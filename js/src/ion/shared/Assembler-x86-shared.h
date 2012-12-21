@@ -165,13 +165,16 @@ class AssemblerX86Shared
     }
 
     void executableCopy(void *buffer);
-    void processCodeLabels(IonCode *code);
+    void processCodeLabels(uint8_t *rawCode);
     void copyJumpRelocationTable(uint8_t *dest);
     void copyDataRelocationTable(uint8_t *dest);
     void copyPreBarrierTable(uint8_t *dest);
 
     bool addCodeLabel(CodeLabel *label) {
         return codeLabels_.append(label);
+    }
+    size_t numCodeLabels() const {
+        return codeLabels_.length();
     }
 
     // Size of the instruction stream, in bytes.
@@ -453,6 +456,18 @@ class AssemblerX86Shared
             JS_NOT_REACHED("unexpected operand kind");
         }
     }
+    void leal(const Operand &src, const Register &dest) {
+        switch (src.kind()) {
+          case Operand::REG_DISP:
+            masm.leal_mr(src.disp(), src.base(), dest.code());
+            break;
+          case Operand::SCALE:
+            masm.leal_mr(src.disp(), src.base(), src.index(), src.scale(), dest.code());
+            break;
+          default:
+            JS_NOT_REACHED("unexpected operand kind");
+        }
+    }
 
   protected:
     JmpSrc jSrc(Condition cond, Label *label) {
@@ -587,8 +602,7 @@ class AssemblerX86Shared
         label->reset();
     }
 
-    static void Bind(IonCode *code, AbsoluteLabel *label, const void *address) {
-        uint8_t *raw = code->raw();
+    static void Bind(uint8_t *raw, AbsoluteLabel *label, const void *address) {
         if (label->used()) {
             intptr_t src = label->offset();
             do {
@@ -630,6 +644,9 @@ class AssemblerX86Shared
           default:
             JS_NOT_REACHED("unexpected operand kind");
         }
+    }
+    size_t unlabeledCall() {
+        return masm.call().offset();
     }
 
     void breakpoint() {
@@ -1013,8 +1030,11 @@ class AssemblerX86Shared
     void cdq() {
         masm.cdq();
     }
-    void idiv(Register dest) {
-        masm.idivl_r(dest.code());
+    void idiv(Register divisor) {
+        masm.idivl_r(divisor.code());
+    }
+    void udiv(Register divisor) {
+        masm.divl_r(divisor.code());
     }
 
     void unpcklps(const FloatRegister &src, const FloatRegister &dest) {

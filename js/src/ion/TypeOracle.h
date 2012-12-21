@@ -358,8 +358,8 @@ StringFromMIRType(MIRType type)
       return "Slots";
     case MIRType_Elements:
       return "Elements";
-    case MIRType_StackFrame:
-      return "StackFrame";
+    case MIRType_Pointer:
+      return "Pointer";
     default:
       JS_NOT_REACHED("Unknown MIRType.");
       return "";

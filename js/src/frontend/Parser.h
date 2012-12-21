@@ -213,6 +213,9 @@ struct ParseContext                 /* tree context for semantic checks */
     //   if (cond) { function f3() { if (cond) { function f4() { } } } }
     //
     bool atBodyLevel();
+
+    // TODO
+    inline bool useAsmOrInsideUseAsm() const;
 };
 
 bool

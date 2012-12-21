@@ -554,6 +554,9 @@ class TokenStream
                                        va_list args);
     bool reportStrictWarningErrorNumberVA(ParseNode *pn, unsigned errorNumber, va_list args);
 
+    // asm.js reporter
+    void reportAsmError(ParseNode *pn, unsigned errorNumber, ...);
+
   private:
     // These are private because they should only be called by the tokenizer
     // while tokenizing not by, for example, BytecodeEmitter.

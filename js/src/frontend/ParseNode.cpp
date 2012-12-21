@@ -312,6 +312,13 @@ ParseNode::newBinaryOrAppend(ParseNodeKind kind, JSOp op, ParseNode *left, Parse
         return NULL;
 
     /*
+     * Ensure that the parse tree is faithful to the source when "use asm" (for
+     * the purpose of type checking).
+     */
+    if (parser->pc->useAsmOrInsideUseAsm())
+        return parser->new_<BinaryNode>(kind, op, left, right);
+
+    /*
      * Flatten a left-associative (left-heavy) tree of a given operator into
      * a list to reduce js::FoldConstants and js::frontend::EmitTree recursion.
      */

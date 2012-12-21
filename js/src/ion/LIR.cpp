@@ -19,6 +19,7 @@ LIRGraph::LIRGraph(MIRGraph *mir)
     numInstructions_(1), // First id is 1.
     localSlotCount_(0),
     argumentSlotCount_(0),
+    performsAsmCall_(false),
     entrySnapshot_(NULL),
     osrBlock_(NULL),
     mir_(*mir)

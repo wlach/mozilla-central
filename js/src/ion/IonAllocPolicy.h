@@ -163,6 +163,8 @@ class TempObjectPool
     }
 };
 
+typedef Vector<MIRType, 8> MIRTypeVector;
+
 } // namespace ion
 } // namespace js
 

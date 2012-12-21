@@ -26,6 +26,7 @@
 #include "BacktrackingAllocator.h"
 #include "StupidAllocator.h"
 #include "UnreachableCodeElimination.h"
+#include "EffectiveAddressAnalysis.h"
 
 #if defined(JS_CPU_X86)
 # include "x86/Lowering-x86.h"
@@ -359,7 +360,7 @@ IonCode::copyFrom(MacroAssembler &masm)
     preBarrierTableBytes_ = masm.preBarrierTableBytes();
     masm.copyPreBarrierTable(code_ + preBarrierTableOffset());
 
-    masm.processCodeLabels(this);
+    masm.processCodeLabels(code_);
 }
 
 void
@@ -773,7 +774,7 @@ namespace js {
 namespace ion {
 
 CodeGenerator *
-CompileBackEnd(MIRGenerator *mir)
+CompileBackEnd(MIRGenerator *mir, bool useAsm)
 {
     IonSpewPass("BuildSSA");
     // Note: don't call AssertGraphCoherency before SplitCriticalEdges,
@@ -915,6 +916,17 @@ CompileBackEnd(MIRGenerator *mir)
             return NULL;
     }
 
+    if (js_IonOptions.eaa) {
+        EffectiveAddressAnalysis eaa(graph);
+        if (!eaa.analyze())
+            return NULL;
+        IonSpewPass("Effective Address Analysis");
+        AssertExtendedGraphCoherency(graph);
+
+        if (mir->shouldCancel("Effective Address Analysis"))
+            return NULL;
+    }
+
     if (!EliminateDeadCode(mir, graph))
         return NULL;
     IonSpewPass("DCE");
@@ -1020,7 +1032,12 @@ CompileBackEnd(MIRGenerator *mir)
         return NULL;
 
     CodeGenerator *codegen = js_new<CodeGenerator>(mir, lir);
-    if (!codegen || !codegen->generate()) {
+    if (!codegen) {
+        js_delete(codegen);
+        return NULL;
+    }
+
+    if (!useAsm && !codegen->generate()) {
         js_delete(codegen);
         return NULL;
     }

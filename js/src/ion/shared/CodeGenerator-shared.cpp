@@ -39,6 +39,23 @@ CodeGeneratorShared::CodeGeneratorShared(MIRGenerator *gen, LIRGraph *graph)
     frameDepth_(graph->localSlotCount() * sizeof(STACK_SLOT_SIZE) +
                 graph->argumentSlotCount() * sizeof(Value))
 {
+    // Since asm.js uses the system ABI which does not necessarily use a
+    // regular array where all slots are sizeof(Value), it maintains the max
+    // argument stack depth separately.
+    if (gen->info().compilingAsmJS()) {
+        JS_ASSERT(graph->argumentSlotCount() == 0);
+        frameDepth_ += gen->maxAsmStackArgBytes();
+
+        // An MAsmCall does not align the stack pointer at calls sites but instead
+        // relies on the a priori stack adjustment (in the prologue) on platforms
+        // (like x64) which require the stack to be aligned.
+        if (graph->performsAsmCall()) {
+            unsigned alignmentAtCall = AlignmentAtPrologue + frameDepth_;
+            if (unsigned rem = alignmentAtCall % StackAlignment)
+                frameDepth_ += StackAlignment - rem;
+        }
+    }
+
     frameClass_ = FrameSizeClass::FromDepth(frameDepth_);
 }
 

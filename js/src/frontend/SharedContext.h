@@ -199,6 +199,8 @@ class FunctionBox : public ObjectBox, public SharedContext
     bool            inWith:1;               /* some enclosing scope is a with-statement
                                                or E4X filter-expression */
     bool            inGenexpLambda:1;       /* lambda from generator expression */
+    bool            useAsm:1;               /* function contains "use asm" directive */
+    bool            insideUseAsm:1;         /* nested function of function of "use asm" directive */
 
     FunctionContextFlags funCxFlags;
 
@@ -220,6 +222,12 @@ class FunctionBox : public ObjectBox, public SharedContext
     void setArgumentsHasLocalBinding()     { funCxFlags.argumentsHasLocalBinding = true; }
     void setDefinitelyNeedsArgsObj()       { JS_ASSERT(funCxFlags.argumentsHasLocalBinding);
                                              funCxFlags.definitelyNeedsArgsObj   = true; }
+
+    // Return whether this ParseContext represents a function that has either
+    // specified "use asm" or is (transitively) nested inside a function that has.
+    bool useAsmOrInsideUseAsm() const {
+        return useAsm || insideUseAsm;
+    }
 };
 
 /*

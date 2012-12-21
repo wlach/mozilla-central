@@ -325,6 +325,7 @@ private:
         GROUP3_OP_TEST = 0,
         GROUP3_OP_NOT  = 2,
         GROUP3_OP_NEG  = 3,
+        GROUP3_OP_DIV  = 6,
         GROUP3_OP_IDIV = 7,
 
         GROUP5_OP_CALLN = 2,
@@ -1024,11 +1025,18 @@ public:
         m_formatter.immediate32(value);
     }
 
-    void idivl_r(RegisterID dst)
+    void idivl_r(RegisterID divisor)
     {
         spew("idivl      %s", 
-             nameIReg(4, dst));
-        m_formatter.oneByteOp(OP_GROUP3_Ev, GROUP3_OP_IDIV, dst);
+             nameIReg(4, divisor));
+        m_formatter.oneByteOp(OP_GROUP3_Ev, GROUP3_OP_IDIV, divisor);
+    }
+
+    void divl_r(RegisterID divisor)
+    {
+        spew("div        %s",
+             nameIReg(4, divisor));
+        m_formatter.oneByteOp(OP_GROUP3_Ev, GROUP3_OP_DIV, divisor);
     }
 
     // Comparisons:

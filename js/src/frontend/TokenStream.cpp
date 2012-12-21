@@ -620,6 +620,15 @@ TokenStream::reportStrictWarningErrorNumberVA(ParseNode *pn, unsigned errorNumbe
     return reportCompileErrorNumberVA(NULL, JSREPORT_STRICT | JSREPORT_WARNING, errorNumber, args);
 }
 
+void
+TokenStream::reportAsmError(ParseNode *pn, unsigned errorNumber, ...)
+{
+    va_list args;
+    va_start(args, errorNumber);
+    reportCompileErrorNumberVA(pn, JSREPORT_WARNING, errorNumber, args);
+    va_end(args);
+}
+
 #if JS_HAS_XML_SUPPORT
 
 bool

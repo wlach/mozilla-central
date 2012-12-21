@@ -431,6 +431,13 @@ class MacroAssembler : public MacroAssemblerSpecific
         bind(&done);
     }
 
+    void canonicalizeDouble(FloatRegister reg) {
+        Label notNaN;
+        branchDouble(DoubleOrdered, reg, reg, &notNaN);
+        loadStaticDouble(&js_NaN, reg);
+        bind(&notNaN);
+    }
+
     template<typename T>
     void loadFromTypedArray(int arrayType, const T &src, AnyRegister dest, Register temp, Label *fail);
 
@@ -669,30 +676,6 @@ class MacroAssembler : public MacroAssemblerSpecific
     void printf(const char *output, Register value);
 };
 
-static inline Assembler::Condition
-JSOpToCondition(JSOp op)
-{
-    switch (op) {
-      case JSOP_EQ:
-      case JSOP_STRICTEQ:
-        return Assembler::Equal;
-      case JSOP_NE:
-      case JSOP_STRICTNE:
-        return Assembler::NotEqual;
-      case JSOP_LT:
-        return Assembler::LessThan;
-      case JSOP_LE:
-        return Assembler::LessThanOrEqual;
-      case JSOP_GT:
-        return Assembler::GreaterThan;
-      case JSOP_GE:
-        return Assembler::GreaterThanOrEqual;
-      default:
-        JS_NOT_REACHED("Unrecognized comparison operation");
-        return Assembler::Equal;
-    }
-}
-
 static inline Assembler::DoubleCondition
 JSOpToDoubleCondition(JSOp op)
 {
@@ -716,6 +699,25 @@ JSOpToDoubleCondition(JSOp op)
         return Assembler::DoubleEqual;
     }
 }
+
+class ABIArgIter
+{
+    ABIArgGenerator gen_;
+    const MIRTypeVector &types_;
+    unsigned i_;
+
+  public:
+    ABIArgIter(const MIRTypeVector &argTypes);
+
+    void operator++(int);
+    bool done() const { return i_ == types_.length(); }
+
+    ABIArg *operator->() { JS_ASSERT(!done()); return &gen_.current(); }
+    ABIArg &operator*() { JS_ASSERT(!done()); return gen_.current(); }
+
+    unsigned index() const { JS_ASSERT(!done()); return i_; }
+    MIRType mirType() const { JS_ASSERT(!done()); return types_[i_]; }
+};
 
 } // namespace ion
 } // namespace js

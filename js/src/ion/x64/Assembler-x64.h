@@ -72,6 +72,8 @@ static const Register JSReturnReg_Data = JSReturnReg;
 
 static const Register ReturnReg = rax;
 static const Register ScratchReg = r11;
+static const Register GlobalReg = r14;
+static const Register HeapReg = r15;
 static const FloatRegister ReturnFloatReg = xmm0;
 static const FloatRegister ScratchFloatReg = xmm15;
 
@@ -128,6 +130,48 @@ static const uint32_t NumFloatArgRegs = 8;
 static const FloatRegister FloatArgRegs[NumFloatArgRegs] = { xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7 };
 #endif
 
+class ABIArg
+{
+  public:
+    enum Kind { GPR, FPU, Stack };
+
+  private:
+    Kind kind_;
+    union {
+        Registers::Code gpr_;
+        FloatRegisters::Code fpu_;
+        uint32_t offset_;
+    } u;
+
+  public:
+    ABIArg() : kind_(Kind(-1)) { u.offset_ = -1; }
+    ABIArg(Register gpr) : kind_(GPR) { u.gpr_ = gpr.code(); }
+    ABIArg(FloatRegister fpu) : kind_(FPU) { u.fpu_ = fpu.code(); }
+    ABIArg(uint32_t offset) : kind_(Stack) { u.offset_ = offset; }
+
+    Kind kind() const { return kind_; }
+    Register gpr() const { JS_ASSERT(kind() == GPR); return Register::FromCode(u.gpr_); }
+    FloatRegister fpu() const { JS_ASSERT(kind() == FPU); return FloatRegister::FromCode(u.fpu_); }
+    uint32_t offsetFromArg0() const { JS_ASSERT(kind() == Stack); return u.offset_; }
+
+    bool argInRegister() const { return kind() != Stack; }
+    AnyRegister reg() const { return kind_ == GPR ? AnyRegister(gpr()) : AnyRegister(fpu()); }
+};
+
+class ABIArgGenerator
+{
+    unsigned intRegIndex_;
+    unsigned floatRegIndex_;
+    uint32_t stackOffset_;
+    ABIArg current_;
+
+  public:
+    ABIArgGenerator();
+    ABIArg next(MIRType argType);
+    ABIArg &current() { return current_; }
+    uint32_t stackBytesConsumedSoFar() const { return stackOffset_; }
+};
+
 static const Register OsrFrameReg = IntArgReg3;
 
 static const Register PreBarrierReg = rdx;
@@ -136,6 +180,8 @@ static const Register PreBarrierReg = rdx;
 // jitted code.
 static const uint32_t StackAlignment = 16;
 static const bool StackKeptAligned = false;
+static const uint32_t NativeFrameSize = sizeof(void*);
+static const uint32_t AlignmentAtPrologue = sizeof(void*);
 
 static const Scale ScalePointer = TimesEight;
 
@@ -365,6 +411,21 @@ class Assembler : public AssemblerX86Shared
             JS_NOT_REACHED("unexpected operand kind");
         }
     }
+    void movq(Imm32 imm32, const Operand &dest) {
+        switch (dest.kind()) {
+          case Operand::REG:
+            masm.movl_i32r(imm32.value, dest.reg());
+            break;
+          case Operand::REG_DISP:
+            masm.movq_i32m(imm32.value, dest.disp(), dest.base());
+            break;
+          case Operand::SCALE:
+            masm.movq_i32m(imm32.value, dest.disp(), dest.base(), dest.index(), dest.scale());
+            break;
+          default:
+            JS_NOT_REACHED("unexpected operand kind");
+        }
+    }
     void movqsd(const Register &src, const FloatRegister &dest) {
         masm.movq_rr(src.code(), dest.code());
     }
@@ -473,6 +534,9 @@ class Assembler : public AssemblerX86Shared
     }
     void mov(const Register &src, const Operand &dest) {
         movq(src, dest);
+    }
+    void mov(const Imm32 &imm32, const Operand &dest) {
+        movq(imm32, dest);
     }
     void mov(const Register &src, const Register &dest) {
         movq(src, dest);

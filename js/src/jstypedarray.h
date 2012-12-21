@@ -307,6 +307,12 @@ IsTypedArrayProtoClass(const Class *clasp)
            clasp < &TypedArray::protoClasses[TypedArray::TYPE_MAX];
 }
 
+bool
+IsTypedArrayConstructor(const Value &v, uint32_t type);
+
+bool
+IsTypedArrayBuffer(const Value &v);
+
 class DataViewObject : public JSObject, public BufferView
 {
 public:

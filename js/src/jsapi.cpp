@@ -883,6 +883,7 @@ JSRuntime::JSRuntime(JSUseHelperThreads useHelperThreads)
     noGCOrAllocationCheck(0),
 #endif
     jitHardening(false),
+    asmJSActivation(NULL),
     ionPcScriptCache(NULL),
     threadPool(this),
     ctypesActivityCallback(NULL),
@@ -971,6 +972,8 @@ JSRuntime::init(uint32_t maxbytes)
 
 JSRuntime::~JSRuntime()
 {
+    JS_ASSERT(!asmJSActivation);
+
 #ifdef JS_THREADSAFE
     clearOwnerThread();
 #endif
@@ -4862,6 +4865,11 @@ JS_CloneFunctionObject(JSContext *cx, JSObject *funobjArg, JSRawObject parentArg
     }
 
     if (fun->isBoundFunction()) {
+        JS_ReportErrorNumber(cx, js_GetErrorMessage, NULL, JSMSG_CANT_CLONE_OBJECT);
+        return NULL;
+    }
+
+    if (fun->hasScript() && fun->nonLazyScript()->asmJS) {
         JS_ReportErrorNumber(cx, js_GetErrorMessage, NULL, JSMSG_CANT_CLONE_OBJECT);
         return NULL;
     }

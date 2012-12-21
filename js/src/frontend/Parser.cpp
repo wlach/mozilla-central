@@ -380,6 +380,9 @@ FunctionBox::FunctionBox(JSContext *cx, ObjectBox* traceListHead, JSFunction *fu
     ndefaults(0),
     inWith(false),                  // initialized below
     inGenexpLambda(false),
+    useAsm(false),
+    insideUseAsm(outerpc && outerpc->sc->isFunctionBox() &&
+                 outerpc->sc->asFunctionBox()->useAsmOrInsideUseAsm()),
     funCxFlags()
 {
     if (!outerpc) {
@@ -1899,6 +1902,13 @@ Parser::maybeParseDirective(ParseNode *pn, bool *cont)
                     }
                     pc->sc->strict = true;
                 }
+            }
+        } else if (directive == context->names().useAsm) {
+            if (pc->sc->isFunctionBox()) {
+                pc->sc->asFunctionBox()->useAsm = true;
+            } else {
+                if (!reportWarning(string, JSMSG_USE_ASM_DIRECTIVE_FAIL))
+                    return false;
             }
         }
     }

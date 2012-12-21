@@ -41,6 +41,7 @@
 
 #include "builtin/Eval.h"
 #include "gc/Marking.h"
+#include "ion/AsmJS.h"
 #include "vm/Debugger.h"
 #include "vm/Shape.h"
 
@@ -1344,7 +1345,6 @@ ADD_EMPTY_CASE(JSOP_NOP)
 ADD_EMPTY_CASE(JSOP_UNUSED0)
 ADD_EMPTY_CASE(JSOP_UNUSED1)
 ADD_EMPTY_CASE(JSOP_UNUSED2)
-ADD_EMPTY_CASE(JSOP_UNUSED3)
 ADD_EMPTY_CASE(JSOP_UNUSED12)
 ADD_EMPTY_CASE(JSOP_UNUSED13)
 ADD_EMPTY_CASE(JSOP_UNUSED17)
@@ -1450,6 +1450,43 @@ BEGIN_CASE(JSOP_LOOPENTRY)
 #endif /* JS_ION */
 
 END_CASE(JSOP_LOOPENTRY)
+
+BEGIN_CASE(JSOP_LINKASMJS)
+#ifdef JS_ION
+{
+    RootedValue &rval = rootValue0;
+
+    /*
+     * This function specified "use asm" in its directives and the entire body
+     * type-checked according to the asm.js specification. However, there are
+     * still a handful of dynamic checks required of the input parameters to
+     * this function which much be checked at runtime by LinkAsmJS.
+     */
+    rval = NullValue();
+    if (!LinkAsmJS(cx, regs.fp(), &rval))
+        goto error;
+
+    /*
+     * If the linking step succeeded, then 'rval' contains the result of
+     * executing the entire "use asm" function we can simply return this value.
+     * (The return value is a tuple of exported super-optimized functions.)
+     */
+    if (rval.isObject()) {
+        regs.fp()->setReturnValue(rval);
+        regs.setToEndOfScript();
+        interpReturnOK = true;
+        if (entryFrame != regs.fp())
+            goto inline_return;
+        goto exit;
+    }
+
+    /*
+     * Otherwise, linking failed. This will emit a warning, but is not
+     * otherwise a JS semantic error so we keep executing as normal.
+     */
+}
+#endif  /* JS_ION */
+END_CASE(JSOP_LINKASMJS)
 
 BEGIN_CASE(JSOP_NOTEARG)
 END_CASE(JSOP_NOTEARG)

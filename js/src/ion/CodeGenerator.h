@@ -31,6 +31,16 @@ class OutOfLineStoreElementHole;
 class OutOfLineTypeOfV;
 class OutOfLineLoadTypedArray;
 
+// TODO: explain
+struct AsmCodePtr
+{
+    typedef int32_t (*PF)(void *heap, uint8_t *globalData, uint64_t *argv);
+    PF externalEntry;
+
+    uint8_t *baseAddress;
+    uint8_t *internalEntry;
+};
+
 class CodeGenerator : public CodeGeneratorSpecific
 {
     bool generateArgumentsChecks();
@@ -43,6 +53,9 @@ class CodeGenerator : public CodeGeneratorSpecific
     bool generate();
     bool link();
 
+    bool generateAsm(AsmCodePtr *codePtr, ScopedReleasePtr<JSC::ExecutablePool> *pool,
+                     const MIRTypeVector *maybeExternalEntryArgTypes, MIRType returnType);
+
     bool visitLabel(LLabel *lir);
     bool visitNop(LNop *lir);
     bool visitOsiPoint(LOsiPoint *lir);
@@ -50,9 +63,12 @@ class CodeGenerator : public CodeGeneratorSpecific
     bool visitTableSwitch(LTableSwitch *ins);
     bool visitTableSwitchV(LTableSwitchV *ins);
     bool visitParameter(LParameter *lir);
+    bool visitAsmParameter(LAsmParameter *lir);
     bool visitCallee(LCallee *lir);
     bool visitStart(LStart *lir);
     bool visitReturn(LReturn *ret);
+    bool visitAsmReturn(LAsmReturn *ret);
+    bool visitAsmVoidReturn(LAsmVoidReturn *ret);
     bool visitDefVar(LDefVar *lir);
     bool visitDefFun(LDefFun *lir);
     bool visitOsrEntry(LOsrEntry *lir);
@@ -62,6 +78,7 @@ class CodeGenerator : public CodeGeneratorSpecific
     bool visitValueToInt32(LValueToInt32 *lir);
     bool visitValueToDouble(LValueToDouble *lir);
     bool visitInt32ToDouble(LInt32ToDouble *lir);
+    bool visitUInt32ToDouble(LUInt32ToDouble *lir);
     void emitOOLTestObject(Register objreg, Label *ifTruthy, Label *ifFalsy, Register scratch);
     bool visitTestOAndBranch(LTestOAndBranch *lir);
     bool visitTestVAndBranch(LTestVAndBranch *lir);
@@ -122,6 +139,7 @@ class CodeGenerator : public CodeGeneratorSpecific
     bool visitAbsI(LAbsI *lir);
     bool visitPowI(LPowI *lir);
     bool visitPowD(LPowD *lir);
+    bool visitNegI(LNegI *lir);
     bool visitNegD(LNegD *lir);
     bool visitRandom(LRandom *lir);
     bool visitMathFunctionD(LMathFunctionD *ins);

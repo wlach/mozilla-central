@@ -16,6 +16,7 @@
 
 #include "gc/Barrier.h"
 #include "gc/Root.h"
+#include "ion/AsmJS.h"
 #include "vm/Shape.h"
 
 ForwardDeclareJS(Script);
@@ -572,6 +573,7 @@ class JSScript : public js::gc::Cell
 
     /* Information attached by Ion: script for sequential mode execution */
     js::ion::IonScript *ion;
+    js::HeapPtr<JSObject> asmJS;
 
     bool hasIonScript() const {
         return ion && ion != ION_DISABLED_SCRIPT && ion != ION_COMPILING_SCRIPT;

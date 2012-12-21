@@ -73,6 +73,7 @@
     _(EmulatesUndefinedAndBranch)   \
     _(MinMaxI)                      \
     _(MinMaxD)                      \
+    _(NegI)                         \
     _(NegD)                         \
     _(AbsI)                         \
     _(AbsD)                         \
@@ -95,6 +96,7 @@
     _(CharCodeAt)                   \
     _(FromCharCode)                 \
     _(Int32ToDouble)                \
+    _(UInt32ToDouble)               \
     _(ValueToDouble)                \
     _(ValueToInt32)                 \
     _(DoubleToInt32)                \
@@ -140,6 +142,7 @@
     _(LoadTypedArrayElement)        \
     _(LoadTypedArrayElementHole)    \
     _(StoreTypedArrayElement)       \
+    _(EffectiveAddress)             \
     _(ClampIToUint8)                \
     _(ClampDToUint8)                \
     _(ClampVToUint8)                \
@@ -184,6 +187,13 @@
     _(CallInstanceOf)               \
     _(InterruptCheck)               \
     _(FunctionBoundary)             \
+    _(AsmLoad)                      \
+    _(AsmStore)                     \
+    _(AsmParameter)                 \
+    _(AsmReturn)                    \
+    _(AsmVoidReturn)                \
+    _(AsmPassStackArg)              \
+    _(AsmCall)                      \
     _(GetDOMProperty)               \
     _(SetDOMProperty)               \
     _(CallDOMNative)

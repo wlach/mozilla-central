@@ -23,6 +23,101 @@ CodeGeneratorX64::CodeGeneratorX64(MIRGenerator *gen, LIRGraph *graph)
 {
 }
 
+bool
+CodeGeneratorX64::generateAsmPrologue(const MIRTypeVector &argTypes, MIRType returnType,
+                                      Label *internalEntry)
+{
+    // In constrast to the X64 system ABI, the Ion convention is that all
+    // registers are clobbered by calls. Thus, we must save the caller's
+    // non-volatile registers.
+    //
+    // NB: GenerateDefaultExits assumes that masm.framePushed() == 0 before
+    // PushRegsInMask(nonVolatileRegs).
+    JS_ASSERT(masm.framePushed() == 0);
+    RegisterSet nonVolatileRegs = RegisterSet(GeneralRegisterSet(Registers::NonVolatileMask),
+                                              FloatRegisterSet(FloatRegisters::NonVolatileMask));
+    masm.PushRegsInMask(nonVolatileRegs);
+    JS_ASSERT(masm.framePushed() == nonVolatileRegs.gprs().size() * STACK_SLOT_SIZE +
+                                    nonVolatileRegs.fpus().size() * sizeof(double));
+    JS_ASSERT(masm.framePushed() % 16 == 0);
+
+    // Remember the stack pointer in the current AsmJSActivation. This will be
+    // used by error exit paths to set the stack pointer back to what it was
+    // right after the (C++) caller's non-volatile registers were saved so that
+    // they can be restored.
+    masm.movq(ImmWord(GetIonContext()->compartment->rt), ScratchReg);
+    masm.movq(Operand(ScratchReg, offsetof(JSRuntime, asmJSActivation)), ScratchReg);
+    masm.movq(StackPointer, Operand(ScratchReg, AsmJSActivation::offsetOfErrorRejoinSP()));
+
+    // Move the externalEntry parameters into non-argument registers since we
+    // are about to clobber these registers with the contents of argv.
+    Register argv = r13;
+    masm.movq(IntArgReg0, HeapReg);    // buffer
+    masm.movq(IntArgReg1, GlobalReg);  // globalData
+    masm.movq(IntArgReg2, argv);       // argv
+
+    // Remember argv so that we can load argv[0] after the call.
+    JS_ASSERT(masm.framePushed() % 16 == 0);
+    masm.Push(argv);
+    JS_ASSERT(masm.framePushed() % 16 == 8);
+
+    // Determine how many stack slots we need to hold arguments that don't fit
+    // in registers.
+    unsigned numStackArgs = 0;
+    for (ABIArgIter iter(argTypes); !iter.done(); iter++) {
+        if (iter->kind() == ABIArg::Stack)
+            numStackArgs++;
+    }
+
+    // Before calling, we must ensure sp % 16 == 0. Since (sp % 16) = 8 on
+    // entry, we need to push 8 (mod 16) bytes.
+    JS_ASSERT(AlignmentAtPrologue == 8);
+    JS_ASSERT(masm.framePushed() % 16 == 8);
+    unsigned stackDec = (numStackArgs + numStackArgs % 2) * sizeof(uint64_t);
+    masm.reserveStack(stackDec);
+    JS_ASSERT(masm.framePushed() % 16 == 8);
+
+    // Copy parameters out of argv into the registers/stack-slots specified by
+    // the system ABI.
+    for (ABIArgIter iter(argTypes); !iter.done(); iter++) {
+        unsigned argOffset = iter.index() * sizeof(uint64_t);
+        switch (iter->kind()) {
+          case ABIArg::GPR:
+            masm.movl(Operand(argv, argOffset), iter->gpr());
+            break;
+          case ABIArg::FPU:
+            masm.movsd(Operand(argv, argOffset), iter->fpu());
+            break;
+          case ABIArg::Stack:
+            masm.movq(Operand(argv, argOffset), ScratchReg);
+            masm.movq(ScratchReg, Operand(StackPointer, iter->offsetFromArg0()));
+            break;
+        }
+    }
+
+    masm.call(internalEntry);
+
+    // Recover argv.
+    masm.freeStack(stackDec);
+    masm.Pop(argv);
+
+    // Store the result in argv[0].
+    if (returnType == MIRType_Int32) {
+        masm.storeValue(JSVAL_TYPE_INT32, ReturnReg, Address(argv, 0));
+    } else if (returnType == MIRType_Double) {
+        masm.canonicalizeDouble(ReturnFloatReg);
+        masm.storeDouble(ReturnFloatReg, Address(argv, 0));
+    } else {
+        JS_ASSERT(returnType == MIRType_None);
+    }
+
+    masm.PopRegsInMask(nonVolatileRegs);
+
+    masm.movl(Imm32(true), ReturnReg);
+    masm.ret();
+    return true;
+}
+
 ValueOperand
 CodeGeneratorX64::ToValue(LInstruction *ins, size_t pos)
 {
@@ -347,7 +442,7 @@ CodeGeneratorX64::visitCompareB(LCompareB *lir)
 
     // Perform the comparison.
     masm.cmpq(lhs.valueReg(), ScratchReg);
-    emitSet(JSOpToCondition(mir->jsop()), output);
+    emitSet(JSOpToCondition(mir->compareType(), mir->jsop()), output);
     return true;
 }
 
@@ -369,7 +464,7 @@ CodeGeneratorX64::visitCompareBAndBranch(LCompareBAndBranch *lir)
 
     // Perform the comparison.
     masm.cmpq(lhs.valueReg(), ScratchReg);
-    emitBranch(JSOpToCondition(mir->jsop()), lir->ifTrue(), lir->ifFalse());
+    emitBranch(JSOpToCondition(mir->compareType(), mir->jsop()), lir->ifTrue(), lir->ifFalse());
     return true;
 }
 bool
@@ -384,7 +479,7 @@ CodeGeneratorX64::visitCompareV(LCompareV *lir)
               mir->jsop() == JSOP_NE || mir->jsop() == JSOP_STRICTNE);
 
     masm.cmpq(lhs.valueReg(), rhs.valueReg());
-    emitSet(JSOpToCondition(mir->jsop()), output);
+    emitSet(JSOpToCondition(mir->compareType(), mir->jsop()), output);
     return true;
 }
 
@@ -400,6 +495,6 @@ CodeGeneratorX64::visitCompareVAndBranch(LCompareVAndBranch *lir)
               mir->jsop() == JSOP_NE || mir->jsop() == JSOP_STRICTNE);
 
     masm.cmpq(lhs.valueReg(), rhs.valueReg());
-    emitBranch(JSOpToCondition(mir->jsop()), lir->ifTrue(), lir->ifFalse());
+    emitBranch(JSOpToCondition(mir->compareType(), mir->jsop()), lir->ifTrue(), lir->ifFalse());
     return true;
 }

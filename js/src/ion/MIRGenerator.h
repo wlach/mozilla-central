@@ -72,6 +72,9 @@ class MIRGenerator
         cancelBuild_ = 1;
     }
 
+    virtual bool observeAsmCall(size_t offsetOfCall, const void *observerData);
+    virtual uint32_t maxAsmStackArgBytes() const;
+
   public:
     JSCompartment *compartment;
 

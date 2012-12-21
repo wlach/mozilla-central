@@ -310,16 +310,7 @@ class Assembler : public AssemblerX86Shared
         movl(src, dest);
     }
     void lea(const Operand &src, const Register &dest) {
-        switch (src.kind()) {
-          case Operand::REG_DISP:
-            masm.leal_mr(src.disp(), src.base(), dest.code());
-            break;
-          case Operand::SCALE:
-            masm.leal_mr(src.disp(), src.base(), src.index(), src.scale(), dest.code());
-            break;
-          default:
-            JS_NOT_REACHED("unexpected operand kind");
-        }
+        return leal(src, dst);
     }
     void cvttsd2s(const FloatRegister &src, const Register &dest) {
         cvttsd2si(src, dest);

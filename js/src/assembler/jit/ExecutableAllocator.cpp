@@ -51,10 +51,10 @@ ExecutableAllocator::sizeOfCode(size_t *jaeger, size_t *ion, size_t *regexp, siz
         for (ExecPoolHashSet::Range r = m_pools.all(); !r.empty(); r.popFront()) {
             ExecutablePool* pool = r.front();
             *jaeger += pool->m_jaegerCodeBytes;
-            *ion    += pool->m_ionCodeBytes;
+            *ion    += pool->m_ionCodeBytes + pool->m_asmJSCodeBytes;  // TODO: propagate this out
             *regexp += pool->m_regexpCodeBytes;
             *unused += pool->m_allocation.size - pool->m_jaegerCodeBytes - pool->m_ionCodeBytes
-                                               - pool->m_regexpCodeBytes;
+                                               - pool->m_asmJSCodeBytes - pool->m_regexpCodeBytes;
         }
     }
 }

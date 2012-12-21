@@ -141,6 +141,7 @@
     macro(unwatch, unwatch, "unwatch") \
     macro(url, url, "url") \
     macro(useStrict, useStrict, "use strict") \
+    macro(useAsm, useAsm, "use asm") \
     macro(value, value, "value") \
     macro(valueOf, valueOf, "valueOf") \
     macro(var, var, "var") \

@@ -278,6 +278,10 @@ class MacroAssemblerX86Shared : public Assembler
         movss(Operand(src), dest);
         cvtss2sd(dest, dest);
     }
+    void loadFloatAsDouble(const Operand &src, FloatRegister dest) {
+        movss(src, dest);
+        cvtss2sd(dest, dest);
+    }
     void storeFloat(FloatRegister src, const Address &dest) {
         movss(src, Operand(dest));
     }

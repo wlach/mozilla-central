@@ -8,6 +8,8 @@
 #ifndef jsion_compileinfo_h__
 #define jsion_compileinfo_h__
 
+#include "ion/IonMacroAssembler.h"
+
 namespace js {
 namespace ion {
 
@@ -36,9 +38,31 @@ class CompileInfo
         executionMode_(executionMode)
     {
         JS_ASSERT_IF(osrPc, JSOp(*osrPc) == JSOP_LOOPENTRY);
-        nslots_ = script->nslots + CountArgSlots(fun);
+        nimplicit_ = 1 /* scope chain */ + (fun ? 1 /* this */: 0);
+        nargs_ = fun ? fun->nargs : 0;
+        nlocals_ = script->nfixed;
+        nstack_ = script->nslots - script->nfixed;
+        nslots_ = nimplicit_ + nargs_ + nlocals_ + nstack_;
+        stackFrameSize_ = sizeof(IonJSFrameLayout);
     }
 
+    // XXX: perhaps we should consider a way to statically distinguish:
+    // CompileInfo and ScriptCompileInfo, where the latter derived the former
+    // and was only needed from the IonBuilder path
+    CompileInfo(unsigned nlocals)
+      : script_(NULL), fun_(NULL), osrPc_(NULL), constructing_(false)
+    {
+        nimplicit_ = 0;
+        nargs_ = 0;
+        nlocals_ = nlocals;
+        nstack_ = 1 /* for ?: (pushPhiInput/popPhiOutpu) */;
+        nslots_ = nlocals_ + nstack_;
+        stackFrameSize_ = NativeFrameSize;
+    }
+
+    bool compilingAsmJS() const {
+        return script_ == NULL;
+    }
     UnrootedScript script() const {
         return script_;
     }
@@ -104,16 +128,17 @@ class CompileInfo
     }
 
     unsigned nargs() const {
-        return fun()->nargs;
+        return nargs_;
     }
     unsigned nlocals() const {
-        return script()->nfixed;
+        return nlocals_;
     }
     unsigned ninvoke() const {
-        return nlocals() + CountArgSlots(fun());
+        return nslots_ - nstack_;
     }
 
     uint32_t scopeChainSlot() const {
+        JS_ASSERT(script());
         return 0;
     }
     uint32_t thisSlot() const {
@@ -121,14 +146,14 @@ class CompileInfo
         return 1;
     }
     uint32_t firstArgSlot() const {
-        JS_ASSERT(fun());
-        return 2;
+        return nimplicit_;
     }
     uint32_t argSlot(uint32_t i) const {
-        return firstArgSlot() + i;
+        JS_ASSERT(i < nargs_);
+        return nimplicit_ + i;
     }
     uint32_t firstLocalSlot() const {
-        return CountArgSlots(fun());
+        return nimplicit_ + nargs_;
     }
     uint32_t localSlot(uint32_t i) const {
         return firstLocalSlot() + i;
@@ -144,6 +169,10 @@ class CompileInfo
         return script()->argumentsHasVarBinding();
     }
 
+    uint32_t stackFrameSize() const {
+        return stackFrameSize_;
+    }
+
     ExecutionMode executionMode() const {
         return executionMode_;
     }
@@ -153,9 +182,14 @@ class CompileInfo
     }
 
   private:
+    unsigned nimplicit_;
+    unsigned nargs_;
+    unsigned nlocals_;
+    unsigned nstack_;
+    unsigned nslots_;
+    unsigned stackFrameSize_;
     JSScript *script_;
     JSFunction *fun_;
-    unsigned nslots_;
     jsbytecode *osrPc_;
     bool constructing_;
     ExecutionMode executionMode_;

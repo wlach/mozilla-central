@@ -37,6 +37,7 @@
 #include "vm/Stack.h"
 #include "vm/ThreadPool.h"
 
+#include "ion/AsmJS.h"
 #include "ion/PcScriptCache.h"
 
 #ifdef _MSC_VER
@@ -1145,6 +1146,9 @@ struct JSRuntime : js::RuntimeFriendFields,
 #endif
 
     bool                jitHardening;
+
+    // Points to a LIFO linked list of asm.js activations.
+    js::AsmJSActivation *asmJSActivation;
 
     void resetIonStackLimit() {
         mainThread.ionStackLimit = mainThread.nativeStackLimit;

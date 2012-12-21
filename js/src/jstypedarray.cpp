@@ -3648,6 +3648,39 @@ js_InitTypedArrayClasses(JSContext *cx, HandleObject obj)
     return InitArrayBufferClass(cx);
 }
 
+bool
+js::IsTypedArrayConstructor(const Value &v, uint32_t type)
+{
+    switch (type) {
+      case TypedArray::TYPE_INT8:
+        return IsNativeFunction(v, Int8Array::class_constructor);
+      case TypedArray::TYPE_UINT8:
+        return IsNativeFunction(v, Uint8Array::class_constructor);
+      case TypedArray::TYPE_INT16:
+        return IsNativeFunction(v, Int16Array::class_constructor);
+      case TypedArray::TYPE_UINT16:
+        return IsNativeFunction(v, Uint16Array::class_constructor);
+      case TypedArray::TYPE_INT32:
+        return IsNativeFunction(v, Int32Array::class_constructor);
+      case TypedArray::TYPE_UINT32:
+        return IsNativeFunction(v, Uint32Array::class_constructor);
+      case TypedArray::TYPE_FLOAT32:
+        return IsNativeFunction(v, Float32Array::class_constructor);
+      case TypedArray::TYPE_FLOAT64:
+        return IsNativeFunction(v, Float64Array::class_constructor);
+      case TypedArray::TYPE_UINT8_CLAMPED:
+        return IsNativeFunction(v, Uint8ClampedArray::class_constructor);
+    }
+    JS_NOT_REACHED("unexpected typed array type");
+    return false;
+}
+
+bool
+js::IsTypedArrayBuffer(const Value &v)
+{
+    return v.isObject() && v.toObject().isArrayBuffer();
+}
+
 /* JS Friend API */
 
 JS_FRIEND_API(JSBool)

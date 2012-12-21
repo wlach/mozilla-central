@@ -544,7 +544,7 @@ class LDefinition
             // When we begin allocating slots vectors from the GC, this will
             // need to change to ::OBJECT.
             return LDefinition::GENERAL;
-          case MIRType_StackFrame:
+          case MIRType_Pointer:
             return LDefinition::GENERAL;
           default:
             JS_NOT_REACHED("unexpected type");
@@ -692,10 +692,8 @@ class LInstructionVisitor
   public:
     void setInstruction(LInstruction *ins) {
         ins_ = ins;
-        if (ins->mirRaw()) {
+        if (ins->mirRaw())
             lastPC_ = ins->mirRaw()->trackedPc();
-            JS_ASSERT(lastPC_ != NULL);
-        }
     }
 
     LInstructionVisitor()
@@ -1259,6 +1257,8 @@ class LIRGraph
     uint32_t localSlotCount_;
     // Number of stack slots needed for argument construction for calls.
     uint32_t argumentSlotCount_;
+    // Whether this (asm.js) function makes any calls
+    bool performsAsmCall_;
 
     // Snapshot taken before any LIR has been lowered.
     LSnapshot *entrySnapshot_;
@@ -1312,6 +1312,12 @@ class LIRGraph
     }
     uint32_t argumentSlotCount() const {
         return argumentSlotCount_;
+    }
+    void setPerformsAsmCall() {
+        performsAsmCall_ = true;
+    }
+    bool performsAsmCall() const {
+        return performsAsmCall_;
     }
     uint32_t totalSlotCount() const {
         return localSlotCount() + (argumentSlotCount() * sizeof(Value) / STACK_SLOT_SIZE);

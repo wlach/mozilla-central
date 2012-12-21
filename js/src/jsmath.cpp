@@ -107,8 +107,8 @@ js_math_abs(JSContext *cx, unsigned argc, Value *vp)
     return JS_TRUE;
 }
 
-static JSBool
-math_acos(JSContext *cx, unsigned argc, Value *vp)
+JSBool
+js::math_acos(JSContext *cx, unsigned argc, Value *vp)
 {
     double x, z;
 
@@ -132,8 +132,8 @@ math_acos(JSContext *cx, unsigned argc, Value *vp)
     return JS_TRUE;
 }
 
-static JSBool
-math_asin(JSContext *cx, unsigned argc, Value *vp)
+JSBool
+js::math_asin(JSContext *cx, unsigned argc, Value *vp)
 {
     double x, z;
 
@@ -157,8 +157,8 @@ math_asin(JSContext *cx, unsigned argc, Value *vp)
     return JS_TRUE;
 }
 
-static JSBool
-math_atan(JSContext *cx, unsigned argc, Value *vp)
+JSBool
+js::math_atan(JSContext *cx, unsigned argc, Value *vp)
 {
     double x, z;
 
@@ -206,8 +206,8 @@ math_atan2_kernel(double x, double y)
     return atan2(x, y);
 }
 
-static JSBool
-math_atan2(JSContext *cx, unsigned argc, Value *vp)
+JSBool
+js::math_atan2(JSContext *cx, unsigned argc, Value *vp)
 {
     double x, y, z;
 
@@ -287,8 +287,8 @@ math_exp_body(double d)
     return exp(d);
 }
 
-static JSBool
-math_exp(JSContext *cx, unsigned argc, Value *vp)
+JSBool
+js::math_exp(JSContext *cx, unsigned argc, Value *vp)
 {
     double x, z;
 

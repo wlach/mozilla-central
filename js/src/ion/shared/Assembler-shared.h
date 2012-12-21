@@ -24,11 +24,30 @@ namespace js {
 namespace ion {
 
 enum Scale {
-    TimesOne,
-    TimesTwo,
-    TimesFour,
-    TimesEight
+    TimesOne = 0,
+    TimesTwo = 1,
+    TimesFour = 2,
+    TimesEight = 3
 };
+
+static inline unsigned
+ScaleToShift(Scale scale)
+{
+    return unsigned(scale);
+}
+
+static inline bool
+IsShiftInScaleRange(int i)
+{
+    return i >= TimesOne && i <= TimesEight;
+}
+
+static inline Scale
+ShiftToScale(int i)
+{
+    JS_ASSERT(IsShiftInScaleRange(i));
+    return Scale(i);
+}
 
 static inline Scale
 ScaleFromElemWidth(int shift)
@@ -404,6 +423,14 @@ class CodeLocationJump
 
   public:
     CodeLocationJump() {}
+    // TODO: all wrong; don't even use CodeLocationJump to link asm.js calls
+    CodeLocationJump(uint8_t *code, size_t offset) {
+        raw_ = code + offset;
+#ifdef JS_SMALL_BRANCH
+        jumpTableEntry_ = NULL;
+#endif
+        absolute_ = true;
+    }
     CodeLocationJump(IonCode *code, CodeOffsetJump base) {
         *this = base;
         repoint(code);

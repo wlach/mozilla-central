@@ -496,15 +496,19 @@ LIRGenerator::visitTest(MTest *test)
 
         // Compare and branch Int32 or Object pointers.
         if (comp->compareType() == MCompare::Compare_Int32 ||
+            comp->compareType() == MCompare::Compare_UInt32 ||
             comp->compareType() == MCompare::Compare_Object)
         {
             JSOp op = ReorderComparison(comp->jsop(), &left, &right);
             LAllocation lhs = useRegister(left);
             LAllocation rhs;
-            if (comp->compareType() == MCompare::Compare_Int32)
+            if (comp->compareType() == MCompare::Compare_Int32 ||
+                comp->compareType() == MCompare::Compare_UInt32)
+            {
                 rhs = useAnyOrConstant(right);
-            else
+            } else {
                 rhs = useRegister(right);
+            }
             LCompareAndBranch *lir = new LCompareAndBranch(op, lhs, rhs, ifTrue, ifFalse);
             return add(lir, comp);
         }
@@ -642,15 +646,19 @@ LIRGenerator::visitCompare(MCompare *comp)
 
     // Compare Int32 or Object pointers.
     if (comp->compareType() == MCompare::Compare_Int32 ||
+        comp->compareType() == MCompare::Compare_UInt32 ||
         comp->compareType() == MCompare::Compare_Object)
     {
         JSOp op = ReorderComparison(comp->jsop(), &left, &right);
         LAllocation lhs = useRegister(left);
         LAllocation rhs;
-        if (comp->compareType() == MCompare::Compare_Int32)
+        if (comp->compareType() == MCompare::Compare_Int32 ||
+            comp->compareType() == MCompare::Compare_UInt32)
+        {
             rhs = useAnyOrConstant(right);
-        else
+        } else {
             rhs = useRegister(right);
+        }
         return define(new LCompare(op, lhs, rhs), comp);
     }
 
@@ -1714,6 +1722,12 @@ LIRGenerator::visitStoreElementHole(MStoreElementHole *ins)
 }
 
 bool
+LIRGenerator::visitEffectiveAddress(MEffectiveAddress *ins)
+{
+    return define(new LEffectiveAddress(useRegister(ins->base()), useRegister(ins->index())), ins);
+}
+
+bool
 LIRGenerator::visitArrayPopShift(MArrayPopShift *ins)
 {
     LUse object = useRegister(ins->object());
@@ -2184,6 +2198,106 @@ LIRGenerator::visitFunctionBoundary(MFunctionBoundary *ins)
 }
 
 bool
+LIRGenerator::visitAsmUnsignedToDouble(MAsmUnsignedToDouble *ins)
+{
+    JS_ASSERT(ins->input()->type() == MIRType_Int32);
+    LUInt32ToDouble *lir = new LUInt32ToDouble(useRegister(ins->input()));
+    return define(lir, ins);
+}
+
+bool
+LIRGenerator::visitAsmLoad(MAsmLoad *ins)
+{
+    LAsmLoad *lir = new LAsmLoad(useRegisterOrConstantAtStart(ins->index()));
+    return define(lir, ins);
+}
+
+bool
+LIRGenerator::visitAsmStore(MAsmStore *ins)
+{
+    LAsmStore *lir;
+    switch (ins->viewType()) {
+      case ArrayBufferView::TYPE_INT8: case ArrayBufferView::TYPE_UINT8:
+      case ArrayBufferView::TYPE_INT16: case ArrayBufferView::TYPE_UINT16:
+      case ArrayBufferView::TYPE_INT32: case ArrayBufferView::TYPE_UINT32:
+        lir = new LAsmStore(useRegisterOrConstantAtStart(ins->index()),
+                             useRegisterOrConstantAtStart(ins->value()));
+        break;
+      case ArrayBufferView::TYPE_FLOAT32:
+      case ArrayBufferView::TYPE_FLOAT64:
+        lir = new LAsmStore(useRegisterOrConstantAtStart(ins->index()),
+                            useRegisterAtStart(ins->value()));
+        break;
+      default: JS_NOT_REACHED("unexpected array type");
+    }
+
+    return add(lir, ins);
+}
+
+bool
+LIRGenerator::visitAsmParameter(MAsmParameter *ins)
+{
+    ABIArg abi = ins->abi();
+    if (abi.argInRegister())
+        return defineFixed(new LAsmParameter, ins, LAllocation(abi.reg()));
+    return defineFixed(new LAsmParameter, ins, LArgument(abi.offsetFromArg0()));
+}
+
+bool
+LIRGenerator::visitAsmReturn(MAsmReturn *ins)
+{
+    MDefinition *rval = ins->getOperand(0);
+    LAsmReturn *lir = new LAsmReturn;
+    if (rval->type() == MIRType_Double)
+        lir->setOperand(0, useFixed(rval, ReturnFloatReg));
+    else if (rval->type() == MIRType_Int32)
+        lir->setOperand(0, useFixed(rval, ReturnReg));
+    else
+        JS_NOT_REACHED("Unexpected asm.js return type");
+    return add(lir);
+}
+
+bool
+LIRGenerator::visitAsmVoidReturn(MAsmVoidReturn *ins)
+{
+    return add(new LAsmVoidReturn);
+}
+
+bool
+LIRGenerator::visitAsmPassStackArg(MAsmPassStackArg *ins)
+{
+    if (ins->arg()->type() == MIRType_Double) {
+        JS_ASSERT(!ins->arg()->isEmittedAtUses());
+        return add(new LAsmPassStackArg(useRegisterAtStart(ins->arg())), ins);
+    }
+
+    return add(new LAsmPassStackArg(useRegisterOrConstantAtStart(ins->arg())), ins);
+}
+
+bool
+LIRGenerator::visitAsmCall(MAsmCall *ins)
+{
+    lirGraph_.setPerformsAsmCall();
+
+    LAllocation *args = gen->allocate<LAllocation>(ins->numOperands());
+    if (!args)
+        return false;
+
+    for (unsigned i = 0; i < ins->numArgs(); i++)
+        args[i] = useFixed(ins->getOperand(i), ins->registerForArg(i));
+
+    if (ins->callee().which() == MAsmCall::Callee::Dynamic)
+        args[ins->dynamicCalleeOperandIndex()] = useFixed(ins->callee().dynamic(), CallTempReg0);
+
+    LInstruction *lir = new LAsmCall(args, ins->numOperands());
+    if (ins->type() == MIRType_None) {
+        lir->setMir(ins);
+        return add(lir);
+    }
+    return defineReturn(lir, ins);
+}
+
+bool
 LIRGenerator::visitSetDOMProperty(MSetDOMProperty *ins)
 {
     MDefinition *val = ins->value();
@@ -2226,7 +2340,6 @@ LIRGenerator::visitGetDOMProperty(MGetDOMProperty *ins)
 
     return defineReturn(lir, ins) && assignSafepoint(lir, ins);
 }
-
 
 static void
 SpewResumePoint(MBasicBlock *block, MInstruction *ins, MResumePoint *resumePoint)

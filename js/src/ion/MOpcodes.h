@@ -68,6 +68,7 @@ namespace ion {
     _(GuardObject)                                                          \
     _(GuardString)                                                          \
     _(ToDouble)                                                             \
+    _(AsmUnsignedToDouble)                                                  \
     _(ToInt32)                                                              \
     _(TruncateToInt32)                                                      \
     _(ToString)                                                             \
@@ -118,6 +119,7 @@ namespace ion {
     _(LoadTypedArrayElement)                                                \
     _(LoadTypedArrayElementHole)                                            \
     _(StoreTypedArrayElement)                                               \
+    _(EffectiveAddress)                                                     \
     _(ClampToUint8)                                                         \
     _(LoadFixedSlot)                                                        \
     _(StoreFixedSlot)                                                       \
@@ -144,6 +146,17 @@ namespace ion {
     _(CallInstanceOf)                                                       \
     _(InterruptCheck)                                                       \
     _(FunctionBoundary)                                                     \
+    _(AsmNeg)                                                               \
+    _(AsmUDiv)                                                              \
+    _(AsmUMod)                                                              \
+    _(AsmEffectiveAddress)                                                  \
+    _(AsmLoad)                                                              \
+    _(AsmStore)                                                             \
+    _(AsmReturn)                                                            \
+    _(AsmParameter)                                                         \
+    _(AsmVoidReturn)                                                        \
+    _(AsmPassStackArg)                                                      \
+    _(AsmCall)                                                              \
     _(GetDOMProperty)                                                       \
     _(SetDOMProperty)
 

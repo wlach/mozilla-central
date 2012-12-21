@@ -162,6 +162,12 @@ class Maybe
 
     bool empty() const { return !constructed; }
 
+    typedef void (Maybe::*ConvertibleToBool)();
+    void nonNull() {}
+    operator ConvertibleToBool() const {
+        return constructed ? &Maybe::nonNull : NULL;
+    }
+
     void construct() {
       MOZ_ASSERT(!constructed);
       ::new (storage.addr()) T();
@@ -196,6 +202,23 @@ class Maybe
       constructed = true;
     }
 
+    Maybe(const T &t) : constructed(true) {
+        new (storage.addr()) T(t);
+    }
+
+    Maybe(const Maybe& other) : constructed(false) {
+        if (other)
+            construct(other.ref());
+    }
+
+    const Maybe& operator=(const Maybe& other) {
+        if (constructed)
+            destroy();
+        if (other)
+            construct(other.ref());
+        return *this;
+    }
+
     T* addr() {
       MOZ_ASSERT(constructed);
       return &asT();
@@ -211,6 +234,11 @@ class Maybe
       return const_cast<Maybe*>(this)->asT();
     }
 
+    const T& get() const {
+      MOZ_ASSERT(constructed);
+      return const_cast<Maybe*>(this)->asT();
+    }
+
     void destroy() {
       ref().~T();
       constructed = false;
@@ -220,10 +248,6 @@ class Maybe
       if (!empty())
         destroy();
     }
-
-  private:
-    Maybe(const Maybe& other) MOZ_DELETE;
-    const Maybe& operator=(const Maybe& other) MOZ_DELETE;
 };
 
 /*

@@ -7,11 +7,52 @@
 
 #include "Assembler-x64.h"
 #include "gc/Marking.h"
+#include "ion/LIR.h"
 
 #include "jsscriptinlines.h"
 
 using namespace js;
 using namespace js::ion;
+
+ABIArgGenerator::ABIArgGenerator()
+  : intRegIndex_(0),
+    floatRegIndex_(0),
+    stackOffset_(0),
+    current_()
+{}
+
+ABIArg
+ABIArgGenerator::next(MIRType type)
+{
+#if defined(_WIN64)
+# error "ABI is different on win64"
+#else
+    switch (type) {
+      case MIRType_Int32:
+      case MIRType_Pointer:
+        if (intRegIndex_ == NumIntArgRegs) {
+            current_ = ABIArg(stackOffset_);
+            stackOffset_ += sizeof(uint64_t);
+            break;
+        }
+        current_ = ABIArg(IntArgRegs[intRegIndex_]);
+        intRegIndex_++;
+        break;
+      case MIRType_Double:
+        if (floatRegIndex_ == NumFloatArgRegs) {
+            current_ = ABIArg(stackOffset_);
+            stackOffset_ += sizeof(uint64_t);
+            break;
+        }
+        current_ = ABIArg(FloatArgRegs[floatRegIndex_]);
+        floatRegIndex_++;
+        break;
+      default:
+        JS_NOT_REACHED("Unexpected argument type");
+    }
+    return current_;
+#endif
+}
 
 void
 Assembler::writeRelocation(JmpSrc src, Relocation::Kind reloc)

@@ -10,6 +10,8 @@
 
 #include "frontend/Parser.h"
 
+#include "frontend/SharedContext-inl.h"
+
 namespace js {
 namespace frontend {
 
@@ -23,6 +25,12 @@ inline bool
 ParseContext::atBodyLevel()
 {
     return !topStmt;
+}
+
+inline bool
+ParseContext::useAsmOrInsideUseAsm() const
+{
+    return sc->isFunctionBox() && sc->asFunctionBox()->useAsmOrInsideUseAsm();
 }
 
 inline

@@ -174,16 +174,18 @@ CodeGeneratorX86Shared::emitCompare(MCompare::CompareType type, const LAllocatio
 bool
 CodeGeneratorX86Shared::visitCompare(LCompare *comp)
 {
-    emitCompare(comp->mir()->compareType(), comp->left(), comp->right());
-    emitSet(JSOpToCondition(comp->jsop()), ToRegister(comp->output()));
+    MCompare *mir = comp->mir();
+    emitCompare(mir->compareType(), comp->left(), comp->right());
+    emitSet(JSOpToCondition(mir->compareType(), comp->jsop()), ToRegister(comp->output()));
     return true;
 }
 
 bool
 CodeGeneratorX86Shared::visitCompareAndBranch(LCompareAndBranch *comp)
 {
-    emitCompare(comp->mir()->compareType(), comp->left(), comp->right());
-    Assembler::Condition cond = JSOpToCondition(comp->jsop());
+    MCompare *mir = comp->mir();
+    emitCompare(mir->compareType(), comp->left(), comp->right());
+    Assembler::Condition cond = JSOpToCondition(mir->compareType(), comp->jsop());
     emitBranch(cond, comp->ifTrue(), comp->ifFalse());
     return true;
 }
@@ -230,6 +232,125 @@ CodeGeneratorX86Shared::visitCompareDAndBranch(LCompareDAndBranch *comp)
     masm.compareDouble(cond, lhs, rhs);
     emitBranch(Assembler::ConditionFromDoubleCondition(cond), comp->ifTrue(), comp->ifFalse(),
                Assembler::NaNCondFromDoubleCondition(cond));
+    return true;
+}
+
+template <class T, class U>
+static Operand
+PointerOperand(T *ins, U *mir)
+{
+    Register base;
+    switch (mir->base()) {
+      case U::Heap: base = HeapReg; break;
+      case U::Global: base = GlobalReg; break;
+    }
+
+    if (ins->index()->isConstant()) {
+        int32_t ptr = ToInt32(ins->index());
+        return Operand(base, (ptr << ScaleToShift(mir->scale())) + mir->displacement());
+    }
+
+    Register reg = ToRegister(ins->index());
+    return Operand(base, reg, mir->scale(), mir->displacement());
+}
+
+bool
+CodeGeneratorX86Shared::visitAsmLoad(LAsmLoad *ins)
+{
+    const MAsmLoad *mir = ins->mir();
+    Operand addr = PointerOperand(ins, mir);
+    switch (mir->viewType()) {
+      case ArrayBufferView::TYPE_INT8:    masm.movxbl(addr, ToRegister(ins->output())); break;
+      case ArrayBufferView::TYPE_UINT8:   masm.movzbl(addr, ToRegister(ins->output())); break;
+      case ArrayBufferView::TYPE_INT16:   masm.movxwl(addr, ToRegister(ins->output())); break;
+      case ArrayBufferView::TYPE_UINT16:  masm.movzwl(addr, ToRegister(ins->output())); break;
+      case ArrayBufferView::TYPE_INT32:   masm.movl(addr, ToRegister(ins->output())); break;
+      case ArrayBufferView::TYPE_UINT32:  masm.movl(addr, ToRegister(ins->output())); break;
+      case ArrayBufferView::TYPE_FLOAT64: masm.movsd(addr, ToFloatRegister(ins->output())); break;
+      case MAsmLoad::FUNC_PTR:            masm.loadPtr(addr, ToRegister(ins->output())); break;
+      case ArrayBufferView::TYPE_FLOAT32:
+        masm.loadFloatAsDouble(addr, ToFloatRegister(ins->output()));
+        break;
+      default: JS_NOT_REACHED("unexpected array type");
+    }
+    return true;
+}
+
+bool
+CodeGeneratorX86Shared::visitAsmStore(LAsmStore *ins)
+{
+    const MAsmStore *mir = ins->mir();
+    Operand addr = PointerOperand(ins, mir);
+    if (ins->value()->isConstant()) {
+        switch (mir->viewType()) {
+          case ArrayBufferView::TYPE_INT8:    masm.movb(Imm32(ToInt32(ins->value())), addr); break;
+          case ArrayBufferView::TYPE_UINT8:   masm.movb(Imm32(ToInt32(ins->value())), addr); break;
+          case ArrayBufferView::TYPE_INT16:   masm.movw(Imm32(ToInt32(ins->value())), addr); break;
+          case ArrayBufferView::TYPE_UINT16:  masm.movw(Imm32(ToInt32(ins->value())), addr); break;
+          case ArrayBufferView::TYPE_INT32:   masm.movl(Imm32(ToInt32(ins->value())), addr); break;
+          case ArrayBufferView::TYPE_UINT32:  masm.movl(Imm32(ToInt32(ins->value())), addr); break;
+          default: JS_NOT_REACHED("unexpected array type");
+        }
+    } else {
+        switch (mir->viewType()) {
+          case ArrayBufferView::TYPE_INT8:    masm.movb(ToRegister(ins->value()), addr); break;
+          case ArrayBufferView::TYPE_UINT8:   masm.movb(ToRegister(ins->value()), addr); break;
+          case ArrayBufferView::TYPE_INT16:   masm.movw(ToRegister(ins->value()), addr); break;
+          case ArrayBufferView::TYPE_UINT16:  masm.movw(ToRegister(ins->value()), addr); break;
+          case ArrayBufferView::TYPE_INT32:   masm.movl(ToRegister(ins->value()), addr); break;
+          case ArrayBufferView::TYPE_UINT32:  masm.movl(ToRegister(ins->value()), addr); break;
+          case ArrayBufferView::TYPE_FLOAT64: masm.movsd(ToFloatRegister(ins->value()), addr); break;
+          case ArrayBufferView::TYPE_FLOAT32:
+            masm.convertDoubleToFloat(ToFloatRegister(ins->value()), ScratchFloatReg);
+            masm.movss(ScratchFloatReg, addr);
+            break;
+          default: JS_NOT_REACHED("unexpected array type");
+        }
+    }
+    return true;
+}
+
+bool
+CodeGeneratorX86Shared::visitAsmPassStackArg(LAsmPassStackArg *ins)
+{
+    const MAsmPassStackArg *mir = ins->mir();
+    Operand dst(StackPointer, mir->spOffset());
+    if (ins->arg()->isConstant()) {
+        masm.mov(Imm32(ToInt32(ins->arg())), dst);
+    } else {
+        if (ins->arg()->isGeneralReg())
+            masm.mov(ToRegister(ins->arg()), dst);
+        else
+            masm.movsd(ToFloatRegister(ins->arg()), dst);
+    }
+    return true;
+}
+
+bool
+CodeGeneratorX86Shared::visitAsmCall(LAsmCall *ins)
+{
+    MAsmCall *mir = ins->mir();
+
+    if (mir->spIncrement())
+        masm.freeStack(mir->spIncrement());
+
+    MAsmCall::Callee callee = mir->callee();
+    switch (callee.which()) {
+      case MAsmCall::Callee::Dynamic:
+        masm.call(ToRegister(ins->getOperand(mir->dynamicCalleeOperandIndex())));
+        break;
+      case MAsmCall::Callee::Internal:
+        if (!gen->observeAsmCall(masm.unlabeledCall(), callee.internalCallData()))
+            return false;
+        break;
+      case MAsmCall::Callee::Builtin:
+        masm.call(ImmWord(callee.builtin()));
+        break;
+    }
+
+    if (mir->spIncrement())
+        masm.reserveStack(mir->spIncrement());
+
     return true;
 }
 
@@ -628,6 +749,37 @@ CodeGeneratorX86Shared::visitMulI(LMulI *ins)
 }
 
 bool
+CodeGeneratorX86Shared::visitAsmDivOrMod(LAsmDivOrMod *ins)
+{
+    Register remainder = ToRegister(ins->remainder());
+    Register lhs = ToRegister(ins->lhs());
+    Register rhs = ToRegister(ins->rhs());
+    Register output = ToRegister(ins->output());
+
+    JS_ASSERT(remainder == edx);
+    JS_ASSERT(lhs == eax);
+    JS_ASSERT(ins->mirRaw()->isAsmUDiv() || ins->mirRaw()->isAsmUMod());
+    JS_ASSERT_IF(ins->mirRaw()->isAsmUDiv(), output == eax);
+    JS_ASSERT_IF(ins->mirRaw()->isAsmUMod(), output == edx);
+
+    Label afterDiv;
+
+    masm.testl(rhs, rhs);
+    Label notzero;
+    masm.j(Assembler::NonZero, &notzero);
+    masm.movl(Imm32(0), output);
+    masm.jmp(&afterDiv);
+    masm.bind(&notzero);
+
+    masm.xorl(edx, edx);
+    masm.udiv(rhs);
+
+    masm.bind(&afterDiv);
+
+    return true;
+}
+
+bool
 CodeGeneratorX86Shared::visitMulNegativeZeroCheck(MulNegativeZeroCheck *ool)
 {
     LMulI *ins = ool->ins();
@@ -982,9 +1134,9 @@ CodeGeneratorX86Shared::visitMoveGroup(LMoveGroup *group)
         // No bogus moves.
         JS_ASSERT(*from != *to);
         JS_ASSERT(!from->isConstant());
-        JS_ASSERT(from->isDouble() == to->isDouble());
+        JS_ASSERT_IF(!from->isArgument(), from->isDouble() == to->isDouble());
 
-        MoveResolver::Move::Kind kind = from->isDouble()
+        MoveResolver::Move::Kind kind = to->isDouble()
                                         ? MoveResolver::Move::DOUBLE
                                         : MoveResolver::Move::GENERAL;
 
@@ -1358,6 +1510,17 @@ CodeGeneratorX86Shared::visitTruncateDToInt32(LTruncateDToInt32 *ins)
 
     masm.branchTruncateDouble(input, output, ool->entry());
     masm.bind(ool->rejoin());
+    return true;
+}
+
+bool
+CodeGeneratorX86Shared::visitEffectiveAddress(LEffectiveAddress *ins)
+{
+    const MEffectiveAddress *mir = ins->mir();
+    Register base = ToRegister(ins->base());
+    Register index = ToRegister(ins->index());
+    Register output = ToRegister(ins->output());
+    masm.leal(Operand(base, index, mir->scale(), mir->displacement()), output);
     return true;
 }
 

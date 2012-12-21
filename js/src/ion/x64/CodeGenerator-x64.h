@@ -25,6 +25,8 @@ class CodeGeneratorX64 : public CodeGeneratorX86Shared
     ValueOperand ToOutValue(LInstruction *ins);
     ValueOperand ToTempValue(LInstruction *ins, size_t pos);
 
+    bool generateAsmPrologue(const MIRTypeVector &argTypes, MIRType returnType,
+                             Label *internalEntry);
 
     void loadUnboxedValue(Operand source, MIRType type, const LDefinition *dest);
     void storeUnboxedValue(const LAllocation *value, MIRType valueType,

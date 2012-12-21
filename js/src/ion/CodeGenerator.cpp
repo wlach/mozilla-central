@@ -157,6 +157,13 @@ CodeGenerator::visitInt32ToDouble(LInt32ToDouble *lir)
 }
 
 bool
+CodeGenerator::visitUInt32ToDouble(LUInt32ToDouble *lir)
+{
+    masm.convertUInt32ToDouble(ToRegister(lir->input()), ToFloatRegister(lir->output()));
+    return true;
+}
+
+bool
 CodeGenerator::visitDoubleToInt32(LDoubleToInt32 *lir)
 {
     Label fail;
@@ -1598,7 +1605,7 @@ CodeGenerator::maybeCreateScriptCounts()
             return NULL;
     }
 
-    if (!script->hasScriptCounts)
+    if (!script || !script->hasScriptCounts)
         return NULL;
 
     counts = js_new<IonScriptCounts>();
@@ -2244,6 +2251,16 @@ CodeGenerator::visitPowD(LPowD *ins)
 }
 
 bool
+CodeGenerator::visitNegI(LNegI *ins)
+{
+    Register input = ToRegister(ins->input());
+    JS_ASSERT(input == ToRegister(ins->output()));
+
+    masm.negl(input);
+    return true;
+}
+
+bool
 CodeGenerator::visitNegD(LNegD *ins)
 {
     FloatRegister input = ToFloatRegister(ins->input());
@@ -2409,7 +2426,7 @@ CodeGenerator::visitCompareS(LCompareS *lir)
     masm.branchTest32(Assembler::Zero, temp, atomBit, &notAtom);
 
     masm.cmpPtr(left, right);
-    emitSet(JSOpToCondition(op), output);
+    emitSet(JSOpToCondition(lir->mir()->compareType(), op), output);
     masm.jump(ool->rejoin());
 
     masm.bind(&notAtom);
@@ -2536,7 +2553,7 @@ CodeGenerator::visitIsNullOrLikeUndefined(LIsNullOrLikeUndefined *lir)
 
     JS_ASSERT(op == JSOP_STRICTEQ || op == JSOP_STRICTNE);
 
-    Assembler::Condition cond = JSOpToCondition(op);
+    Assembler::Condition cond = JSOpToCondition(compareType, op);
     if (compareType == MCompare::Compare_Null)
         cond = masm.testNull(cond, value);
     else
@@ -2602,7 +2619,7 @@ CodeGenerator::visitIsNullOrLikeUndefinedAndBranch(LIsNullOrLikeUndefinedAndBran
 
     JS_ASSERT(op == JSOP_STRICTEQ || op == JSOP_STRICTNE);
 
-    Assembler::Condition cond = JSOpToCondition(op);
+    Assembler::Condition cond = JSOpToCondition(compareType, op);
     if (compareType == MCompare::Compare_Null)
         cond = masm.testNull(cond, value);
     else
@@ -3589,6 +3606,67 @@ CodeGenerator::visitGetArgument(LGetArgument *lir)
         Register i = ToRegister(index);
         BaseIndex argPtr(StackPointer, i, ScaleFromElemWidth(sizeof(Value)), argvOffset);
         masm.loadValue(argPtr, result);
+    }
+    return true;
+}
+
+bool
+CodeGenerator::generateAsm(AsmCodePtr *codePtr, ScopedReleasePtr<JSC::ExecutablePool> *poolOut,
+                           const MIRTypeVector *maybeExternalEntryArgTypes, MIRType returnType)
+{
+    Label internalEntry;
+    if (maybeExternalEntryArgTypes) {
+        if (!generateAsmPrologue(*maybeExternalEntryArgTypes, returnType, &internalEntry))
+            return false;
+        masm.bind(&internalEntry);
+    }
+
+    if (!generatePrologue())
+        return false;
+    if (!generateBody())
+        return false;
+    if (!generateEpilogue())
+        return false;
+    if (!generateOutOfLineCode())
+        return false;
+
+    masm.finish();
+    if (masm.oom()) {
+        js_ReportOutOfMemory(GetIonContext()->cx);
+        return false;
+    }
+
+    JS_ASSERT(snapshots_.size() == 0);
+    JS_ASSERT(bailouts_.empty());
+    JS_ASSERT(graph.numConstants() == 0);
+    JS_ASSERT(safepointIndices_.empty());
+    JS_ASSERT(osiIndices_.empty());
+    JS_ASSERT(cacheList_.empty());
+    JS_ASSERT(safepoints_.size() == 0);
+    JS_ASSERT(graph.mir().numScripts() == 0);
+
+    JSC::ExecutableAllocator *execAlloc = gen->ionCompartment()->execAlloc();
+    JSC::ExecutablePool *rawPool;
+    uint8_t *code = (uint8_t*)execAlloc->alloc(masm.bytesNeeded(), &rawPool, JSC::ASMJS_CODE);
+    if (!code)
+        return false;
+
+    *poolOut = rawPool;
+
+    // c.f IonCode::copyFrom and above assertions
+    masm.executableCopy(code);
+    JS_ASSERT(masm.jumpRelocationTableBytes() == 0);
+    JS_ASSERT(masm.dataRelocationTableBytes() == 0);
+    JS_ASSERT(masm.preBarrierTableBytes() == 0);
+    masm.processCodeLabels(code);
+
+    codePtr->baseAddress = code;
+    if (maybeExternalEntryArgTypes) {
+        codePtr->externalEntry = JS_DATA_TO_FUNC_PTR(AsmCodePtr::PF, code);
+        codePtr->internalEntry = code + internalEntry.offset();
+    } else {
+        codePtr->externalEntry = NULL;
+        codePtr->internalEntry = code;
     }
     return true;
 }
@@ -5046,6 +5124,30 @@ CodeGenerator::visitFunctionBoundary(LFunctionBoundary *lir)
         default:
             JS_NOT_REACHED("invalid LFunctionBoundary type");
     }
+}
+
+bool
+CodeGenerator::visitAsmParameter(LAsmParameter *lir)
+{
+    return true;
+}
+
+bool
+CodeGenerator::visitAsmReturn(LAsmReturn *lir)
+{
+    // Don't emit a jump to the return label if this is the last block.
+    if (current->mir() != *gen->graph().poBegin())
+        masm.jump(returnLabel_);
+    return true;
+}
+
+bool
+CodeGenerator::visitAsmVoidReturn(LAsmVoidReturn *lir)
+{
+    // Don't emit a jump to the return label if this is the last block.
+    if (current->mir() != *gen->graph().poBegin())
+        masm.jump(returnLabel_);
+    return true;
 }
 
 } // namespace ion

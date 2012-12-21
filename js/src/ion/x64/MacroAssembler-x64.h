@@ -469,6 +469,9 @@ class MacroAssemblerX64 : public MacroAssemblerX86Shared
     void loadPtr(const Address &address, Register dest) {
         movq(Operand(address), dest);
     }
+    void loadPtr(const Operand &src, Register dest) {
+        movq(src, dest);
+    }
     void loadPtr(const BaseIndex &src, Register dest) {
         movq(Operand(src), dest);
 	}
@@ -699,6 +702,9 @@ class MacroAssemblerX64 : public MacroAssemblerX86Shared
     void unboxDouble(const Operand &src, const FloatRegister &dest) {
         lea(src, ScratchReg);
         movqsd(ScratchReg, dest);
+    }
+    void unboxDouble(const Address &src, const FloatRegister &dest) {
+        unboxDouble(Operand(src), dest);
     }
     void unboxPrivate(const ValueOperand &src, const Register dest) {
         movq(src.valueReg(), dest);

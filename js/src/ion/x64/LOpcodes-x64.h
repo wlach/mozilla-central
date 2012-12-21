@@ -15,7 +15,8 @@
     _(DivI)                         \
     _(ModI)                         \
     _(ModPowTwoI)                   \
-    _(PowHalfD)
+    _(PowHalfD)                     \
+    _(AsmDivOrMod)
 
 #endif // jsion_lir_opcodes_x64_h__
 

@@ -143,21 +143,12 @@ MacroAssembler::loadFromTypedArray(int arrayType, const T &src, AnyRegister dest
         break;
       case TypedArray::TYPE_FLOAT32:
       case TypedArray::TYPE_FLOAT64:
-      {
         if (arrayType == js::TypedArray::TYPE_FLOAT32)
             loadFloatAsDouble(src, dest.fpu());
         else
             loadDouble(src, dest.fpu());
-
-        // Make sure NaN gets canonicalized.
-        Label notNaN;
-        branchDouble(DoubleOrdered, dest.fpu(), dest.fpu(), &notNaN);
-        {
-            loadStaticDouble(&js_NaN, dest.fpu());
-        }
-        bind(&notNaN);
+        canonicalizeDouble(dest.fpu());
         break;
-      }
       default:
         JS_NOT_REACHED("Invalid typed array type");
         break;
@@ -629,4 +620,22 @@ MacroAssembler::printf(const char *output, Register value)
     callWithABI(JS_FUNC_TO_DATA_PTR(void *, printf1_));
 
     PopRegsInMask(RegisterSet::Volatile());
+}
+
+ABIArgIter::ABIArgIter(const MIRTypeVector &types)
+  : gen_(),
+    types_(types),
+    i_(0)
+{
+    if (!done())
+        gen_.next(types_[i_]);
+}
+
+void
+ABIArgIter::operator++(int)
+{
+    JS_ASSERT(!done());
+    i_++;
+    if (!done())
+        gen_.next(types_[i_]);
 }

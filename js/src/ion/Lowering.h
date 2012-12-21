@@ -158,6 +158,7 @@ class LIRGenerator : public LIRGeneratorSpecific
     bool visitLoadElementHole(MLoadElementHole *ins);
     bool visitStoreElement(MStoreElement *ins);
     bool visitStoreElementHole(MStoreElementHole *ins);
+    bool visitEffectiveAddress(MEffectiveAddress *ins);
     bool visitArrayPopShift(MArrayPopShift *ins);
     bool visitArrayPush(MArrayPush *ins);
     bool visitArrayConcat(MArrayConcat *ins);
@@ -194,6 +195,14 @@ class LIRGenerator : public LIRGeneratorSpecific
     bool visitInstanceOf(MInstanceOf *ins);
     bool visitCallInstanceOf(MCallInstanceOf *ins);
     bool visitFunctionBoundary(MFunctionBoundary *ins);
+    bool visitAsmUnsignedToDouble(MAsmUnsignedToDouble *ins);
+    bool visitAsmLoad(MAsmLoad *ins);
+    bool visitAsmStore(MAsmStore *ins);
+    bool visitAsmParameter(MAsmParameter *ins);
+    bool visitAsmReturn(MAsmReturn *ins);
+    bool visitAsmVoidReturn(MAsmVoidReturn *ins);
+    bool visitAsmPassStackArg(MAsmPassStackArg *ins);
+    bool visitAsmCall(MAsmCall *ins);
     bool visitSetDOMProperty(MSetDOMProperty *ins);
     bool visitGetDOMProperty(MGetDOMProperty *ins);
 };
