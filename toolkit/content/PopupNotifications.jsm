@@ -59,7 +59,11 @@ Notification.prototype = {
       return null;
 
     let anchorElement = null;
-    if (this.anchorID)
+    let anchor = this.browser.getAttribute("popupnotificationanchor");
+    if (anchor)
+      anchorElement = iconBox.ownerDocument.getElementById(anchor);
+
+    if (!anchorElement && this.anchorID)
       anchorElement = iconBox.querySelector("#"+this.anchorID);
 
     // Use a default anchor icon if it's available
@@ -252,6 +256,8 @@ PopupNotifications.prototype = {
     if (browser == this.tabbrowser.selectedBrowser && fm.activeWindow == this.window) {
       // show panel now
       this._update(notification.anchorElement);
+    } else if (browser.getAttribute("popupnotificationanchor") && fm.activeWindow == this.window) {
+      this._showPanel(notifications, notification.anchorElement);
     } else {
       // Otherwise, update() will display the notification the next time the
       // relevant tab/window is selected.

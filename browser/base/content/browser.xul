@@ -1106,6 +1106,7 @@
       <browser id="social-sidebar-browser"
                type="content"
                disableglobalhistory="true"
+               popupnotificationanchor="social-provider-button"
                flex="1"
                style="min-width: 14em; width: 18em; max-width: 36em;"/>
     </vbox>

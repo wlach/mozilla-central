@@ -1071,6 +1071,10 @@ var gBrowserInit = {
     // setup our MozApplicationManifest listener
     gBrowser.addEventListener("MozApplicationManifest",
                               OfflineApps, false);
+    // listen for offline apps on social
+    let SocialBrowser = document.getElementById("social-sidebar-browser");
+    SocialBrowser.addEventListener("MozApplicationManifest",
+                              OfflineApps, false);
 
     // setup simple gestures support
     gGestureSupport.init(true);
@@ -5779,6 +5783,14 @@ var OfflineApps = {
       if (browser.contentWindow == aContentWindow)
         return browser;
     }
+    // handle other browser/iframe elements that may need popupnotifications
+    let browser = aContentWindow
+                          .QueryInterface(Ci.nsIInterfaceRequestor)
+                          .getInterface(Ci.nsIWebNavigation)
+                          .QueryInterface(Ci.nsIDocShell)
+                          .chromeEventHandler;
+    if (browser.getAttribute("popupnotificationanchor"))
+      return browser;
     return null;
   },
 
@@ -5815,6 +5827,23 @@ var OfflineApps = {
       }
     }
 
+    // is this from a non-tab browser/iframe?
+    browsers = document.querySelectorAll("iframe[popupnotificationanchor]");
+    for (let browser of browsers) {
+      uri = this._getManifestURI(browser.contentWindow);
+      if (uri && uri.equals(aCacheUpdate.manifestURI)) {
+        return browser;
+      }
+    }
+
+    browsers = document.querySelectorAll("browser[popupnotificationanchor]");
+    for (let browser of browsers) {
+      uri = this._getManifestURI(browser.contentWindow);
+      if (uri && uri.equals(aCacheUpdate.manifestURI)) {
+        return browser;
+      }
+    }
+
     return null;
   },
 
@@ -5822,8 +5851,19 @@ var OfflineApps = {
     if (!aBrowser)
       return;
 
-    var notificationBox = gBrowser.getNotificationBox(aBrowser);
-    var notification = notificationBox.getNotificationWithValue("offline-app-usage");
+    var popupAnchor = aBrowser.getAttribute("popupnotificationanchor");
+    var notificationID = "offline-app-usage";
+    var notificationBox, notification;
+    if (popupAnchor) {
+      // add host to avoid buildup of notifications containing notifications
+      // for multiple hosts
+      notificationID = notificationID + "-" + currentURI.asciiHost;
+      notification = PopupNotifications.getNotification(notificationID,
+                                                        aBrowser);
+    } else {
+      notificationBox = gBrowser.getNotificationBox(aBrowser);
+      notification = notificationBox.getNotificationWithValue(notificationID);
+    }
     if (!notification) {
       var buttons = [{
           label: gNavigatorBundle.getString("offlineApps.manageUsage"),
@@ -5832,14 +5872,21 @@ var OfflineApps = {
         }];
 
       var warnQuota = gPrefService.getIntPref("offline-apps.quota.warn");
-      const priority = notificationBox.PRIORITY_WARNING_MEDIUM;
       var message = gNavigatorBundle.getFormattedString("offlineApps.usage",
                                                         [ aURI.host,
                                                           warnQuota / 1024 ]);
-
-      notificationBox.appendNotification(message, "offline-app-usage",
-                                         "chrome://browser/skin/Info.png",
-                                         priority, buttons);
+      if (popupAnchor) {
+        PopupNotifications.show(aBrowser, notificationID, message,
+                                popupAnchor, buttons.shift(),
+                                buttons, {
+                                  popupIconURL: "chrome://browser/skin/Info.png"
+                                });
+      } else {
+        const priority = notificationBox.PRIORITY_WARNING_MEDIUM;
+        notificationBox.appendNotification(message, notificationID,
+                                           "chrome://browser/skin/Info.png",
+                                           priority, buttons);
+      }
     }
 
     // Now that we've warned once, prevent the warning from showing up
@@ -5890,6 +5937,7 @@ var OfflineApps = {
     var browserWindow = this._getBrowserWindowForContentWindow(aContentWindow);
     var browser = this._getBrowserForContentWindow(browserWindow,
                                                    aContentWindow);
+    var popupAnchor = browser.getAttribute("popupnotificationanchor");
 
     var currentURI = aContentWindow.document.documentURIObject;
 
@@ -5907,9 +5955,15 @@ var OfflineApps = {
     }
 
     var host = currentURI.asciiHost;
-    var notificationBox = gBrowser.getNotificationBox(browser);
+    var notificationBox, notification;
     var notificationID = "offline-app-requested-" + host;
-    var notification = notificationBox.getNotificationWithValue(notificationID);
+    if (popupAnchor) {
+      notification = PopupNotifications.getNotification(notificationID,
+                                                        browser);
+    } else {
+      notificationBox = gBrowser.getNotificationBox(browser);
+      notification = notificationBox.getNotificationWithValue(notificationID);
+    }
 
     if (notification) {
       notification.documents.push(aContentWindow.document);
@@ -5936,13 +5990,21 @@ var OfflineApps = {
         callback: function() { /* noop */ }
       }];
 
-      const priority = notificationBox.PRIORITY_INFO_LOW;
       var message = gNavigatorBundle.getFormattedString("offlineApps.available",
                                                         [ host ]);
-      notification =
+      if (popupAnchor) {
+        notification = PopupNotifications.show(browser, notificationID, message,
+                                           popupAnchor, buttons.shift(),
+                                           [buttons.shift()], {
+                                              popupIconURL: "chrome://browser/skin/Info.png"
+                                            });
+      } else {
+        const priority = notificationBox.PRIORITY_INFO_LOW;
+        notification =
         notificationBox.appendNotification(message, notificationID,
                                            "chrome://browser/skin/Info.png",
                                            priority, buttons);
+      }
       notification.documents = [ aContentWindow.document ];
     }
   },

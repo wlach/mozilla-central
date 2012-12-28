@@ -1609,6 +1609,13 @@ ContentPermissionPrompt.prototype = {
     link.href = Services.urlFormatter.formatURLPref("browser.geolocation.warning.infoURL");
 
     var browser = chromeWin.gBrowser.getBrowserForDocument(requestingWindow.document);
+    if (!browser) {
+      // find the requesting browser or iframe
+      browser = requestingWindow.QueryInterface(Ci.nsIInterfaceRequestor)
+                                  .getInterface(Ci.nsIWebNavigation)
+                                  .QueryInterface(Ci.nsIDocShell)
+                                  .chromeEventHandler;
+    }
 
     secHistogram.add(Ci.nsISecurityUITelemetry.WARNING_GEOLOCATION_REQUEST);
     chromeWin.PopupNotifications.show(browser, "geolocation", message, "geo-notification-icon",
