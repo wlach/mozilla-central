@@ -138,9 +138,7 @@ class RefTest(object):
                                  # give the JS harness 30 seconds to deal
                                  # with its own timeouts
                                  timeout=options.timeout + 30.0)
-      # Bug 801682: Disable leak checks until we have time to fix those leaks
-      # Please never land this patch on mozilla-central!
-      # processLeakLog(self.leakLogFile, options.leakThreshold)
+      processLeakLog(self.leakLogFile, options.leakThreshold)
       self.automation.log.info("\nREFTEST INFO | runreftest.py | Running tests: end.")
     finally:
       self.cleanup(profileDir)
