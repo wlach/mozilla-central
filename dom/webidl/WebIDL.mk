@@ -61,6 +61,7 @@ webidl_files = \
   HTMLLabelElement.webidl \
   HTMLOptionsCollection.webidl \
   HTMLPropertiesCollection.webidl \
+  HTMLTitleElement.webidl \
   ImageData.webidl \
   Location.webidl \
   MutationObserver.webidl \
@@ -73,6 +74,7 @@ webidl_files = \
   Performance.webidl \
   PerformanceNavigation.webidl \
   PerformanceTiming.webidl \
+  Rect.webidl \
   RGBColor.webidl \
   Screen.webidl \
   SVGAngle.webidl \
