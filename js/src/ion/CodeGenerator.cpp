@@ -3363,6 +3363,13 @@ CodeGenerator::visitIteratorStart(LIteratorStart *lir)
     masm.loadObjProto(temp1, temp1);
     masm.branchTestPtr(Assembler::NonZero, temp1, temp1, ool->entry());
 
+    // Ensure the object does not have any elements. The presence of dense
+    // elements is not captured by the shape tests above.
+    masm.branchPtr(Assembler::NotEqual,
+                   Address(obj, JSObject::offsetOfElements()),
+                   ImmWord(js::emptyObjectElements),
+                   ool->entry());
+
     // Write barrier for stores to the iterator. We only need to take a write
     // barrier if NativeIterator::obj is actually going to change.
     {
@@ -3589,8 +3596,8 @@ CodeGenerator::link()
       IonScript::New(cx, graph.totalSlotCount(), scriptFrameSize, snapshots_.size(),
                      bailouts_.length(), graph.numConstants(),
                      safepointIndices_.length(), osiIndices_.length(),
-                     cacheList_.length(), barrierOffsets_.length(),
-                     safepoints_.size(), graph.mir().numScripts());
+                     cacheList_.length(), safepoints_.size(),
+                     graph.mir().numScripts());
     SetIonScript(script, executionMode, ionScript);
 
     if (!ionScript)
@@ -3623,8 +3630,6 @@ CodeGenerator::link()
         ionScript->copyOsiIndices(&osiIndices_[0], masm);
     if (cacheList_.length())
         ionScript->copyCacheEntries(&cacheList_[0], masm);
-    if (barrierOffsets_.length())
-        ionScript->copyPrebarrierEntries(&barrierOffsets_[0], masm);
     if (safepoints_.size())
         ionScript->copySafepoints(&safepoints_);
 
@@ -3839,6 +3844,8 @@ class OutOfLineCache : public OutOfLineCodeBase<CodeGenerator>
             return codegen->visitOutOfLineBindNameCache(this);
           case LInstruction::LOp_GetNameCache:
             return codegen->visitOutOfLineGetNameCache(this);
+          case LInstruction::LOp_CallsiteCloneCache:
+            return codegen->visitOutOfLineCallsiteCloneCache(this);
           default:
             JS_NOT_REACHED("Bad instruction");
             return false;
@@ -3875,6 +3882,41 @@ CodeGenerator::visitCache(LInstruction *ins)
     masm.bind(ool->rejoin());
 
     ool->setInlineJump(jump, label);
+    return true;
+}
+
+typedef JSObject *(*CallsiteCloneCacheFn)(JSContext *, size_t, HandleObject);
+static const VMFunction CallsiteCloneCacheInfo =
+    FunctionInfo<CallsiteCloneCacheFn>(CallsiteCloneCache);
+
+bool
+CodeGenerator::visitOutOfLineCallsiteCloneCache(OutOfLineCache *ool)
+{
+    LCallsiteCloneCache *lir = ool->cache()->toCallsiteCloneCache();
+    const MCallsiteCloneCache *mir = lir->mir();
+    Register callee = ToRegister(lir->callee());
+    RegisterSet liveRegs = lir->safepoint()->liveRegs();
+    Register output = ToRegister(lir->output());
+
+    IonCacheCallsiteClone cache(ool->getInlineJump(), ool->getInlineLabel(),
+                                masm.labelForPatch(), liveRegs,
+                                callee, mir->block()->info().script(), mir->callPc(), output);
+
+    JS_ASSERT(!mir->resumePoint());
+
+    size_t cacheIndex = allocateCache(cache);
+
+    saveLive(lir);
+
+    pushArg(callee);
+    pushArg(Imm32(cacheIndex));
+    if (!callVM(CallsiteCloneCacheInfo, lir))
+        return false;
+
+    masm.storeCallResult(output);
+    restoreLive(lir);
+
+    masm.jump(ool->rejoin());
     return true;
 }
 
