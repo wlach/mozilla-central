@@ -88,11 +88,7 @@ StackFrame::initExecuteFrame(UnrootedScript script, StackFrame *prev, FrameRegs 
     ncode_ = (void *)0xbad;
     Debug_SetValueRangeToCrashOnTouch(&rval_, 1);
     hookData_ = (void *)0xbad;
-    annotation_ = (void *)0xbad;
 #endif
-
-    if (prev && prev->annotation())
-        setAnnotation(prev->annotation());
 }
 
 template <StackFrame::TriggerPostBarriers doPostBarrier>
@@ -1051,7 +1047,7 @@ ContextStack::pushInvokeFrame(JSContext *cx, const CallArgs &args,
 bool
 ContextStack::pushExecuteFrame(JSContext *cx, JSScript *script, const Value &thisv,
                                JSObject &scopeChain, ExecuteType type,
-                               StackFrame *evalInFrame, ExecuteFrameGuard *efg)
+                               AbstractFramePtr evalInFrame, ExecuteFrameGuard *efg)
 {
     AssertCanGC();
 
@@ -1071,14 +1067,14 @@ ContextStack::pushExecuteFrame(JSContext *cx, JSScript *script, const Value &thi
     MaybeExtend extend;
     if (evalInFrame) {
         /* Though the prev-frame is given, need to search for prev-call. */
-        StackSegment &seg = cx->stack.space().containingSegment(evalInFrame);
+        StackSegment &seg = cx->stack.space().containingSegment(evalInFrame.asStackFrame());
         StackIter iter(cx->runtime, seg);
         /* Debug-mode currently disables Ion compilation. */
-        JS_ASSERT(!evalInFrame->runningInIon());
-        JS_ASSERT_IF(evalInFrame->compartment() == iter.compartment(), !iter.isIon());
-        while (!iter.isScript() || iter.isIon() || iter.interpFrame() != evalInFrame) {
+        JS_ASSERT(!evalInFrame.asStackFrame()->runningInIon());
+        JS_ASSERT_IF(evalInFrame.compartment() == iter.compartment(), !iter.isIon());
+        while (!iter.isScript() || iter.isIon() || iter.abstractFramePtr() != evalInFrame) {
             ++iter;
-            JS_ASSERT_IF(evalInFrame->compartment() == iter.compartment(), !iter.isIon());
+            JS_ASSERT_IF(evalInFrame.compartment() == iter.compartment(), !iter.isIon());
         }
         evalInFrameCalls = iter.data_.calls_;
         extend = CANT_EXTEND;
@@ -1091,7 +1087,7 @@ ContextStack::pushExecuteFrame(JSContext *cx, JSScript *script, const Value &thi
     if (!firstUnused)
         return false;
 
-    StackFrame *prev = evalInFrame ? evalInFrame : maybefp();
+    StackFrame *prev = evalInFrame ? evalInFrame.asStackFrame() : maybefp();
     StackFrame *fp = reinterpret_cast<StackFrame *>(firstUnused + 2);
     fp->initExecuteFrame(script, prev, seg_->maybeRegs(), thisv, scopeChain, type);
     fp->initVarsToUndefined();
@@ -1398,7 +1394,7 @@ StackIter::settleOnNewState()
                 }
 
                 data_.state_ = ION;
-                ionInlineFrames_ = ion::InlineFrameIterator(&data_.ionFrames_);
+                ionInlineFrames_.resetOn(&data_.ionFrames_);
                 data_.pc_ = ionInlineFrames_.pc();
                 return;
             }
@@ -1432,7 +1428,7 @@ StackIter::settleOnNewState()
 
 StackIter::Data::Data(JSContext *cx, PerThreadData *perThread, SavedOption savedOption)
   : perThread_(perThread),
-    maybecx_(cx),
+    cx_(cx),
     savedOption_(savedOption),
     poppedCallDuringSettle_(false)
 #ifdef JS_ION
@@ -1442,9 +1438,9 @@ StackIter::Data::Data(JSContext *cx, PerThreadData *perThread, SavedOption saved
 {
 }
 
-StackIter::Data::Data(JSRuntime *rt, StackSegment *seg)
+StackIter::Data::Data(JSContext *cx, JSRuntime *rt, StackSegment *seg)
   : perThread_(&rt->mainThread),
-    maybecx_(NULL),
+    cx_(cx),
     savedOption_(STOP_AT_SAVED),
     poppedCallDuringSettle_(false)
 #ifdef JS_ION
@@ -1456,7 +1452,7 @@ StackIter::Data::Data(JSRuntime *rt, StackSegment *seg)
 
 StackIter::Data::Data(const StackIter::Data &other)
   : perThread_(other.perThread_),
-    maybecx_(other.maybecx_),
+    cx_(other.cx_),
     savedOption_(other.savedOption_),
     state_(other.state_),
     fp_(other.fp_),
@@ -1475,7 +1471,7 @@ StackIter::Data::Data(const StackIter::Data &other)
 StackIter::StackIter(JSContext *cx, SavedOption savedOption)
   : data_(cx, &cx->runtime->mainThread, savedOption)
 #ifdef JS_ION
-    , ionInlineFrames_((js::ion::IonFrameIterator*) NULL)
+    , ionInlineFrames_(cx, (js::ion::IonFrameIterator*) NULL)
 #endif
 {
 #ifdef JS_METHODJIT
@@ -1493,9 +1489,9 @@ StackIter::StackIter(JSContext *cx, SavedOption savedOption)
 }
 
 StackIter::StackIter(JSRuntime *rt, StackSegment &seg)
-  : data_(rt, &seg)
+  : data_(seg.cx(), rt, &seg)
 #ifdef JS_ION
-    , ionInlineFrames_((js::ion::IonFrameIterator*) NULL)
+    , ionInlineFrames_(seg.cx(), (js::ion::IonFrameIterator*) NULL)
 #endif
 {
 #ifdef JS_METHODJIT
@@ -1510,7 +1506,7 @@ StackIter::StackIter(JSRuntime *rt, StackSegment &seg)
 StackIter::StackIter(const StackIter &other)
   : data_(other.data_)
 #ifdef JS_ION
-    , ionInlineFrames_(other.ionInlineFrames_)
+    , ionInlineFrames_(other.data_.seg_->cx(), &other.ionInlineFrames_)
 #endif
 {
 }
@@ -1518,9 +1514,10 @@ StackIter::StackIter(const StackIter &other)
 StackIter::StackIter(const Data &data)
   : data_(data)
 #ifdef JS_ION
-    , ionInlineFrames_(data_.ionFrames_.isScripted() ? &data_.ionFrames_ : NULL)
+    , ionInlineFrames_(data.cx_, data_.ionFrames_.isScripted() ? &data_.ionFrames_ : NULL)
 #endif
 {
+    JS_ASSERT(data.cx_);
 }
 
 #ifdef JS_ION
@@ -1539,7 +1536,7 @@ StackIter::popIonFrame()
             ++data_.ionFrames_;
 
         if (!data_.ionFrames_.done()) {
-            ionInlineFrames_ = ion::InlineFrameIterator(&data_.ionFrames_);
+            ionInlineFrames_.resetOn(&data_.ionFrames_);
             data_.pc_ = ionInlineFrames_.pc();
             return;
         }
@@ -1614,7 +1611,7 @@ StackIter::copyData() const
      */
     JS_ASSERT(data_.ionFrames_.type() != ion::IonFrame_OptimizedJS);
 #endif
-    return data_.maybecx_->new_<Data>(data_);
+    return data_.cx_->new_<Data>(data_);
 }
 
 JSCompartment *
@@ -1761,7 +1758,7 @@ StackIter::abstractFramePtr() const
         break;
     }
     JS_NOT_REACHED("Unexpected state");
-    return AbstractFramePtr();
+    return NullFramePtr();
 }
 
 void
@@ -1771,7 +1768,7 @@ StackIter::updatePcQuadratic()
       case DONE:
         break;
       case SCRIPTED:
-        data_.pc_ = interpFrame()->pcQuadratic(data_.maybecx_);
+        data_.pc_ = interpFrame()->pcQuadratic(data_.cx_);
         return;
       case ION:
         break;
@@ -1939,8 +1936,8 @@ bool
 StackIter::computeThis() const
 {
     if (isScript() && !isIon()) {
-        JS_ASSERT(data_.maybecx_);
-        return ComputeThis(data_.maybecx_, interpFrame());
+        JS_ASSERT(data_.cx_);
+        return ComputeThis(data_.cx_, interpFrame());
     }
     return true;
 }
@@ -2014,9 +2011,9 @@ StackIter::numFrameSlots() const
         break;
 #endif
       case SCRIPTED:
-        JS_ASSERT(data_.maybecx_);
-        JS_ASSERT(data_.maybecx_->regs().spForStackDepth(0) == interpFrame()->base());
-        return data_.maybecx_->regs().sp - interpFrame()->base();
+        JS_ASSERT(data_.cx_);
+        JS_ASSERT(data_.cx_->regs().spForStackDepth(0) == interpFrame()->base());
+        return data_.cx_->regs().sp - interpFrame()->base();
     }
     JS_NOT_REACHED("Unexpected state");
     return 0;
@@ -2154,5 +2151,5 @@ AllFramesIter::abstractFramePtr() const
         break;
     }
     JS_NOT_REACHED("Unexpected state");
-    return AbstractFramePtr();
+    return NullFramePtr();
 }

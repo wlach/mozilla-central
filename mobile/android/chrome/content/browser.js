@@ -326,7 +326,7 @@ var BrowserApp = {
   initContextMenu: function ba_initContextMenu() {
     // TODO: These should eventually move into more appropriate classes
     NativeWindow.contextmenus.add(Strings.browser.GetStringFromName("contextmenu.openInNewTab"),
-      NativeWindow.contextmenus.linkOpenableContext,
+      NativeWindow.contextmenus.linkOpenableNonPrivateContext,
       function(aTarget) {
         let url = NativeWindow.contextmenus._getLinkURL(aTarget);
         BrowserApp.addTab(url, { selected: false, parentId: BrowserApp.selectedTab.id });
@@ -534,8 +534,13 @@ var BrowserApp = {
   // switch tabs, and ends when the new browser content document has been drawn and handed
   // off to the compositor.
   isBrowserContentDocumentDisplayed: function() {
-    if (window.top.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils).isFirstPaint)
+    try {
+      if (window.top.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils).isFirstPaint)
+        return false;
+    } catch (e) {
       return false;
+    }
+
     let tab = this.selectedTab;
     if (!tab)
       return true;
@@ -1021,6 +1026,9 @@ var BrowserApp = {
   },
 
   getFocusedInput: function(aBrowser, aOnlyInputElements = false) {
+    if (!aBrowser)
+      return null;
+
     let doc = aBrowser.contentDocument;
     if (!doc)
       return null;
@@ -1426,6 +1434,17 @@ var NativeWindow = {
             return aElt.mozMatchesSelector(aSelector);
           return false;
         }
+      }
+    },
+
+    linkOpenableNonPrivateContext: {
+      matches: function linkOpenableNonPrivateContextMatches(aElement) {
+        let doc = aElement.ownerDocument;
+        if (!doc || PrivateBrowsingUtils.isWindowPrivate(doc.defaultView)) {
+          return false;
+        }
+
+        return NativeWindow.contextmenus.linkOpenableContext.matches(aElement);
       }
     },
 

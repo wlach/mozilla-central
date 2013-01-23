@@ -486,6 +486,7 @@ user_pref("extensions.getAddons.cache.enabled", false);
 user_pref("extensions.installDistroAddons", false);
 
 user_pref("extensions.testpilot.runStudies", false);
+user_pref("extensions.testpilot.alreadyCustomizedToolbar", true);
 
 user_pref("geo.wifi.uri", "http://%(server)s/tests/dom/tests/mochitest/geolocation/network_geolocation.sjs");
 user_pref("geo.wifi.testing", true);
@@ -525,6 +526,9 @@ user_pref("network.activity.blipIntervalMilliseconds", 250);
 
 // Don't allow the Data Reporting service to prompt for policy acceptance.
 user_pref("datareporting.policy.dataSubmissionPolicyBypassAcceptance", true);
+
+// Make sure CSS error reporting is enabled for tests
+user_pref("layout.css.report_errors", true);
 """ % { "server" : self.webServer + ":" + str(self.httpPort) }
     prefs.append(part)
 

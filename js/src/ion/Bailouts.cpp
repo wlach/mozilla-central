@@ -46,11 +46,11 @@ SnapshotIterator::SnapshotIterator(const IonBailoutIterator &iter)
 {
 }
 
-InlineFrameIterator::InlineFrameIterator(const IonBailoutIterator *iter)
+InlineFrameIterator::InlineFrameIterator(JSContext *cx, const IonBailoutIterator *iter)
   : frame_(iter),
     framesRead_(0),
-    callee_(NULL),
-    script_(NULL)
+    callee_(cx),
+    script_(cx)
 {
     if (iter) {
         start_ = SnapshotIterator(*iter);
@@ -62,7 +62,7 @@ void
 IonBailoutIterator::dump() const
 {
     if (type_ == IonFrame_OptimizedJS) {
-        InlineFrameIterator frames(this);
+        InlineFrameIterator frames(GetIonContext()->cx, this);
         for (;;) {
             frames.dump();
             if (!frames.more())
@@ -208,7 +208,7 @@ PushInlinedFrame(JSContext *cx, StackFrame *callerFrame)
     if (JSOp(*regs.pc) == JSOP_NEW)
         flags = INITIAL_CONSTRUCT;
 
-    if (!cx->stack.pushInlineFrame(cx, regs, inlineArgs, *fun, script, flags, DONT_REPORT_ERROR))
+    if (!cx->stack.pushInlineFrame(cx, regs, inlineArgs, fun, script, flags, DONT_REPORT_ERROR))
         return NULL;
 
     StackFrame *fp = cx->stack.fp();
@@ -419,16 +419,6 @@ ion::InvalidationBailout(InvalidationBailoutStack *sp, size_t *frameSizeOut)
         cx->regs().sp[-1] = cx->runtime->takeIonReturnOverride();
 
     if (retval != BAILOUT_RETURN_FATAL_ERROR) {
-        if (activation->entryfp()) {
-            if (void *annotation = activation->entryfp()->annotation()) {
-                // If the entry frame has an annotation, then we invalidated and have
-                // immediately returned into this bailout. Transfer the annotation to
-                // the new topmost frame.
-                activation->entryfp()->setAnnotation(NULL);
-                cx->fp()->setAnnotation(annotation);
-            }
-        }
-
         // If invalidation was triggered inside a stub call, we may still have to
         // monitor the result, since the bailout happens before the MMonitorTypes
         // instruction is executed.
@@ -456,7 +446,7 @@ ReflowArgTypes(JSContext *cx)
     unsigned nargs = fp->fun()->nargs;
     RootedScript script(cx, fp->script());
 
-    types::AutoEnterTypeInference enter(cx);
+    types::AutoEnterAnalysis enter(cx);
 
     if (!fp->isConstructing())
         types::TypeScript::SetThis(cx, script, fp->thisValue());
@@ -486,7 +476,7 @@ ion::ReflowTypeInfo(uint32_t bailoutResult)
     IonSpew(IonSpew_Bailouts, "reflowing type info at %s:%d pcoff %d", script->filename,
             script->lineno, pc - script->code);
 
-    types::AutoEnterTypeInference enter(cx);
+    types::AutoEnterAnalysis enter(cx);
     if (bailoutResult == BAILOUT_RETURN_TYPE_BARRIER)
         script->analysis()->breakTypeBarriers(cx, pc - script->code, false);
     else

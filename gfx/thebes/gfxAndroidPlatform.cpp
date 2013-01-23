@@ -7,6 +7,7 @@
 
 #include "gfxAndroidPlatform.h"
 #include "mozilla/gfx/2D.h"
+#include "mozilla/Preferences.h"
 
 #include "gfxFT2FontList.h"
 #include "gfxImageSurface.h"
@@ -26,8 +27,6 @@ using namespace mozilla::dom;
 using namespace mozilla::gfx;
 
 static FT_Library gPlatformFTLibrary = NULL;
-
-#define LOG(args...)  __android_log_print(ANDROID_LOG_INFO, "GeckoFonts" , ## args)
 
 static int64_t sFreetypeMemoryUsed;
 static FT_MemoryRec_ sFreetypeMemoryRecord;
@@ -102,6 +101,11 @@ gfxAndroidPlatform::gfxAndroidPlatform()
     mOffscreenFormat = mScreenDepth == 16
                        ? gfxASurface::ImageFormatRGB16_565
                        : gfxASurface::ImageFormatRGB24;
+
+    if (Preferences::GetBool("gfx.android.rgb16.force", false)) {
+        mOffscreenFormat = gfxASurface::ImageFormatRGB16_565;
+    }
+
 }
 
 gfxAndroidPlatform::~gfxAndroidPlatform()
