@@ -5,3 +5,6 @@
 # This file is included at the bottom of all native android mozconfigs
 
 . "$topsrcdir/build/mozconfig.common.override"
+
+ac_add_options --with-android-version=9
+ac_add_options --disable-elf-hack
