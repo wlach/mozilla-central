@@ -29,5 +29,3 @@ ac_add_options --with-ccache=/usr/bin/ccache
 STRIP_FLAGS="--strip-debug"
 
 . "$topsrcdir/mobile/android/config/mozconfigs/common.override"
-
-. "$topsrcdir/mobile/android/config/mozconfigs/common.override"

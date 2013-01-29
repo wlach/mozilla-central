@@ -5,6 +5,3 @@
 # This file is included at the top of all native android mozconfigs
 
 . "$topsrcdir/build/mozconfig.common"
-
-ac_add_options --enable-webrtc
-ac_add_options --with-android-gnu-compiler-version=4.6
