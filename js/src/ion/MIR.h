@@ -1511,6 +1511,15 @@ class MCompare
         // String compared to String
         Compare_String,
 
+        // Undefined compared to String
+        // Null      compared to String
+        // Boolean   compared to String
+        // Int32     compared to String
+        // Double    compared to String
+        // Object    compared to String
+        // Value     compared to String
+        Compare_StrictString,
+
         // Object compared to Object
         Compare_Object,
 
@@ -1965,7 +1974,8 @@ class MPassArg : public MUnaryInstruction
 // Converts a primitive (either typed or untyped) to a double. If the input is
 // not primitive at runtime, a bailout occurs.
 class MToDouble
-  : public MUnaryInstruction
+  : public MUnaryInstruction,
+    public ToDoublePolicy
 {
     MToDouble(MDefinition *def)
       : MUnaryInstruction(def)

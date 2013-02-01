@@ -196,8 +196,7 @@ class FunctionBox : public ObjectBox, public SharedContext
     size_t          bufStart;
     size_t          bufEnd;
     uint16_t        ndefaults;
-    bool            inWith:1;               /* some enclosing scope is a with-statement
-                                               or E4X filter-expression */
+    bool            inWith:1;               /* some enclosing scope is a with-statement */
     bool            inGenexpLambda:1;       /* lambda from generator expression */
     bool            useAsm:1;               /* function contains "use asm" directive */
     bool            insideUseAsm:1;         /* nested function of function of "use asm" directive */
