@@ -4160,25 +4160,60 @@ CheckConditional(AsmFunctionCompiler &f, ParseNode *ternary, MDefinition **def, 
 }
 
 static bool
-CheckFloatMultiply(AsmFunctionCompiler &f, ParseNode *star, MDefinition **def, AsmType *type)
+IsValidIntMultiplyConstant(ParseNode *expr)
+{
+    if (!IsNumericLiteral(expr))
+        return false;
+
+    AsmNumLit literal = ExtractNumericLiteral(expr);
+    switch (literal.which()) {
+      case AsmNumLit::Fixnum:
+      case AsmNumLit::NegativeInt:
+        if (abs(literal.toInt32()) < (1<<20))
+            return true;
+        return false;
+      case AsmNumLit::BigUnsigned:
+      case AsmNumLit::Double:
+      case AsmNumLit::OutOfRangeInt:
+        return false;
+    }
+
+    JS_NOT_REACHED("Bad literal");
+    return false;
+}
+
+static bool
+CheckMultiply(AsmFunctionCompiler &f, ParseNode *star, MDefinition **def, AsmType *type)
 {
     JS_ASSERT(star->isKind(PNK_STAR));
     ParseNode *lhs = BinaryLeft(star);
     ParseNode *rhs = BinaryRight(star);
 
-    MDefinition *lhsDef, *rhsDef;
-    AsmType lhsType, rhsType;
+    MDefinition *lhsDef;
+    AsmType lhsType;
     if (!CheckExpr(f, lhs, AsmUse::ToNumber, &lhsDef, &lhsType))
         return false;
+
+    MDefinition *rhsDef;
+    AsmType rhsType;
     if (!CheckExpr(f, rhs, AsmUse::ToNumber, &rhsDef, &rhsType))
         return false;
 
-    if (!lhsType.isDoublish() || !rhsType.isDoublish())
-        return f.fail("Arguments to * must both be doubles", star);
+    if (lhsType.isInt() && rhsType.isInt()) {
+        if (!IsValidIntMultiplyConstant(lhs) && !IsValidIntMultiplyConstant(rhs))
+            return f.fail("One arg to int multiply must be small (-2^20, 2^20) int literal", star);
+        *def = f.mul(lhsDef, rhsDef, MIRType_Int32, MMul::Integer);
+        *type = AsmType::Signed;
+        return true;
+    }
 
-    *def = f.mul(lhsDef, rhsDef, MIRType_Double, MMul::Normal);
-    *type = AsmType::Double;
-    return true;
+    if (lhsType.isDoublish() && rhsType.isDoublish()) {
+        *def = f.mul(lhsDef, rhsDef, MIRType_Double, MMul::Normal);
+        *type = AsmType::Double;
+        return true;
+    }
+
+    return f.fail("Arguments to * must both be doubles", star);
 }
 
 static bool
@@ -4393,7 +4428,7 @@ CheckExpr(AsmFunctionCompiler &f, ParseNode *expr, AsmUse use, MDefinition **def
       case PNK_COMMA:       return CheckComma(f, expr, use, def, type);
       case PNK_CONDITIONAL: return CheckConditional(f, expr, def, type);
 
-      case PNK_STAR:        return CheckFloatMultiply(f, expr, def, type);
+      case PNK_STAR:        return CheckMultiply(f, expr, def, type);
 
       case PNK_ADD:
       case PNK_SUB:         return CheckAddOrSub(f, expr, use, def, type);

@@ -6,6 +6,9 @@ assertAsmTypeFail(USE_ASM + "function f() { var i=0,j=0.0; return (i-j)|0 } retu
 assertAsmTypeFail(USE_ASM + "function f() { var i=0.0,j=0; return (i-j)|0 } return f");
 assertAsmTypeFail(USE_ASM + "function f() { var i=0,j=0.0; return (i*j)|0 } return f");
 assertAsmTypeFail(USE_ASM + "function f() { var i=0.0,j=0; return (i*j)|0 } return f");
+assertAsmTypeFail(USE_ASM + "function f() { var i=0,j=0; return (i*j)|0 } return f");
+assertAsmTypeFail(USE_ASM + "function f() { var i=0; return (i*1048576)|0 } return f");
+assertAsmTypeFail(USE_ASM + "function f() { var i=0; return (i*-1048576)|0 } return f");
 assertAsmTypeFail(USE_ASM + "function f() { var i=0,j=0.0; return (i/j)|0 } return f");
 assertAsmTypeFail(USE_ASM + "function f() { var i=0.0,j=0; return (i/j)|0 } return f");
 assertAsmTypeFail(USE_ASM + "function f() { var i=1,j=1; return (i/j)|0 } return f");
@@ -20,6 +23,30 @@ assertAsmTypeFail(USE_ASM + "function f() { var i=0,j=0; return (-(i+j))|0 } ret
 const UINT32_MAX = Math.pow(2,32)-1;
 const INT32_MIN = -Math.pow(2,31);
 const INT32_MAX = Math.pow(2,31)-1;
+
+var f = asmLink(asmCompile(USE_ASM + "function f(i) { i=i|0; return (i*2)|0 } return f"));
+assertEq(f(0), 0);
+assertEq(f(INT32_MIN), (2*INT32_MIN)|0);
+assertEq(f(INT32_MAX), (2*INT32_MAX)|0);
+
+var f = asmLink(asmCompile(USE_ASM + "function f(i) { i=i|0; return (2*i)|0 } return f"));
+assertEq(f(0), 0);
+assertEq(f(INT32_MIN), (2*INT32_MIN)|0);
+assertEq(f(INT32_MAX), (2*INT32_MAX)|0);
+
+var f = asmLink(asmCompile(USE_ASM + "function f(i) { i=i|0; return (i*1048575)|0 } return f"));
+assertEq(f(0), 0);
+assertEq(f(2), (1048575*2)|0);
+assertEq(f(-1), (1048575*-1)|0);
+assertEq(f(INT32_MIN), (1048575*INT32_MIN)|0);
+assertEq(f(INT32_MAX), (1048575*INT32_MAX)|0);
+
+var f = asmLink(asmCompile(USE_ASM + "function f(i) { i=i|0; return (1048575*i)|0 } return f"));
+assertEq(f(0), 0);
+assertEq(f(2), (1048575*2)|0);
+assertEq(f(-1), (1048575*-1)|0);
+assertEq(f(INT32_MIN), (1048575*INT32_MIN)|0);
+assertEq(f(INT32_MAX), (1048575*INT32_MAX)|0);
 
 var f = asmLink(asmCompile(USE_ASM + "function f(i) { i=+i; var j=0; j=~~i; return j|0 } return f"));
 assertEq(f(0), 0);
