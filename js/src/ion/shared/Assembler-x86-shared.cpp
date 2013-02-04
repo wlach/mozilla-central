@@ -94,8 +94,8 @@ void
 AssemblerX86Shared::processCodeLabels(uint8_t *rawCode)
 {
     for (size_t i = 0; i < codeLabels_.length(); i++) {
-        CodeLabel *label = codeLabels_[i];
-        Bind(rawCode, label->dest(), rawCode + label->src()->offset());
+        CodeLabel label = codeLabels_[i];
+        Bind(rawCode, label.dest(), rawCode + label.src()->offset());
     }
 }
 

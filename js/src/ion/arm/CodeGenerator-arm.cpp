@@ -876,7 +876,7 @@ CodeGeneratorARM::visitMoveGroup(LMoveGroup *group)
 class js::ion::OutOfLineTableSwitch : public OutOfLineCodeBase<CodeGeneratorARM>
 {
     MTableSwitch *mir_;
-    Vector<CodeLabel*, 8, IonAllocPolicy> codeLabels_;
+    Vector<CodeLabel, 8, IonAllocPolicy> codeLabels_;
 
     bool accept(CodeGeneratorARM *codegen) {
         return codegen->visitOutOfLineTableSwitch(this);
@@ -891,10 +891,10 @@ class js::ion::OutOfLineTableSwitch : public OutOfLineCodeBase<CodeGeneratorARM>
         return mir_;
     }
 
-    bool addCodeLabel(CodeLabel *label) {
+    bool addCodeLabel(CodeLabel label) {
         return codeLabels_.append(label);
     }
-    CodeLabel *codeLabel(unsigned i) {
+    CodeLabel codeLabel(unsigned i) {
         return codeLabels_[i];
     }
 };
@@ -912,8 +912,8 @@ CodeGeneratorARM::visitOutOfLineTableSwitch(OutOfLineTableSwitch *ool)
 
         // The entries of the jump table need to be absolute addresses and thus
         // must be patched after codegen is finished.
-        CodeLabel *cl = ool->codeLabel(i);
-        cl->src()->bind(caseoffset);
+        CodeLabel cl = ool->codeLabel(i);
+        cl.src()->bind(caseoffset);
         if (!masm.addCodeLabel(cl))
             return false;
     }
@@ -966,8 +966,8 @@ CodeGeneratorARM::emitTableSwitchDispatch(MTableSwitch *mir, const Register &ind
     // instruction stream).
     OutOfLineTableSwitch *ool = new OutOfLineTableSwitch(mir);
     for (int32_t i = 0; i < cases; i++) {
-        CodeLabel *cl = new CodeLabel();
-        masm.writeCodePointer(cl->dest());
+        CodeLabel cl;
+        masm.writeCodePointer(cl.dest());
         if (!ool->addCodeLabel(cl))
             return false;
     }
