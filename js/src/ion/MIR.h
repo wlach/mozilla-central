@@ -1993,6 +1993,10 @@ class MToDouble
         return new MToDouble(def);
     }
 
+    TypePolicy *typePolicy() {
+        return this;
+    }
+
     MDefinition *foldsTo(bool useValueNumbers);
     MDefinition *input() const {
         return getOperand(0);
