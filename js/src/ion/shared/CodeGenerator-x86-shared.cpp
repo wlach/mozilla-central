@@ -22,8 +22,8 @@ using namespace js::ion;
 namespace js {
 namespace ion {
 
-CodeGeneratorX86Shared::CodeGeneratorX86Shared(MIRGenerator *gen, LIRGraph *graph)
-  : CodeGeneratorShared(gen, graph),
+CodeGeneratorX86Shared::CodeGeneratorX86Shared(MIRGenerator *gen, LIRGraph *graph, MacroAssembler *masm)
+  : CodeGeneratorShared(gen, graph, masm),
     deoptLabel_(NULL)
 {
 }

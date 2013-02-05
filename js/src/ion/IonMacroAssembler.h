@@ -69,9 +69,9 @@ class MacroAssembler : public MacroAssemblerSpecific
     // If instrumentation should be emitted, then the sps parameter should be
     // provided, but otherwise it can be safely omitted to prevent all
     // instrumentation from being emitted.
-    MacroAssembler(IonInstrumentation *sps = NULL)
+    MacroAssembler()
       : enoughMemory_(true),
-        sps_(sps)
+        sps_(NULL)
     {
         JSContext *cx = GetIonContext()->cx;
         if (cx)
@@ -88,7 +88,7 @@ class MacroAssembler : public MacroAssemblerSpecific
     // (for example, Trampoline-$(ARCH).cpp).
     MacroAssembler(JSContext *cx)
       : enoughMemory_(true),
-        sps_(NULL) // no need for instrumentation in trampolines and such
+        sps_(NULL)
     {
         constructRoot(cx);
         ionContext_.construct(cx, cx->compartment, (js::ion::TempAllocator *)NULL);
@@ -96,6 +96,11 @@ class MacroAssembler : public MacroAssemblerSpecific
 #ifdef JS_CPU_ARM
         m_buffer.id = GetIonContext()->getNextAssemblerId();
 #endif
+    }
+
+    void initInstrumentation(IonInstrumentation *sps) {
+        JS_ASSERT(!sps_);
+        sps_ = sps;
     }
 
     void constructRoot(JSContext *cx) {

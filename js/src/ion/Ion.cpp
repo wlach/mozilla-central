@@ -774,7 +774,7 @@ namespace js {
 namespace ion {
 
 CodeGenerator *
-CompileBackEnd(MIRGenerator *mir, bool useAsm)
+CompileBackEnd(MIRGenerator *mir, MacroAssembler *masm)
 {
     IonSpewPass("BuildSSA");
     // Note: don't call AssertGraphCoherency before SplitCriticalEdges,
@@ -1031,13 +1031,13 @@ CompileBackEnd(MIRGenerator *mir, bool useAsm)
     if (mir->shouldCancel("Allocate Registers"))
         return NULL;
 
-    CodeGenerator *codegen = js_new<CodeGenerator>(mir, lir);
+    CodeGenerator *codegen = js_new<CodeGenerator>(mir, lir, masm);
     if (!codegen) {
         js_delete(codegen);
         return NULL;
     }
 
-    if (!useAsm && !codegen->generate()) {
+    if (!masm && !codegen->generate()) {
         js_delete(codegen);
         return NULL;
     }

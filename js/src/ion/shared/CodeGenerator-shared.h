@@ -35,8 +35,11 @@ class CodeGeneratorShared : public LInstructionVisitor
     js::Vector<OutOfLineCode *, 0, SystemAllocPolicy> outOfLineCode_;
     OutOfLineCode *oolIns;
 
+    MacroAssembler &ensureMasm(MacroAssembler *masm);
+    mozilla::Maybe<MacroAssembler> maybeMasm_;
+
   public:
-    MacroAssembler masm;
+    MacroAssembler &masm;
 
   protected:
     MIRGenerator *gen;
@@ -287,7 +290,7 @@ class CodeGeneratorShared : public LInstructionVisitor
     void generateInvalidateEpilogue();
 
   public:
-    CodeGeneratorShared(MIRGenerator *gen, LIRGraph *graph);
+    CodeGeneratorShared(MIRGenerator *gen, LIRGraph *graph, MacroAssembler *masm);
 
   public:
     template <class ArgSeq, class StoreOutputTo>

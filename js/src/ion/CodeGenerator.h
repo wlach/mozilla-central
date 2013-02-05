@@ -47,9 +47,10 @@ class CodeGenerator : public CodeGeneratorSpecific
     bool generateBody();
 
   public:
-    CodeGenerator(MIRGenerator *gen, LIRGraph *graph);
+    CodeGenerator(MIRGenerator *gen, LIRGraph *graph, MacroAssembler *masm = NULL);
 
   public:
+
     bool generate();
     bool link();
 

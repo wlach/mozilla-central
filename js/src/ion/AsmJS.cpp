@@ -1954,8 +1954,6 @@ class AsmFunctionCompiler
 
     ~AsmFunctionCompiler()
     {
-        m_.alloc().release(NULL);
-
         if (!m().hasError() && !cx()->isExceptionPending()) {
             JS_ASSERT(loopStack_.empty());
             JS_ASSERT(unlabeledBreaks_.empty());
@@ -4839,7 +4837,8 @@ CheckStatement(AsmFunctionCompiler &f, ParseNode *stmt, AsmLabelVector *maybeLab
 static bool
 CompileMIR(AsmFunctionCompiler &f)
 {
-    ScopedJSDeletePtr<CodeGenerator> codegen(CompileBackEnd(&f.mirGen(), /* useAsm = */ true));
+    MacroAssembler masm;
+    ScopedJSDeletePtr<CodeGenerator> codegen(CompileBackEnd(&f.mirGen(), &masm));
     if (!codegen)
         return false;
 
@@ -5087,7 +5086,9 @@ GenerateDefaultExit(AsmModuleCompiler &m, MacroAssembler &masm, Label &errorLabe
 static bool
 GenerateDefaultExits(AsmModuleCompiler &m)
 {
-    MacroAssembler masm(m.cx());
+    TempAllocator tempAlloc(&m.alloc());
+    IonContext ictx(m.cx(), m.cx()->compartment, &tempAlloc);
+    MacroAssembler masm;
 
     // If there is an error during the FFI call, we must propagate the
     // exception. Since try-catch isn't supported by asm.js (atm), we can

@@ -36,8 +36,8 @@ MNewStringObject::templateObj() const {
     return &templateObj_->asString();
 }
 
-CodeGenerator::CodeGenerator(MIRGenerator *gen, LIRGraph *graph)
-  : CodeGeneratorSpecific(gen, graph)
+CodeGenerator::CodeGenerator(MIRGenerator *gen, LIRGraph *graph, MacroAssembler *masm)
+  : CodeGeneratorSpecific(gen, graph, masm)
 {
 }
 

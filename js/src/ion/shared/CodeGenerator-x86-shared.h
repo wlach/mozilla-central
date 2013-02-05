@@ -80,7 +80,7 @@ class CodeGeneratorX86Shared : public CodeGeneratorShared
     bool emitTableSwitchDispatch(MTableSwitch *mir, const Register &index, const Register &base);
 
   public:
-    CodeGeneratorX86Shared(MIRGenerator *gen, LIRGraph *graph);
+    CodeGeneratorX86Shared(MIRGenerator *gen, LIRGraph *graph, MacroAssembler *masm);
 
   public:
     // Instruction visitors.

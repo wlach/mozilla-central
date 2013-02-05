@@ -27,8 +27,8 @@ using namespace js;
 using namespace js::ion;
 
 // shared
-CodeGeneratorARM::CodeGeneratorARM(MIRGenerator *gen, LIRGraph *graph)
-  : CodeGeneratorShared(gen, graph),
+CodeGeneratorARM::CodeGeneratorARM(MIRGenerator *gen, LIRGraph *graph, MacroAssembler *masm)
+  : CodeGeneratorShared(gen, graph, masm),
     deoptLabel_(NULL)
 {
 }

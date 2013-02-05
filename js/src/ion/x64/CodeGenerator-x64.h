@@ -36,7 +36,7 @@ class CodeGeneratorX64 : public CodeGeneratorX86Shared
                            const Register &elements, const LAllocation *index);
 
   public:
-    CodeGeneratorX64(MIRGenerator *gen, LIRGraph *graph);
+    CodeGeneratorX64(MIRGenerator *gen, LIRGraph *graph, MacroAssembler *masm);
 
   public:
     bool visitValue(LValue *value);

@@ -23,9 +23,19 @@ using mozilla::DebugOnly;
 namespace js {
 namespace ion {
 
-CodeGeneratorShared::CodeGeneratorShared(MIRGenerator *gen, LIRGraph *graph)
+MacroAssembler &
+CodeGeneratorShared::ensureMasm(MacroAssembler *masmArg)
+{
+    if (masmArg)
+        return *masmArg;
+    maybeMasm_.construct();
+    return maybeMasm_.ref();
+}
+
+CodeGeneratorShared::CodeGeneratorShared(MIRGenerator *gen, LIRGraph *graph, MacroAssembler *masmArg)
   : oolIns(NULL),
-    masm(&sps_),
+    maybeMasm_(),
+    masm(ensureMasm(masmArg)),
     gen(gen),
     graph(*graph),
     current(NULL),
@@ -39,6 +49,8 @@ CodeGeneratorShared::CodeGeneratorShared(MIRGenerator *gen, LIRGraph *graph)
     frameDepth_(graph->localSlotCount() * sizeof(STACK_SLOT_SIZE) +
                 graph->argumentSlotCount() * sizeof(Value))
 {
+    masm.initInstrumentation(&sps_);
+
     // Since asm.js uses the system ABI which does not necessarily use a
     // regular array where all slots are sizeof(Value), it maintains the max
     // argument stack depth separately.

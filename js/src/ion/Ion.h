@@ -318,7 +318,7 @@ class IonBuilder;
 class MIRGenerator;
 class CodeGenerator;
 
-CodeGenerator *CompileBackEnd(MIRGenerator *mir, bool useAsm = false);
+CodeGenerator *CompileBackEnd(MIRGenerator *mir, MacroAssembler *masm = NULL);
 void AttachFinishedCompilations(JSContext *cx);
 void FinishOffThreadBuilder(IonBuilder *builder);
 MethodStatus TestIonCompile(JSContext *cx, HandleScript script, HandleFunction fun, jsbytecode *osrPc, bool constructing);
