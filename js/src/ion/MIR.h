@@ -6673,24 +6673,22 @@ class MAsmCall : public MInstruction
   public:
     class Callee {
       public:
-        enum Which { Dynamic, Internal, Builtin };
+        enum Which { Internal, Dynamic, Builtin };
       private:
         Which which_;
         union {
+            Label *internal_;
             MDefinition *dynamic_;
-            const void *internalCallData_;
             const void *builtin_;
-            const void *raw_;
         } u;
-        Callee(Which which, const void *ptr) : which_(which) { u.raw_ = ptr; }
       public:
         Callee() {}
-        static Callee dynamic(MDefinition *def) { return Callee(Dynamic, def); }
-        static Callee internal(const void *observerData) { return Callee(Internal, observerData); }
-        static Callee builtin(const void *builtin) { return Callee(Builtin, builtin); }
+        Callee(Label *callee) : which_(Internal) { u.internal_ = callee; }
+        Callee(MDefinition *callee) : which_(Dynamic) { u.dynamic_ = callee; }
+        Callee(const void *callee) : which_(Builtin) { u.builtin_ = callee; }
         Which which() const { return which_; }
+        Label *internal() const { JS_ASSERT(which_ == Internal); return u.internal_; }
         MDefinition *dynamic() const { JS_ASSERT(which_ == Dynamic); return u.dynamic_; }
-        const void *internalCallData() const { JS_ASSERT(which_ == Internal); return u.internalCallData_; }
         const void *builtin() const { JS_ASSERT(which_ == Builtin); return u.builtin_; }
     };
 

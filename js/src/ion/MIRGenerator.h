@@ -72,8 +72,24 @@ class MIRGenerator
         cancelBuild_ = 1;
     }
 
-    virtual bool observeAsmCall(size_t offsetOfCall, const void *observerData);
-    virtual uint32_t maxAsmStackArgBytes() const;
+    bool compilingAsmJS() const {
+        return info_->script() == NULL;
+    }
+
+    uint32_t maxAsmStackArgBytes() const {
+        JS_ASSERT(compilingAsmJS());
+        return maxAsmStackArgBytes_;
+    }
+    uint32_t resetAsmMaxStackArgBytes() {
+        JS_ASSERT(compilingAsmJS());
+        uint32_t old = maxAsmStackArgBytes_;
+        maxAsmStackArgBytes_ = 0;
+        return old;
+    }
+    void setAsmMaxStackArgBytes(uint32_t n) {
+        JS_ASSERT(compilingAsmJS());
+        maxAsmStackArgBytes_ = n;
+    }
 
   public:
     JSCompartment *compartment;
@@ -86,6 +102,7 @@ class MIRGenerator
     MIRGraph *graph_;
     bool error_;
     size_t cancelBuild_;
+    uint32_t maxAsmStackArgBytes_;
 };
 
 } // namespace ion

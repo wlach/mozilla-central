@@ -31,16 +31,6 @@ class OutOfLineStoreElementHole;
 class OutOfLineTypeOfV;
 class OutOfLineLoadTypedArray;
 
-// TODO: explain
-struct AsmCodePtr
-{
-    typedef int32_t (*PF)(void *heap, uint8_t *globalData, uint64_t *argv);
-    PF externalEntry;
-
-    uint8_t *baseAddress;
-    uint8_t *internalEntry;
-};
-
 class CodeGenerator : public CodeGeneratorSpecific
 {
     bool generateArgumentsChecks();
@@ -54,8 +44,7 @@ class CodeGenerator : public CodeGeneratorSpecific
     bool generate();
     bool link();
 
-    bool generateAsm(AsmCodePtr *codePtr, ScopedReleasePtr<JSC::ExecutablePool> *pool,
-                     const MIRTypeVector *maybeExternalEntryArgTypes, MIRType returnType);
+    bool generateAsm();
 
     bool visitLabel(LLabel *lir);
     bool visitNop(LNop *lir);
@@ -64,12 +53,9 @@ class CodeGenerator : public CodeGeneratorSpecific
     bool visitTableSwitch(LTableSwitch *ins);
     bool visitTableSwitchV(LTableSwitchV *ins);
     bool visitParameter(LParameter *lir);
-    bool visitAsmParameter(LAsmParameter *lir);
     bool visitCallee(LCallee *lir);
     bool visitStart(LStart *lir);
     bool visitReturn(LReturn *ret);
-    bool visitAsmReturn(LAsmReturn *ret);
-    bool visitAsmVoidReturn(LAsmVoidReturn *ret);
     bool visitDefVar(LDefVar *lir);
     bool visitDefFun(LDefFun *lir);
     bool visitOsrEntry(LOsrEntry *lir);
@@ -211,6 +197,10 @@ class CodeGenerator : public CodeGeneratorSpecific
     bool visitSetDOMProperty(LSetDOMProperty *lir);
     bool visitCallDOMNative(LCallDOMNative *lir);
     bool visitCallGetIntrinsicValue(LCallGetIntrinsicValue *lir);
+    bool visitAsmCall(LAsmCall *lir);
+    bool visitAsmParameter(LAsmParameter *lir);
+    bool visitAsmReturn(LAsmReturn *ret);
+    bool visitAsmVoidReturn(LAsmVoidReturn *ret);
 
     bool visitCheckOverRecursed(LCheckOverRecursed *lir);
     bool visitCheckOverRecursedFailure(CheckOverRecursedFailure *ool);

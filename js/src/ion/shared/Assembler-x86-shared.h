@@ -645,9 +645,6 @@ class AssemblerX86Shared
             JS_NOT_REACHED("unexpected operand kind");
         }
     }
-    size_t unlabeledCall() {
-        return masm.call().offset();
-    }
 
     void breakpoint() {
         masm.int3();

@@ -98,9 +98,13 @@ class MacroAssembler : public MacroAssemblerSpecific
 #endif
     }
 
-    void initInstrumentation(IonInstrumentation *sps) {
-        JS_ASSERT(!sps_);
+    void setInstrumentation(IonInstrumentation *sps) {
         sps_ = sps;
+    }
+
+    void resetForNewCodeGenerator() {
+        setFramePushed(0);
+        moveResolver_.clearTempObjectPool();
     }
 
     void constructRoot(JSContext *cx) {
@@ -711,6 +715,8 @@ JSOpToDoubleCondition(JSOp op)
         return Assembler::DoubleEqual;
     }
 }
+
+typedef Vector<MIRType, 8> MIRTypeVector;
 
 class ABIArgIter
 {

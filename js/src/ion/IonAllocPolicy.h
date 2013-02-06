@@ -161,9 +161,10 @@ class TempObjectPool
     void free(T *obj) {
         freed_.pushFront(obj);
     }
+    void clear() {
+        freed_.clear();
+    }
 };
-
-typedef Vector<MIRType, 8> MIRTypeVector;
 
 } // namespace ion
 } // namespace js

@@ -32,3 +32,5 @@ assertEq(asmLink(asmCompile(USE_ASM+"function f(i,j,k,l,m,n,o,p) { i=+i;j=+j;k=+
 assertEq(asmLink(asmCompile(USE_ASM+"function f(i,j,k,l,m,n,o,p) { i=+i;j=+j;k=+k;l=+l;m=+m;n=+n;o=+o;p=+p; return +(o-p) } function g(i,j) { i=+i;j=+j; return +f(0.0,0.0,0.0,0.0,0.0,0.0,f(0.0,0.0,0.0,0.0,0.0,0.0,i,j),f(0.0,0.0,0.0,0.0,0.0,0.0,j,i)) } return g"))(10.3, .2), (10.3-.2)-(.2-10.3));
 
 assertEq(asmLink(asmCompile(USE_ASM+"function f(i) {i=i|0; return i|0} function g() { return 42; return f(13)|0 } return g"))(), 42);
+
+assertEq(asmLink(asmCompile(USE_ASM+"function e() { return 42 } function f(i) { i=i|0; switch(i|0) { case 0: return e()|0; default: return 13 } return 0 } function g() { return f(0)|0 } return g"))(), 42);

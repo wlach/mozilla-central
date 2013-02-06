@@ -23,7 +23,8 @@ MIRGenerator::MIRGenerator(JSCompartment *compartment,
     temp_(temp),
     graph_(graph),
     error_(false),
-    cancelBuild_(0)
+    cancelBuild_(0),
+    maxAsmStackArgBytes_(0)
 { }
 
 bool
@@ -41,20 +42,6 @@ MIRGenerator::abort(const char *message, ...)
     va_start(ap, message);
     abortFmt(message, ap);
     va_end(ap);
-    return false;
-}
-
-bool
-MIRGenerator::observeAsmCall(size_t offset, const void *observerData)
-{
-    JS_NOT_REACHED("Not expecting any LAsmCalls");
-    return false;
-}
-
-uint32_t
-MIRGenerator::maxAsmStackArgBytes() const
-{
-    JS_NOT_REACHED("Not compiling asm.js");
     return false;
 }
 

@@ -327,34 +327,6 @@ CodeGeneratorX86Shared::visitAsmPassStackArg(LAsmPassStackArg *ins)
 }
 
 bool
-CodeGeneratorX86Shared::visitAsmCall(LAsmCall *ins)
-{
-    MAsmCall *mir = ins->mir();
-
-    if (mir->spIncrement())
-        masm.freeStack(mir->spIncrement());
-
-    MAsmCall::Callee callee = mir->callee();
-    switch (callee.which()) {
-      case MAsmCall::Callee::Dynamic:
-        masm.call(ToRegister(ins->getOperand(mir->dynamicCalleeOperandIndex())));
-        break;
-      case MAsmCall::Callee::Internal:
-        if (!gen->observeAsmCall(masm.unlabeledCall(), callee.internalCallData()))
-            return false;
-        break;
-      case MAsmCall::Callee::Builtin:
-        masm.call(ImmWord(callee.builtin()));
-        break;
-    }
-
-    if (mir->spIncrement())
-        masm.reserveStack(mir->spIncrement());
-
-    return true;
-}
-
-bool
 CodeGeneratorX86Shared::generateOutOfLineCode()
 {
     if (!CodeGeneratorShared::generateOutOfLineCode())

@@ -60,9 +60,6 @@ class CompileInfo
         stackFrameSize_ = NativeFrameSize;
     }
 
-    bool compilingAsmJS() const {
-        return script_ == NULL;
-    }
     UnrootedScript script() const {
         return script_;
     }

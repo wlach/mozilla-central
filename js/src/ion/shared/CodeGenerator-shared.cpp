@@ -49,12 +49,12 @@ CodeGeneratorShared::CodeGeneratorShared(MIRGenerator *gen, LIRGraph *graph, Mac
     frameDepth_(graph->localSlotCount() * sizeof(STACK_SLOT_SIZE) +
                 graph->argumentSlotCount() * sizeof(Value))
 {
-    masm.initInstrumentation(&sps_);
+    masm.setInstrumentation(&sps_);
 
     // Since asm.js uses the system ABI which does not necessarily use a
     // regular array where all slots are sizeof(Value), it maintains the max
     // argument stack depth separately.
-    if (gen->info().compilingAsmJS()) {
+    if (gen->compilingAsmJS()) {
         JS_ASSERT(graph->argumentSlotCount() == 0);
         frameDepth_ += gen->maxAsmStackArgBytes();
 

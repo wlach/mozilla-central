@@ -3647,16 +3647,14 @@ CodeGenerator::visitGetArgument(LGetArgument *lir)
 }
 
 bool
-CodeGenerator::generateAsm(AsmCodePtr *codePtr, ScopedReleasePtr<JSC::ExecutablePool> *poolOut,
-                           const MIRTypeVector *maybeExternalEntryArgTypes, MIRType returnType)
+CodeGenerator::generateAsm()
 {
-    Label internalEntry;
-    if (maybeExternalEntryArgTypes) {
-        if (!generateAsmPrologue(*maybeExternalEntryArgTypes, returnType, &internalEntry))
-            return false;
-        masm.bind(&internalEntry);
-    }
-
+    // The caller (either another asm.js function or the external-entry
+    // trampoline) has placed all arguments in registers and on the stack
+    // according to the system ABI. The MAsmParameters which represent these
+    // parameters have been useFixed()ed to these ABI-specified positions.
+    // Thus, there is nothing special to do in the prologue except (possibly)
+    // bump the stack.
     if (!generatePrologue())
         return false;
     if (!generateBody())
@@ -3666,12 +3664,14 @@ CodeGenerator::generateAsm(AsmCodePtr *codePtr, ScopedReleasePtr<JSC::Executable
     if (!generateOutOfLineCode())
         return false;
 
-    masm.finish();
-    if (masm.oom()) {
-        js_ReportOutOfMemory(GetIonContext()->cx);
-        return false;
-    }
-
+    // The only remaining work needed to compile this function is to patch the
+    // switch-statement jump tables (the entries of the table need the absolute
+    // address of the cases). These table entries are accmulated as CodeLabels
+    // in the MacroAssembler's codeLabels_ list and processed all at once at in
+    // the "static-link" phase of module compilation. It is critical that there
+    // is nothing else to do after this point since the LifoAlloc memory
+    // holding the MIR graph is about to be popped and reused. In particular,
+    // every step in CodeGenerator::link must be a nop, as asserted here:
     JS_ASSERT(snapshots_.size() == 0);
     JS_ASSERT(bailouts_.empty());
     JS_ASSERT(graph.numConstants() == 0);
@@ -3680,30 +3680,6 @@ CodeGenerator::generateAsm(AsmCodePtr *codePtr, ScopedReleasePtr<JSC::Executable
     JS_ASSERT(cacheList_.empty());
     JS_ASSERT(safepoints_.size() == 0);
     JS_ASSERT(graph.mir().numScripts() == 0);
-
-    JSC::ExecutableAllocator *execAlloc = gen->ionCompartment()->execAlloc();
-    JSC::ExecutablePool *rawPool;
-    uint8_t *code = (uint8_t*)execAlloc->alloc(masm.bytesNeeded(), &rawPool, JSC::ASMJS_CODE);
-    if (!code)
-        return false;
-
-    *poolOut = rawPool;
-
-    // c.f IonCode::copyFrom and above assertions
-    masm.executableCopy(code);
-    JS_ASSERT(masm.jumpRelocationTableBytes() == 0);
-    JS_ASSERT(masm.dataRelocationTableBytes() == 0);
-    JS_ASSERT(masm.preBarrierTableBytes() == 0);
-    masm.processCodeLabels(code);
-
-    codePtr->baseAddress = code;
-    if (maybeExternalEntryArgTypes) {
-        codePtr->externalEntry = JS_DATA_TO_FUNC_PTR(AsmCodePtr::PF, code);
-        codePtr->internalEntry = code + internalEntry.offset();
-    } else {
-        codePtr->externalEntry = NULL;
-        codePtr->internalEntry = code;
-    }
     return true;
 }
 
@@ -5160,6 +5136,33 @@ CodeGenerator::visitFunctionBoundary(LFunctionBoundary *lir)
         default:
             JS_NOT_REACHED("invalid LFunctionBoundary type");
     }
+}
+
+bool
+CodeGenerator::visitAsmCall(LAsmCall *ins)
+{
+    MAsmCall *mir = ins->mir();
+
+    if (mir->spIncrement())
+        masm.freeStack(mir->spIncrement());
+
+    MAsmCall::Callee callee = mir->callee();
+    switch (callee.which()) {
+      case MAsmCall::Callee::Internal:
+        masm.call(callee.internal());
+        break;
+      case MAsmCall::Callee::Dynamic:
+        masm.call(ToRegister(ins->getOperand(mir->dynamicCalleeOperandIndex())));
+        break;
+      case MAsmCall::Callee::Builtin:
+        masm.call(ImmWord(callee.builtin()));
+        break;
+    }
+
+    if (mir->spIncrement())
+        masm.reserveStack(mir->spIncrement());
+
+    return true;
 }
 
 bool

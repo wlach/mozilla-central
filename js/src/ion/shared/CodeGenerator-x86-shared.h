@@ -118,7 +118,6 @@ class CodeGeneratorX86Shared : public CodeGeneratorShared
     virtual bool visitAsmLoad(LAsmLoad *ins);
     virtual bool visitAsmStore(LAsmStore *ins);
     virtual bool visitAsmPassStackArg(LAsmPassStackArg *ins);
-    virtual bool visitAsmCall(LAsmCall *ins);
 
     // Out of line visitors.
     bool visitOutOfLineBailout(OutOfLineBailout *ool);
