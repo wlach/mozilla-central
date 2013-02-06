@@ -1499,6 +1499,19 @@ class CheckOverRecursedFailure : public OutOfLineCodeBase<CodeGenerator>
 };
 
 bool
+CodeGenerator::visitAsmCheckOverRecursed(LAsmCheckOverRecursed *lir)
+{
+    Register limitReg = ToRegister(lir->limitTemp());
+
+    // TODO: Use the native stack limit, for now. Later do the same trick as IM.
+    uintptr_t *limitAddr = &gen->compartment->rt->mainThread.nativeStackLimit;
+    masm.loadPtr(AbsoluteAddress(limitAddr), limitReg);
+    masm.branchPtr(Assembler::BelowOrEqual, StackPointer, limitReg, lir->mir()->onError());
+
+    return true;
+}
+
+bool
 CodeGenerator::visitCheckOverRecursed(LCheckOverRecursed *lir)
 {
     // Ensure that this frame will not cross the stack limit.

@@ -17,11 +17,6 @@
 
 #include "frontend/ParseNode-inl.h"
 
-// (TEMPORARY) Set to 'false' to pretend we have signal handlers setup to
-// protect us from out-of-bounds access and we are using DataView so there is
-// no masking necessary before loading [heap+index].
-static const bool SAFE = true;
-
 using namespace js;
 using namespace js::ion;
 using namespace js::frontend;
@@ -1562,6 +1557,8 @@ class AsmModuleCompiler
     TempAllocator                alloc_;
     IonContext                   ionContext_;
     MacroAssembler               masm_;
+    Label                        stackOverflowLabel_;
+    Label                        operationCallbackLabel_;
 
     ScopedJSDeletePtr<AsmModule> module_;
 
@@ -1616,6 +1613,12 @@ class AsmModuleCompiler
         noGC_.destroy();
         if (errorString_)
             tokenStream_.reportAsmError(errorNode_, JSMSG_USE_ASM_TYPE_FAIL, errorString_);
+
+        // Avoid spurious Label assertions on compilation failure.
+        if (!stackOverflowLabel_.bound())
+            stackOverflowLabel_.bind(0);
+        if (!operationCallbackLabel_.bound())
+            operationCallbackLabel_.bind(0);
     }
 
     bool init() {
@@ -1669,6 +1672,8 @@ class AsmModuleCompiler
     LifoAlloc &lifo() { return lifo_; }
     TempAllocator &alloc() { return alloc_; }
     MacroAssembler &masm() { return masm_; }
+    Label &stackOverflowLabel() { return stackOverflowLabel_; }
+    Label &operationCallbackLabel() { return operationCallbackLabel_; }
     bool hasError() const { return errorString_ != NULL; }
     const AsmModule &module() const { return *module_.get(); }
     PropertyName *maybeModuleName() const { return moduleName_; }
@@ -1960,18 +1965,24 @@ class AsmFunctionCompiler
 
         curBlock_ = newBlock(/* pred = */ NULL);
 
+        if (!m_.cx()->runtime->asmJSUnsafe) {
+            // Note: this can be removed using a signal handler
+            MAsmCheckOverRecursed *ins = MAsmCheckOverRecursed::New(&m_.stackOverflowLabel());
+            curBlock_->add(ins);
+        }
+
         for (ABIArgIter i(func_.argMIRTypes()); !i.done(); i++) {
-            MAsmParameter *param = MAsmParameter::New(*i, i.mirType());
-            curBlock_->add(param);
-            curBlock_->initSlot(compileInfo_.localSlot(i.index()), param);
+            MAsmParameter *ins = MAsmParameter::New(*i, i.mirType());
+            curBlock_->add(ins);
+            curBlock_->initSlot(compileInfo_.localSlot(i.index()), ins);
         }
 
         for (LocalMap::Range r = locals_.all(); !r.empty(); r.popFront()) {
             const Local &local = r.front().value;
             if (local.which == Local::Var) {
-                MConstant *constant = MConstant::New(local.initialValue);
-                curBlock_->add(constant);
-                curBlock_->initSlot(compileInfo_.localSlot(local.slot), constant);
+                MConstant *ins = MConstant::New(local.initialValue);
+                curBlock_->add(ins);
+                curBlock_->initSlot(compileInfo_.localSlot(local.slot), ins);
             }
         }
 
@@ -2590,11 +2601,11 @@ class AsmFunctionCompiler
   private:
     MDefinition *maskArrayAccess(MDefinition *ptr, uint32_t mask)
     {
-        // If !SAFE, pretend this is a DataView access guarded by a signal
+        // If unsafe, pretend this is a DataView access guarded by a signal
         // handler. In that case, there is no checking required at the load; we
         // depend on signal handlers and carefully setting everything up so
         // that out of bounds access always trap.
-        if (!SAFE || mask == UINT32_MAX)
+        if (m_.cx()->runtime->asmJSUnsafe || mask == UINT32_MAX)
             return ptr;
 
         MConstant *constant = MConstant::New(Int32Value(mask));
@@ -5043,9 +5054,17 @@ InvokeFromAsmJS_ToNumber(JSContext *cx, AsmExitGlobalDatum *exitDatum, int32_t a
     return JS_CHECK_OPERATION_LIMIT(cx);  // (TEMPORARY)
 }
 
+static void
+LoadJSContextIntoRegister(MacroAssembler &masm, Register reg)
+{
+    masm.movePtr(ImmWord(GetIonContext()->compartment->rt), reg);
+    masm.loadPtr(Address(reg, offsetof(JSRuntime, asmJSActivation)), reg);
+    masm.loadPtr(Address(reg, AsmJSActivation::offsetOfContext()), reg);
+}
+
 static bool
-GenerateExit(AsmModuleCompiler &m, MacroAssembler &masm, Label &errorLabel,
-             const AsmExitDescriptor &descriptor, AsmExitIndex exitIndex)
+GenerateExit(AsmModuleCompiler &m, MacroAssembler &masm, const AsmExitDescriptor &descriptor,
+             AsmExitIndex exitIndex, Label *popAllFramesLabel)
 {
     const unsigned arrayLength = Max<size_t>(1, descriptor.argTypes().length());
     const unsigned arraySize = arrayLength * sizeof(Value);
@@ -5054,6 +5073,7 @@ GenerateExit(AsmModuleCompiler &m, MacroAssembler &masm, Label &errorLabel,
     const unsigned reserveSize = arraySize + padding;
     const unsigned callerArgsOffset = reserveSize + NativeFrameSize;
 
+    JS_ASSERT(masm.framePushed() == 0);
     masm.reserveStack(reserveSize);
     Register argv = StackPointer;
 
@@ -5085,16 +5105,11 @@ GenerateExit(AsmModuleCompiler &m, MacroAssembler &masm, Label &errorLabel,
     }
 
     // argument 0: cx
-    masm.movePtr(ImmWord(GetIonContext()->compartment->rt), IntArgReg0);
-    masm.loadPtr(Address(IntArgReg0, offsetof(JSRuntime, asmJSActivation)), IntArgReg0);
-    masm.loadPtr(Address(IntArgReg0, AsmJSActivation::offsetOfContext()), IntArgReg0);
-
+    LoadJSContextIntoRegister(masm, IntArgReg0);
     // argument 1: exitDatum
     masm.lea(Operand(GlobalReg, m.module().exitIndexToGlobalDataOffset(exitIndex)), IntArgReg1);
-
     // argument 2: argc
     masm.mov(Imm32(descriptor.argTypes().length()), IntArgReg2);
-
     // argument 3: argv
     masm.mov(argv, IntArgReg3);
 
@@ -5102,18 +5117,18 @@ GenerateExit(AsmModuleCompiler &m, MacroAssembler &masm, Label &errorLabel,
       case AsmUse::NoCoercion:
         masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, &InvokeFromAsmJS_Ignore)));
         masm.testl(ReturnReg, ReturnReg);
-        masm.j(Assembler::Zero, &errorLabel);
+        masm.j(Assembler::Zero, popAllFramesLabel);
         break;
       case AsmUse::ToInt32:
         masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, &InvokeFromAsmJS_ToInt32)));
         masm.testl(ReturnReg, ReturnReg);
-        masm.j(Assembler::Zero, &errorLabel);
+        masm.j(Assembler::Zero, popAllFramesLabel);
         masm.unboxInt32(Address(argv, 0), ReturnReg);
         break;
       case AsmUse::ToNumber:
         masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, &InvokeFromAsmJS_ToNumber)));
         masm.testl(ReturnReg, ReturnReg);
-        masm.j(Assembler::Zero, &errorLabel);
+        masm.j(Assembler::Zero, popAllFramesLabel);
         masm.loadDouble(Address(argv, 0), ReturnFloatReg);
         break;
       case AsmUse::AddOrSub:
@@ -5130,41 +5145,49 @@ GenerateExits(AsmModuleCompiler &m)
 {
     MacroAssembler &masm = m.masm();
 
-    // If there is an error during the FFI call, we must propagate the
-    // exception. Since try-catch isn't supported by asm.js (atm), we can
-    // simply pop all frames, returning to CallAsmJS. To do this, there are
-    // three steps:
-    //  1. Restore 'sp' to it's value right after the PushRegsInMask in
-    //     generateAsmPrologue.
-    //  2. PopRegsInMask to restore the caller's non-volatile registers.
-    //  3. Return (to CallAsmJS).
-    // These steps are implemented by a single error handling stub. The FFI
-    // call stubs jump to this stub when an error is returned.
+    Label popAllFramesLabel;
 
-    // c.f. CodeGeneratorX64::generateAsmPrologue
-    RegisterSet nonVolatileRegs = RegisterSet(GeneralRegisterSet(Registers::NonVolatileMask),
-                                              FloatRegisterSet(FloatRegisters::NonVolatileMask));
-    masm.setFramePushed(nonVolatileRegs.gprs().size() * STACK_SLOT_SIZE +
-                        nonVolatileRegs.fpus().size() * sizeof(double));
+    if (m.stackOverflowLabel().used()) {
+        void (*pf)(JSContext*) = js_ReportOverRecursed;
 
-    // Generate the error stub.
-    Label errorLabel;
-    masm.bind(&errorLabel);
-    masm.movq(ImmWord(GetIonContext()->compartment->rt), ScratchReg);
-    masm.movq(Operand(ScratchReg, offsetof(JSRuntime, asmJSActivation)), ScratchReg);
-    masm.movq(Operand(ScratchReg, AsmJSActivation::offsetOfErrorRejoinSP()), StackPointer);
-    masm.PopRegsInMask(nonVolatileRegs);
-    masm.ret();
+        masm.bind(&m.stackOverflowLabel());
+        LoadJSContextIntoRegister(masm, IntArgReg0);
+        masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, pf)));
+        masm.jmp(&popAllFramesLabel);
+    }
 
-    // Generate the exits which may jump to the error stub.
+    if (m.operationCallbackLabel().used()) {
+        JS_NOT_REACHED("TODO");
+    }
+
+    // Generate FFI call exit stubs.
     for (AsmExitMap::Range r = m.allExits(); !r.empty(); r.popFront()) {
         const AsmExitDescriptor &exitDesc = r.front().key;
         AsmExitIndex exitIndex = r.front().value;
 
         m.setExitOffset(exitIndex);
 
-        if (!GenerateExit(m, masm, errorLabel, exitDesc, exitIndex))
+        if (!GenerateExit(m, masm, exitDesc, exitIndex, &popAllFramesLabel))
             return false;
+    }
+
+    // If an exception is thrown, simply pop all frames (since asm.js does not
+    // contain try/catch). To do this:
+    //  1. Restore 'sp' to it's value right after the PushRegsInMask in GenerateEntry.
+    //  2. PopRegsInMask to restore the caller's non-volatile registers.
+    //  3. Return (to CallAsmJS).
+    if (popAllFramesLabel.used()) {
+        RegisterSet nonVolatileRegs = RegisterSet(GeneralRegisterSet(Registers::NonVolatileMask),
+                                                  FloatRegisterSet(FloatRegisters::NonVolatileMask));
+        masm.setFramePushed(nonVolatileRegs.gprs().size() * STACK_SLOT_SIZE +
+                            nonVolatileRegs.fpus().size() * sizeof(double));
+
+        masm.bind(&popAllFramesLabel);
+        masm.movq(ImmWord(GetIonContext()->compartment->rt), ScratchReg);
+        masm.movq(Operand(ScratchReg, offsetof(JSRuntime, asmJSActivation)), ScratchReg);
+        masm.movq(Operand(ScratchReg, AsmJSActivation::offsetOfErrorRejoinSP()), StackPointer);
+        masm.PopRegsInMask(nonVolatileRegs);
+        masm.ret();
     }
 
     return true;

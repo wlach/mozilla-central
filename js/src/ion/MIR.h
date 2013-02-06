@@ -3320,6 +3320,18 @@ class MCheckOverRecursed : public MNullaryInstruction
     INSTRUCTION_HEADER(CheckOverRecursed)
 };
 
+// The asm.js version doesn't use the bail mechanism: instead it throws and
+// exception by jumping to the given label.
+class MAsmCheckOverRecursed : public MNullaryInstruction
+{
+    Label *onError_;
+    MAsmCheckOverRecursed(Label *onError) : onError_(onError) {}
+  public:
+    INSTRUCTION_HEADER(AsmCheckOverRecursed);
+    static MAsmCheckOverRecursed *New(Label *onError) { return new MAsmCheckOverRecursed(onError); }
+    Label *onError() const { return onError_; }
+};
+
 // Check the script's use count and trigger recompilation to inline
 // calls when the script becomes hot.
 class MRecompileCheck : public MNullaryInstruction

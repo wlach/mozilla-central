@@ -361,13 +361,29 @@ class LCheckOverRecursed : public LInstructionHelper<0, 0, 1>
   public:
     LIR_HEADER(CheckOverRecursed)
 
-    LCheckOverRecursed(const LDefinition &limitreg)
-    {
+    LCheckOverRecursed(const LDefinition &limitreg) {
         setTemp(0, limitreg);
     }
 
     const LAllocation *limitTemp() {
         return getTemp(0)->output();
+    }
+};
+
+class LAsmCheckOverRecursed : public LInstructionHelper<0, 0, 1>
+{
+  public:
+    LIR_HEADER(AsmCheckOverRecursed)
+
+    LAsmCheckOverRecursed(const LDefinition &limitreg) {
+        setTemp(0, limitreg);
+    }
+
+    const LAllocation *limitTemp() {
+        return getTemp(0)->output();
+    }
+    MAsmCheckOverRecursed *mir() const {
+        return mir_->toAsmCheckOverRecursed();
     }
 };
 

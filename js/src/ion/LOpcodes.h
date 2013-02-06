@@ -30,6 +30,7 @@
     _(NewStringObject)              \
     _(InitProp)                     \
     _(CheckOverRecursed)            \
+    _(AsmCheckOverRecursed)         \
     _(RecompileCheck)               \
     _(DefVar)                       \
     _(DefFun)                       \

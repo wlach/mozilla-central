@@ -5333,6 +5333,9 @@ main(int argc, char **argv, char **envp)
 #ifdef JSGC_GENERATIONAL
         || !op.addBoolOption('\0', "ggc", "Enable Generational GC")
 #endif
+        || !op.addBoolOption('\0', "asm-unsafe", "Disable safety checks in generated asm.js code "
+                                                 "to simulate performance once we've removed those "
+                                                 "checks by using signal handlers tricks.")
     )
     {
         return EXIT_FAILURE;
@@ -5380,6 +5383,11 @@ main(int argc, char **argv, char **envp)
     JS_SetSecurityCallbacks(rt, &securityCallbacks);
 
     JS_SetNativeStackQuota(rt, gMaxStackSize);
+
+    if (op.getBoolOption("asm-unsafe"))
+        rt->asmJSUnsafe = true;
+    else
+        JS_ASSERT(rt->asmJSUnsafe == false);
 
     if (!InitWatchdog(rt))
         return 1;

@@ -876,6 +876,7 @@ JSRuntime::JSRuntime(JSUseHelperThreads useHelperThreads)
 #endif
     jitHardening(false),
     asmJSActivation(NULL),
+    asmJSUnsafe(false),
     ionPcScriptCache(NULL),
     threadPool(this),
     ctypesActivityCallback(NULL),

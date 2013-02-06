@@ -114,6 +114,12 @@ LIRGenerator::visitCheckOverRecursed(MCheckOverRecursed *ins)
 }
 
 bool
+LIRGenerator::visitAsmCheckOverRecursed(MAsmCheckOverRecursed *ins)
+{
+    return add(new LAsmCheckOverRecursed(temp()), ins);
+}
+
+bool
 LIRGenerator::visitDefVar(MDefVar *ins)
 {
     LDefVar *lir = new LDefVar(useRegisterAtStart(ins->scopeChain()));

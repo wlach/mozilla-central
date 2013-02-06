@@ -1141,6 +1141,8 @@ struct JSRuntime : js::RuntimeFriendFields,
 
     // Points to a LIFO linked list of asm.js activations.
     js::AsmJSActivation *asmJSActivation;
+    // 'True' if '--asm-unsafe' is passed to the js shell.
+    bool asmJSUnsafe;
 
     void resetIonStackLimit() {
         mainThread.ionStackLimit = mainThread.nativeStackLimit;

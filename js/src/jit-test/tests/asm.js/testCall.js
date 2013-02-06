@@ -1,4 +1,5 @@
 load(libdir + "asm.js");
+load(libdir + "asserts.js");
 
 assertAsmTypeFail(USE_ASM+"function f(){i=i|0} function g() { f(0) } return g");
 assertAsmTypeFail(USE_ASM+"function f(i){i=i|0} function g() { f() } return g");
@@ -34,3 +35,12 @@ assertEq(asmLink(asmCompile(USE_ASM+"function f(i,j,k,l,m,n,o,p) { i=+i;j=+j;k=+
 assertEq(asmLink(asmCompile(USE_ASM+"function f(i) {i=i|0; return i|0} function g() { return 42; return f(13)|0 } return g"))(), 42);
 
 assertEq(asmLink(asmCompile(USE_ASM+"function e() { return 42 } function f(i) { i=i|0; switch(i|0) { case 0: return e()|0; default: return 13 } return 0 } function g() { return f(0)|0 } return g"))(), 42);
+
+var rec = asmLink(asmCompile(USE_ASM+"function rec() { rec() } return rec"));
+assertThrowsInstanceOf(rec, InternalError);
+
+var rec = asmLink(asmCompile(USE_ASM+"function rec(i) { i=i|0; if (!i) return 0; return (rec((i-1)|0)+1)|0 } return rec"));
+assertEq(rec(100), 100);
+assertEq(rec(1000), 1000);
+assertThrowsInstanceOf(function() rec(100000000000), InternalError);
+assertEq(rec(10000), 10000);
