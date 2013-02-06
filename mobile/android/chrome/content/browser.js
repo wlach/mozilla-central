@@ -48,6 +48,11 @@ XPCOMUtils.defineLazyGetter(this, "PrivateBrowsingUtils", function() {
   return PrivateBrowsingUtils;
 });
 
+XPCOMUtils.defineLazyGetter(this, "Sanitizer", function() {
+  Cu.import("resource://gre/modules/Sanitizer.jsm");
+  return Sanitizer;
+});
+
 // Lazily-loaded browser scripts:
 [
   ["HelperApps", "chrome://browser/content/HelperApps.js"],
@@ -270,16 +275,18 @@ var BrowserApp = {
         pinned = window.arguments[3];
     }
 
-    let updated = this.isAppUpdated();
+    let status = this.startupStatus();
     if (pinned) {
-      WebAppRT.init(updated, url).then(function(aUrl) {
-        BrowserApp.addTab(aUrl);
-      }, function() {
-        let uri = Services.io.newURI(url, null, null);
-        if (!uri)
-          return;
-        Cc["@mozilla.org/uriloader/external-protocol-service;1"].getService(Ci.nsIExternalProtocolService).getProtocolHandlerInfo(uri.scheme).launchWithURI(uri);
-        BrowserApp.quit();
+      WebAppRT.init(status, url, function(aUrl) {
+        if (aUrl) {
+          BrowserApp.addTab(aUrl);
+        } else {
+          let uri = Services.io.newURI(url, null, null);
+          if (!uri)
+            return;
+          Cc["@mozilla.org/uriloader/external-protocol-service;1"].getService(Ci.nsIExternalProtocolService).getProtocolHandlerInfo(uri.scheme).launchWithURI(uri);
+          BrowserApp.quit();
+        }
       });
     } else {
       SearchEngines.init();
@@ -294,7 +301,7 @@ var BrowserApp = {
     event.initEvent("UIReady", true, false);
     window.dispatchEvent(event);
 
-    if (updated)
+    if (status)
       this.onAppUpdated();
 
     // Store the low-precision buffer pref
@@ -309,7 +316,7 @@ var BrowserApp = {
 #endif
   },
 
-  isAppUpdated: function() {
+  startupStatus: function() {
     let savedmstone = null;
     try {
       savedmstone = Services.prefs.getCharPref("browser.startup.homepage_override.mstone");
@@ -1000,7 +1007,6 @@ var BrowserApp = {
   },
 
   sanitize: function (aItems) {
-    let sanitizer = new Sanitizer();
     let json = JSON.parse(aItems);
     let success = true;
 
@@ -1011,15 +1017,21 @@ var BrowserApp = {
       try {
         switch (key) {
           case "history_downloads":
-            sanitizer.clearItem("history");
-            sanitizer.clearItem("downloads");
+            Sanitizer.clearItem("history");
+
+            // If we're also removing downloaded files, don't clear the
+            // download history yet since it will be handled when the files are
+            // removed.
+            if (!json["downloadFiles"]) {
+              Sanitizer.clearItem("downloads");
+            }
             break;
           case "cookies_sessions":
-            sanitizer.clearItem("cookies");
-            sanitizer.clearItem("sessions");
+            Sanitizer.clearItem("cookies");
+            Sanitizer.clearItem("sessions");
             break;
           default:
-            sanitizer.clearItem(key);
+            Sanitizer.clearItem(key);
         }
       } catch (e) {
         dump("sanitize error: " + e);
@@ -5754,11 +5766,33 @@ var IndexedDB = {
       responseTopic = this._quotaResponse;
     }
 
+    const firstTimeoutDuration = 300000; // 5 minutes
+
+    let timeoutId;
+
     let notificationID = responseTopic + host;
     let observer = requestor.getInterface(Ci.nsIObserver);
 
+    // This will be set to the result of PopupNotifications.show() below, or to
+    // the result of PopupNotifications.getNotification() if this is a
+    // quotaCancel notification.
+    let notification;
+
+    function timeoutNotification() {
+      // Remove the notification.
+      NativeWindow.doorhanger.hide(notificationID, tab.id);
+
+      // Clear all of our timeout stuff. We may be called directly, not just
+      // when the timeout actually elapses.
+      clearTimeout(timeoutId);
+
+      // And tell the page that the popup timed out.
+      observer.observe(null, responseTopic, Ci.nsIPermissionManager.UNKNOWN_ACTION);
+    }
+
     if (topic == this._quotaCancel) {
       NativeWindow.doorhanger.hide(notificationID, tab.id);
+      timeoutNotification();
       observer.observe(null, responseTopic, Ci.nsIPermissionManager.UNKNOWN_ACTION);
       return;
     }
@@ -5766,23 +5800,31 @@ var IndexedDB = {
     let buttons = [{
       label: strings.GetStringFromName("offlineApps.allow"),
       callback: function() {
+        clearTimeout(timeoutId);
         observer.observe(null, responseTopic, Ci.nsIPermissionManager.ALLOW_ACTION);
       }
     },
     {
       label: strings.GetStringFromName("offlineApps.never"),
       callback: function() {
+        clearTimeout(timeoutId);
         observer.observe(null, responseTopic, Ci.nsIPermissionManager.DENY_ACTION);
       }
     },
     {
       label: strings.GetStringFromName("offlineApps.notNow"),
       callback: function() {
+        clearTimeout(timeoutId);
         observer.observe(null, responseTopic, Ci.nsIPermissionManager.UNKNOWN_ACTION);
       }
     }];
 
     NativeWindow.doorhanger.show(message, notificationID, buttons, tab.id);
+
+    // Set the timeoutId after the popup has been created, and use the long
+    // timeout value. If the user doesn't notice the popup after this amount of
+    // time then it is most likely not visible and we want to alert the page.
+    timeoutId = setTimeout(timeoutNotification, firstTimeoutDuration);
   }
 };
 

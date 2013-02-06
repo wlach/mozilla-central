@@ -2661,8 +2661,12 @@ BEGIN_CASE(JSOP_REST)
     if (!rest)
         goto error;
     PUSH_COPY(ObjectValue(*rest));
-    if (!SetInitializerObjectType(cx, script, regs.pc, rest))
+    if (!SetInitializerObjectType(cx, script, regs.pc, rest, GenericObject))
         goto error;
+    rootType0 = GetTypeCallerInitObject(cx, JSProto_Array);
+    if (!rootType0)
+        goto error;
+    rest->setType(rootType0);
 }
 END_CASE(JSOP_REST)
 
@@ -2887,13 +2891,16 @@ BEGIN_CASE(JSOP_NEWINIT)
     JS_ASSERT(i == JSProto_Array || i == JSProto_Object);
 
     RootedObject &obj = rootObject0;
+    NewObjectKind newKind;
     if (i == JSProto_Array) {
-        obj = NewDenseEmptyArray(cx);
+        newKind = UseNewTypeForInitializer(cx, script, regs.pc, &ArrayClass);
+        obj = NewDenseEmptyArray(cx, NULL, newKind);
     } else {
-        gc::AllocKind kind = GuessObjectGCKind(0);
-        obj = NewBuiltinClassInstance(cx, &ObjectClass, kind);
+        gc::AllocKind allocKind = GuessObjectGCKind(0);
+        newKind = UseNewTypeForInitializer(cx, script, regs.pc, &ObjectClass);
+        obj = NewBuiltinClassInstance(cx, &ObjectClass, allocKind, newKind);
     }
-    if (!obj || !SetInitializerObjectType(cx, script, regs.pc, obj))
+    if (!obj || !SetInitializerObjectType(cx, script, regs.pc, obj, newKind))
         goto error;
 
     PUSH_OBJECT(*obj);
@@ -2905,8 +2912,9 @@ BEGIN_CASE(JSOP_NEWARRAY)
 {
     unsigned count = GET_UINT24(regs.pc);
     RootedObject &obj = rootObject0;
-    obj = NewDenseAllocatedArray(cx, count);
-    if (!obj || !SetInitializerObjectType(cx, script, regs.pc, obj))
+    NewObjectKind newKind = UseNewTypeForInitializer(cx, script, regs.pc, &ArrayClass);
+    obj = NewDenseAllocatedArray(cx, count, NULL, newKind);
+    if (!obj || !SetInitializerObjectType(cx, script, regs.pc, obj, newKind))
         goto error;
 
     PUSH_OBJECT(*obj);
@@ -2920,8 +2928,9 @@ BEGIN_CASE(JSOP_NEWOBJECT)
     baseobj = script->getObject(regs.pc);
 
     RootedObject &obj = rootObject1;
-    obj = CopyInitializerObject(cx, baseobj);
-    if (!obj || !SetInitializerObjectType(cx, script, regs.pc, obj))
+    NewObjectKind newKind = UseNewTypeForInitializer(cx, script, regs.pc, baseobj->getClass());
+    obj = CopyInitializerObject(cx, baseobj, newKind);
+    if (!obj || !SetInitializerObjectType(cx, script, regs.pc, obj, newKind))
         goto error;
 
     PUSH_OBJECT(*obj);
@@ -3370,6 +3379,8 @@ END_CASE(JSOP_ARRAYPUSH)
         Probes::exitScript(cx, script, script->function(), regs.fp());
     regs.fp()->setFinishedInInterpreter();
 
+    gc::MaybeVerifyBarriers(cx, true);
+
 #ifdef JS_METHODJIT
     /*
      * This path is used when it's guaranteed the method can be finished
@@ -3378,7 +3389,6 @@ END_CASE(JSOP_ARRAYPUSH)
   leave_on_safe_point:
 #endif
 
-    gc::MaybeVerifyBarriers(cx, true);
     return interpReturnOK ? Interpret_Ok : Interpret_Error;
 }
 

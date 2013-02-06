@@ -5565,9 +5565,9 @@ NewExportedFunction(JSContext *cx, const AsmModule::ExportedFunction &func,
                     HandleObject linkedModule, unsigned exportIndex)
 {
     RootedPropertyName name(cx, func.name());
-    JSFunction *fun = js_NewFunction(cx, NullPtr(), CallAsmJS, func.numArgs(),
-                                     JSFunction::NATIVE_FUN, cx->global(), name,
-                                     JSFunction::ExtendedFinalizeKind);
+    JSFunction *fun = NewFunction(cx, NullPtr(), CallAsmJS, func.numArgs(),
+                                  JSFunction::NATIVE_FUN, cx->global(), name,
+                                  JSFunction::ExtendedFinalizeKind);
     if (!fun)
         return NULL;
 
