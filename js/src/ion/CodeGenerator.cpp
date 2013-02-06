@@ -3680,6 +3680,7 @@ CodeGenerator::generateAsm()
     JS_ASSERT(cacheList_.empty());
     JS_ASSERT(safepoints_.size() == 0);
     JS_ASSERT(graph.mir().numScripts() == 0);
+    JS_ASSERT(numDeferredDoubles() == 0);
     return true;
 }
 
@@ -3786,7 +3787,7 @@ CodeGenerator::link()
     JS_ASSERT(graph.mir().numScripts() > 0);
     ionScript->copyScriptEntries(graph.mir().scripts());
 
-    linkAbsoluteLabels();
+    linkDeferredDoubles();
 
     // The correct state for prebarriers is unknown until the end of compilation,
     // since a GC can occur during code generation. All barriers are emitted

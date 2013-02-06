@@ -1852,6 +1852,7 @@ class AsmModuleCompiler
         JS_ASSERT(masm_.jumpRelocationTableBytes() == 0);
         JS_ASSERT(masm_.dataRelocationTableBytes() == 0);
         JS_ASSERT(masm_.preBarrierTableBytes() == 0);
+        JS_ASSERT(!masm_.hasEnteredExitFrame());
 
         // Patch anything in the AsmModule that needs an absolute address:
 

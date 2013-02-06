@@ -49,7 +49,8 @@ class CodeGeneratorX86 : public CodeGeneratorX86Shared
                            const Register &elements, const LAllocation *index);
 
   protected:
-    void linkAbsoluteLabels();
+    size_t numDeferredDoubles() const { return deferredDoubles_.length(); }
+    void linkDeferredDoubles();
 
   public:
     CodeGeneratorX86(MIRGenerator *gen, LIRGraph *graph, MacroAssembler *masm);
