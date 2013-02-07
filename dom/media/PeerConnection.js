@@ -261,9 +261,10 @@ PeerConnection.prototype = {
     if (this._win) {
       throw new Error("RTCPeerConnection constructor already called");
     }
-    if (!rtcConfig) {
-      // TODO(jib@mozilla.com): Hardcoded Mozilla server. Final? Bug 807494
-      rtcConfig = { "iceServers": [{ url: "stun:23.21.150.121" }] };
+    if (!rtcConfig ||
+        Services.prefs.getBoolPref("media.peerconnection.ignoreCustomRtcConfig")) {
+      rtcConfig =
+        JSON.parse(Services.prefs.getCharPref("media.peerconnection.defaultRtcConfig"));
     }
     this._mustValidateRTCConfiguration(rtcConfig,
         "RTCPeerConnection constructor passed invalid RTCConfiguration");
