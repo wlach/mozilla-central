@@ -204,6 +204,16 @@ class LInterruptCheck : public LInstructionHelper<0, 0, 0>
     LIR_HEADER(InterruptCheck)
 };
 
+class LAsmCheckStackAndInterrupt : public LInstructionHelper<0, 0, 0>
+{
+  public:
+    LIR_HEADER(AsmCheckStackAndInterrupt)
+
+    MAsmCheckStackAndInterrupt *mir() const {
+        return mir_->toAsmCheckStackAndInterrupt();
+    }
+};
+
 class LMulI : public LBinaryMath<0, 1>
 {
   public:

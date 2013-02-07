@@ -1499,19 +1499,6 @@ class CheckOverRecursedFailure : public OutOfLineCodeBase<CodeGenerator>
 };
 
 bool
-CodeGenerator::visitAsmCheckOverRecursed(LAsmCheckOverRecursed *lir)
-{
-    Register limitReg = ToRegister(lir->limitTemp());
-
-    // TODO: Use the native stack limit, for now. Later do the same trick as IM.
-    uintptr_t *limitAddr = &gen->compartment->rt->mainThread.nativeStackLimit;
-    masm.loadPtr(AbsoluteAddress(limitAddr), limitReg);
-    masm.branchPtr(Assembler::BelowOrEqual, StackPointer, limitReg, lir->mir()->onError());
-
-    return true;
-}
-
-bool
 CodeGenerator::visitCheckOverRecursed(LCheckOverRecursed *lir)
 {
     // Ensure that this frame will not cross the stack limit.
@@ -5206,6 +5193,28 @@ CodeGenerator::visitAsmVoidReturn(LAsmVoidReturn *lir)
     // Don't emit a jump to the return label if this is the last block.
     if (current->mir() != *gen->graph().poBegin())
         masm.jump(returnLabel_);
+    return true;
+}
+
+bool
+CodeGenerator::visitOutOfLineAsmCheckStackAndInterrupt(OutOfLineAsmCheckStackAndInterrupt *ool)
+{
+    // The frameDepth_ computation for asm.js code in CodeGeneratorShared's
+    // constructor ensures that sp is already properly aligned for a call.
+    JS_ASSERT(masm.framePushed() == uint32_t(frameDepth_));
+
+    // We need to call into CheckOverRecursed and jump back to ool->rejoin if
+    // CheckOverRecursed returns 'true'. Since CheckOverRecursed can do
+    // anything, that requires saving/restoring all volatile registers. Instead
+    // of doing this in the out-of-line path (many hundred bytes for each
+    // prologue and loop header), we generate this once at the end of the
+    // asm.js module. Unlike the normal calling convention, mir->failLabel()
+    // will take care of saving our volatile registers. If CheckOverRecursed
+    // returns 'false', all asm.js functions will be popped so the exception
+    // can propagate outward, so if we return, it means that execution should
+    // continue.
+    masm.call(ool->mir()->failLabel());
+    masm.jump(ool->rejoin());
     return true;
 }
 

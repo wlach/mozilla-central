@@ -30,7 +30,6 @@
     _(NewStringObject)              \
     _(InitProp)                     \
     _(CheckOverRecursed)            \
-    _(AsmCheckOverRecursed)         \
     _(RecompileCheck)               \
     _(DefVar)                       \
     _(DefFun)                       \
@@ -188,6 +187,7 @@
     _(InstanceOfV)                  \
     _(CallInstanceOf)               \
     _(InterruptCheck)               \
+    _(AsmCheckStackAndInterrupt)    \
     _(FunctionBoundary)             \
     _(AsmLoad)                      \
     _(AsmStore)                     \

@@ -27,7 +27,6 @@ namespace ion {
     _(OsrScopeChain)                                                        \
     _(ReturnFromCtor)                                                       \
     _(CheckOverRecursed)                                                    \
-    _(AsmCheckOverRecursed)                                                 \
     _(RecompileCheck)                                                       \
     _(DefVar)                                                               \
     _(DefFun)                                                               \
@@ -146,6 +145,7 @@ namespace ion {
     _(InstanceOf)                                                           \
     _(CallInstanceOf)                                                       \
     _(InterruptCheck)                                                       \
+    _(AsmCheckStackAndInterrupt)                                            \
     _(FunctionBoundary)                                                     \
     _(AsmNeg)                                                               \
     _(AsmUDiv)                                                              \

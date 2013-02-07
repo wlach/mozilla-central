@@ -44,6 +44,12 @@ LIRGeneratorX86Shared::visitInterruptCheck(MInterruptCheck *ins)
 }
 
 bool
+LIRGeneratorX86Shared::visitAsmCheckStackAndInterrupt(MAsmCheckStackAndInterrupt *ins)
+{
+    return add(new LAsmCheckStackAndInterrupt(), ins);
+}
+
+bool
 LIRGeneratorX86Shared::visitGuardShape(MGuardShape *ins)
 {
     JS_ASSERT(ins->obj()->type() == MIRType_Object);
