@@ -49,7 +49,8 @@ CodeGeneratorShared::CodeGeneratorShared(MIRGenerator *gen, LIRGraph *graph, Mac
     frameDepth_(graph->localSlotCount() * sizeof(STACK_SLOT_SIZE) +
                 graph->argumentSlotCount() * sizeof(Value))
 {
-    masm.setInstrumentation(&sps_);
+    if (!gen->compilingAsmJS())
+        masm.setInstrumentation(&sps_);
 
     // Since asm.js uses the system ABI which does not necessarily use a
     // regular array where all slots are sizeof(Value), it maintains the max
