@@ -2495,19 +2495,16 @@ class AsmFunctionCompiler
 
     void bindContinues(ParseNode *pn, const AsmLabelVector *maybeLabels)
     {
-        MBasicBlock *joinBlock = NULL;
         if (UnlabeledBlockMap::Ptr p = unlabeledContinues_.lookup(pn)) {
-            joinBlock = bindBreaksOrContinues(joinBlock, &p->value);
+            bindBreaksOrContinues(&p->value);
             unlabeledContinues_.remove(p);
         }
-        joinBlock = bindLabeledBreaksOrContinues(joinBlock, maybeLabels, &labeledContinues_);
-        if (joinBlock)
-            curBlock_ = joinBlock;
+        bindLabeledBreaksOrContinues(maybeLabels, &labeledContinues_);
     }
 
     void bindLabeledBreaks(const AsmLabelVector *maybeLabels)
     {
-        curBlock_ = bindLabeledBreaksOrContinues(curBlock_, maybeLabels, &labeledBreaks_);
+        bindLabeledBreaksOrContinues(maybeLabels, &labeledBreaks_);
     }
 
     bool addBreak(PropertyName *maybeLabel) {
@@ -2612,40 +2609,38 @@ class AsmFunctionCompiler
         return newBlockWithDepth(pred, loopStack_.length());
     }
 
-    MBasicBlock *bindBreaksOrContinues(MBasicBlock *joinBlock, BlockVector *preds)
+    void bindBreaksOrContinues(BlockVector *preds)
     {
         for (unsigned i = 0; i < preds->length(); i++) {
             MBasicBlock *pred = (*preds)[i];
-            if (!joinBlock) {
-                joinBlock = newBlock(pred);
-                if (curBlock_) {
-                    curBlock_->end(MGoto::New(joinBlock));
-                    joinBlock->addPredecessor(curBlock_);
-                }
-                pred->end(MGoto::New(joinBlock));
+            if (curBlock_ && curBlock_->begin() == curBlock_->end()) {
+                pred->end(MGoto::New(curBlock_));
+                curBlock_->addPredecessor(pred);
             } else {
-                pred->end(MGoto::New(joinBlock));
-                joinBlock->addPredecessor(pred);
+                MBasicBlock *next = newBlock(pred);
+                pred->end(MGoto::New(next));
+                if (curBlock_) {
+                    curBlock_->end(MGoto::New(next));
+                    next->addPredecessor(curBlock_);
+                }
+                curBlock_ = next;
             }
+            JS_ASSERT(curBlock_->begin() == curBlock_->end());
         }
         preds->clear();
-        return joinBlock;
     }
 
-    MBasicBlock *bindLabeledBreaksOrContinues(MBasicBlock *joinBlock,
-                                              const AsmLabelVector *maybeLabels,
-                                              LabeledBlockMap *map)
+    void bindLabeledBreaksOrContinues(const AsmLabelVector *maybeLabels, LabeledBlockMap *map)
     {
         if (!maybeLabels)
-            return joinBlock;
+            return;
         const AsmLabelVector &labels = *maybeLabels;
         for (unsigned i = 0; i < labels.length(); i++) {
             if (LabeledBlockMap::Ptr p = map->lookup(labels[i])) {
-                joinBlock = bindBreaksOrContinues(joinBlock, &p->value);
+                bindBreaksOrContinues(&p->value);
                 map->remove(p);
             }
         }
-        return joinBlock;
     }
 
     template <class Key, class Map>
@@ -2683,7 +2678,7 @@ class AsmFunctionCompiler
     void bindUnlabeledBreaks(ParseNode *pn)
     {
         if (UnlabeledBlockMap::Ptr p = unlabeledBreaks_.lookup(pn)) {
-            curBlock_ = bindBreaksOrContinues(curBlock_, &p->value);
+            bindBreaksOrContinues(&p->value);
             unlabeledBreaks_.remove(p);
         }
     }
