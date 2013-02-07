@@ -1940,7 +1940,8 @@ class AsmFunctionCompiler
             return false;
         }
 
-        curBlock_ = newBlock(/* pred = */ NULL);
+        if (!newBlock(/* pred = */ NULL, &curBlock_))
+            return false;
 
         for (ABIArgIter i(func_.argMIRTypes()); !i.done(); i++) {
             MAsmParameter *ins = MAsmParameter::New(*i, i.mirType());
@@ -2262,30 +2263,35 @@ class AsmFunctionCompiler
     }
 
   private:
-    MDefinition *call(MAsmCall::Callee callee, const Args &args, MIRType returnType)
+    bool call(MAsmCall::Callee callee, const Args &args, MIRType returnType, MDefinition **def)
     {
-        if (!curBlock_)
-            return NULL;
+        if (!curBlock_) {
+            *def = NULL;
+            return true;
+        }
         uint32_t spIncrement = args.childClobbers_ ? args.maxChildStackBytes_ : 0;
         MAsmCall *ins = MAsmCall::New(callee, args.regArgs_, returnType, spIncrement);
+        if (!ins)
+            return false;
         curBlock_->add(ins);
-        return ins;
+        *def = ins;
+        return true;
     }
 
   public:
-    MDefinition *internalCall(const AsmModuleCompiler::Func &func, const Args &args)
+    bool internalCall(const AsmModuleCompiler::Func &func, const Args &args, MDefinition **def)
     {
-        if (!curBlock_)
-            return NULL;
         MIRType returnType = func.returnType().toMIRType();
-        return call(MAsmCall::Callee(func.codeLabel()), args, returnType);
+        return call(MAsmCall::Callee(func.codeLabel()), args, returnType, def);
     }
 
-    MDefinition *funcPtrCall(const AsmModuleCompiler::FuncPtrTable &funcPtrTable, MDefinition *index,
-                             const Args &args)
+    bool funcPtrCall(const AsmModuleCompiler::FuncPtrTable &funcPtrTable, MDefinition *index,
+                     const Args &args, MDefinition **def)
     {
-        if (!curBlock_)
-            return NULL;
+        if (!curBlock_) {
+            *def = NULL;
+            return true;
+        }
 
         MConstant *mask = MConstant::New(Int32Value(funcPtrTable.mask()));
         curBlock_->add(mask);
@@ -2297,13 +2303,15 @@ class AsmFunctionCompiler
         curBlock_->add(ptrFun);
 
         MIRType returnType = funcPtrTable.sig().returnType().toMIRType();
-        return call(MAsmCall::Callee(ptrFun), args, returnType);
+        return call(MAsmCall::Callee(ptrFun), args, returnType, def);
     }
 
-    MDefinition *ffiCall(AsmExitIndex exitIndex, const Args &args, MIRType returnType)
+    bool ffiCall(AsmExitIndex exitIndex, const Args &args, MIRType returnType, MDefinition **def)
     {
-        if (!curBlock_)
-            return NULL;
+        if (!curBlock_) {
+            *def = NULL;
+            return true;
+        }
 
         JS_STATIC_ASSERT(offsetof(AsmExitGlobalDatum, exit) == 0);
         int32_t offset = m_.module().exitIndexToGlobalDataOffset(exitIndex);
@@ -2311,14 +2319,12 @@ class AsmFunctionCompiler
         MAsmLoad *ptrFun = MAsmLoad::New(MAsmLoad::FUNC_PTR, MAsmLoad::Global, index);
         curBlock_->add(ptrFun);
 
-        return call(MAsmCall::Callee(ptrFun), args, returnType);
+        return call(MAsmCall::Callee(ptrFun), args, returnType, def);
     }
 
-    MDefinition *builtinCall(void *builtin, const Args &args, MIRType returnType)
+    bool builtinCall(void *builtin, const Args &args, MIRType returnType, MDefinition **def)
     {
-        if (!curBlock_)
-            return NULL;
-        return call(MAsmCall::Callee(builtin), args, returnType);
+        return call(MAsmCall::Callee(builtin), args, returnType, def);
     }
 
     /*********************************************** Control flow generation */
@@ -2341,17 +2347,18 @@ class AsmFunctionCompiler
         curBlock_ = NULL;
     }
 
-    void branchAndStartThen(MDefinition *cond, MBasicBlock **thenBlock, MBasicBlock **elseBlock)
+    bool branchAndStartThen(MDefinition *cond, MBasicBlock **thenBlock, MBasicBlock **elseBlock)
     {
         if (!curBlock_) {
             *thenBlock = NULL;
             *elseBlock = NULL;
-            return;
+            return true;
         }
-        *thenBlock = newBlock(curBlock_);
-        *elseBlock = newBlock(curBlock_);
+        if (!newBlock(curBlock_, thenBlock) || !newBlock(curBlock_, elseBlock))
+            return false;
         curBlock_->end(MTest::New(cond, *thenBlock, *elseBlock));
         curBlock_ = *thenBlock;
+        return true;
     }
 
     void joinIf(MBasicBlock *joinBlock)
@@ -2376,12 +2383,14 @@ class AsmFunctionCompiler
         return thenEnd;
     }
 
-    void joinIfElse(MBasicBlock *thenEnd)
+    bool joinIfElse(MBasicBlock *thenEnd)
     {
         if (!curBlock_ && !thenEnd)
-            return;
+            return true;
         MBasicBlock *pred = curBlock_ ? curBlock_ : thenEnd;
-        MBasicBlock *join = newBlock(pred);
+        MBasicBlock *join;
+        if (!newBlock(pred, &join))
+            return false;
         if (curBlock_)
             curBlock_->end(MGoto::New(join));
         if (thenEnd)
@@ -2389,6 +2398,7 @@ class AsmFunctionCompiler
         if (curBlock_ && thenEnd)
             join->addPredecessor(thenEnd);
         curBlock_ = join;
+        return true;
     }
 
     void pushPhiInput(MDefinition *def)
@@ -2407,47 +2417,68 @@ class AsmFunctionCompiler
         return curBlock_->pop();
     }
 
-    MBasicBlock *startPendingLoop(ParseNode *pn)
+    bool startPendingLoop(ParseNode *pn, MBasicBlock **loopEntry)
     {
-        pushLoop(pn);
+        if (!loopStack_.append(pn) || !breakableStack_.append(pn))
+            return false;
         JS_ASSERT_IF(curBlock_, curBlock_->loopDepth() == loopStack_.length() - 1);
-        if (!curBlock_)
-            return NULL;
-        MBasicBlock *next = MBasicBlock::NewPendingLoopHeader(mirGraph_, compileInfo_, curBlock_, NULL);
-        mirGraph_.addBlock(next);
-        next->setLoopDepth(loopStack_.length());
-        curBlock_->end(MGoto::New(next));
-        curBlock_ = next;
+        if (!curBlock_) {
+            *loopEntry = NULL;
+            return true;
+        }
+        *loopEntry = MBasicBlock::NewPendingLoopHeader(mirGraph_, compileInfo_, curBlock_, NULL);
+        if (!*loopEntry)
+            return false;
+        mirGraph_.addBlock(*loopEntry);
+        (*loopEntry)->setLoopDepth(loopStack_.length());
+        curBlock_->end(MGoto::New(*loopEntry));
+        curBlock_ = *loopEntry;
         if (!m_.cx()->runtime->asmJSUnsafe)
             curBlock_->add(MAsmCheckStackAndInterrupt::New(m_.checkStackAndInterrupt()));
-        return next;
+        return true;
     }
 
-    MBasicBlock *branchAndStartLoopBody(MDefinition *cond)
+    bool branchAndStartLoopBody(MDefinition *cond, MBasicBlock **afterLoop)
     {
-        if (!curBlock_)
-            return NULL;
+        if (!curBlock_) {
+            *afterLoop = NULL;
+            return true;
+        }
         JS_ASSERT(curBlock_->loopDepth() > 0);
-        MBasicBlock *body = newBlock(curBlock_);
-        MBasicBlock *afterLoop = NULL;
+        MBasicBlock *body;
+        if (!newBlock(curBlock_, &body))
+            return false;
         if (cond->isConstant() && ToBoolean(cond->toConstant()->value())) {
+            *afterLoop = NULL;
             curBlock_->end(MGoto::New(body));
         } else {
-            afterLoop = newBlockWithDepth(curBlock_, curBlock_->loopDepth() - 1);
-            curBlock_->end(MTest::New(cond, body, afterLoop));
+            if (!newBlockWithDepth(curBlock_, curBlock_->loopDepth() - 1, afterLoop))
+                return false;
+            curBlock_->end(MTest::New(cond, body, *afterLoop));
         }
         curBlock_ = body;
-        return afterLoop;
+        return true;
     }
 
-    void closeLoop(MBasicBlock *loopEntry, MBasicBlock *afterLoop)
+  private:
+    ParseNode *popLoop()
+    {
+        ParseNode *pn = loopStack_.back();
+        JS_ASSERT(!unlabeledContinues_.has(pn));
+        loopStack_.popBack();
+        breakableStack_.popBack();
+        return pn;
+    }
+
+  public:
+    bool closeLoop(MBasicBlock *loopEntry, MBasicBlock *afterLoop)
     {
         ParseNode *pn = popLoop();
         if (!loopEntry) {
             JS_ASSERT(!afterLoop);
             JS_ASSERT(!curBlock_);
             JS_ASSERT(unlabeledBreaks_.empty());
-            return;
+            return true;
         }
         JS_ASSERT(loopEntry->loopDepth() == loopStack_.length() + 1);
         JS_ASSERT_IF(afterLoop, afterLoop->loopDepth() == loopStack_.length());
@@ -2459,16 +2490,16 @@ class AsmFunctionCompiler
         curBlock_ = afterLoop;
         if (curBlock_)
             mirGraph_.moveBlockToEnd(curBlock_);
-        bindUnlabeledBreaks(pn);
+        return bindUnlabeledBreaks(pn);
     }
 
-    void branchAndCloseDoWhileLoop(MDefinition *cond, MBasicBlock *loopEntry)
+    bool branchAndCloseDoWhileLoop(MDefinition *cond, MBasicBlock *loopEntry)
     {
         ParseNode *pn = popLoop();
         if (!loopEntry) {
             JS_ASSERT(!curBlock_);
             JS_ASSERT(unlabeledBreaks_.empty());
-            return;
+            return true;
         }
         JS_ASSERT(loopEntry->loopDepth() == loopStack_.length() + 1);
         if (curBlock_) {
@@ -2479,32 +2510,37 @@ class AsmFunctionCompiler
                     loopEntry->setBackedge(curBlock_);
                     curBlock_ = NULL;
                 } else {
-                    MBasicBlock *afterLoop = newBlock(curBlock_);
+                    MBasicBlock *afterLoop;
+                    if (!newBlock(curBlock_, &afterLoop))
+                        return false;
                     curBlock_->end(MGoto::New(afterLoop));
                     curBlock_ = afterLoop;
                 }
             } else {
-                MBasicBlock *afterLoop = newBlock(curBlock_);
+                MBasicBlock *afterLoop;
+                if (!newBlock(curBlock_, &afterLoop))
+                    return false;
                 curBlock_->end(MTest::New(cond, loopEntry, afterLoop));
                 loopEntry->setBackedge(curBlock_);
                 curBlock_ = afterLoop;
             }
         }
-        bindUnlabeledBreaks(pn);
+        return bindUnlabeledBreaks(pn);
     }
 
-    void bindContinues(ParseNode *pn, const AsmLabelVector *maybeLabels)
+    bool bindContinues(ParseNode *pn, const AsmLabelVector *maybeLabels)
     {
         if (UnlabeledBlockMap::Ptr p = unlabeledContinues_.lookup(pn)) {
-            bindBreaksOrContinues(&p->value);
+            if (!bindBreaksOrContinues(&p->value))
+                return false;
             unlabeledContinues_.remove(p);
         }
-        bindLabeledBreaksOrContinues(maybeLabels, &labeledContinues_);
+        return bindLabeledBreaksOrContinues(maybeLabels, &labeledContinues_);
     }
 
-    void bindLabeledBreaks(const AsmLabelVector *maybeLabels)
+    bool bindLabeledBreaks(const AsmLabelVector *maybeLabels)
     {
-        bindLabeledBreaksOrContinues(maybeLabels, &labeledBreaks_);
+        return bindLabeledBreaksOrContinues(maybeLabels, &labeledBreaks_);
     }
 
     bool addBreak(PropertyName *maybeLabel) {
@@ -2519,62 +2555,72 @@ class AsmFunctionCompiler
         return addBreakOrContinue(loopStack_.back(), &unlabeledContinues_);
     }
 
-    MBasicBlock *startSwitch(ParseNode *pn, MDefinition *expr, int32_t low, int32_t high)
+    bool startSwitch(ParseNode *pn, MDefinition *expr, int32_t low, int32_t high,
+                     MBasicBlock **switchBlock)
     {
-        breakableStack_.append(pn);
+        if (!breakableStack_.append(pn))
+            return false;
         if (!curBlock_)
-            return NULL;
+            return true;
         curBlock_->end(MTableSwitch::New(expr, low, high));
-        MBasicBlock *switchBlock = curBlock_;
+        *switchBlock = curBlock_;
         curBlock_ = NULL;
-        return switchBlock;
+        return true;
     }
 
-    MBasicBlock *startSwitchCase(MBasicBlock *switchBlock)
+    bool startSwitchCase(MBasicBlock *switchBlock, MBasicBlock **next)
     {
-        if (!switchBlock)
-            return NULL;
-        MBasicBlock *next = newBlock(switchBlock);
-        if (curBlock_) {
-            curBlock_->end(MGoto::New(next));
-            next->addPredecessor(curBlock_);
+        if (!switchBlock) {
+            *next = NULL;
+            return true;
         }
-        curBlock_ = next;
-        return next;
+        if (!newBlock(switchBlock, next))
+            return false;
+        if (curBlock_) {
+            curBlock_->end(MGoto::New(*next));
+            (*next)->addPredecessor(curBlock_);
+        }
+        curBlock_ = *next;
+        return true;
     }
 
-    MBasicBlock *startSwitchDefault(MBasicBlock *switchBlock, AsmCaseVector *cases)
+    bool startSwitchDefault(MBasicBlock *switchBlock, AsmCaseVector *cases, MBasicBlock **defaultBlock)
     {
-        MBasicBlock *defaultBlock = startSwitchCase(switchBlock);
-        if (!defaultBlock)
-            return NULL;
+        if (!startSwitchCase(switchBlock, defaultBlock))
+            return false;
+        if (!*defaultBlock)
+            return true;
         for (unsigned i = 0; i < cases->length(); i++) {
             if (!(*cases)[i]) {
-                MBasicBlock *bb = newBlock(switchBlock);
-                bb->end(MGoto::New(defaultBlock));
-                defaultBlock->addPredecessor(bb);
+                MBasicBlock *bb;
+                if (!newBlock(switchBlock, &bb))
+                    return false;
+                bb->end(MGoto::New(*defaultBlock));
+                (*defaultBlock)->addPredecessor(bb);
                 (*cases)[i] = bb;
             }
         }
-        mirGraph_.moveBlockToEnd(defaultBlock);
-        return defaultBlock;
+        mirGraph_.moveBlockToEnd(*defaultBlock);
+        return true;
     }
 
-    void joinSwitch(MBasicBlock *switchBlock, const AsmCaseVector &cases, MBasicBlock *defaultBlock)
+    bool joinSwitch(MBasicBlock *switchBlock, const AsmCaseVector &cases, MBasicBlock *defaultBlock)
     {
         ParseNode *pn = breakableStack_.popCopy();
         if (!switchBlock)
-            return;
+            return true;
         MTableSwitch *mir = switchBlock->lastIns()->toTableSwitch();
         mir->addDefault(defaultBlock);
         for (unsigned i = 0; i < cases.length(); i++)
             mir->addCase(cases[i]);
         if (curBlock_) {
-            MBasicBlock *next = newBlock(curBlock_);
+            MBasicBlock *next;
+            if (!newBlock(curBlock_, &next))
+                return false;
             curBlock_->end(MGoto::New(next));
             curBlock_ = next;
         }
-        bindUnlabeledBreaks(pn);
+        return bindUnlabeledBreaks(pn);
     }
 
     /*************************************************************************/
@@ -2595,21 +2641,22 @@ class AsmFunctionCompiler
         return bitAnd;
     }
 
-    MBasicBlock *newBlockWithDepth(MBasicBlock *pred, unsigned loopDepth)
+    bool newBlockWithDepth(MBasicBlock *pred, unsigned loopDepth, MBasicBlock **block)
     {
-        MBasicBlock *bb = MBasicBlock::New(mirGraph_, compileInfo_, pred, /* pc = */NULL,
-                                           MBasicBlock::NORMAL);
-        mirGraph_.addBlock(bb);
-        bb->setLoopDepth(loopDepth);
-        return bb;
+        *block = MBasicBlock::New(mirGraph_, compileInfo_, pred, /* pc = */ NULL, MBasicBlock::NORMAL);
+        if (!*block)
+            return false;
+        mirGraph_.addBlock(*block);
+        (*block)->setLoopDepth(loopDepth);
+        return true;
     }
 
-    MBasicBlock *newBlock(MBasicBlock *pred)
+    bool newBlock(MBasicBlock *pred, MBasicBlock **block)
     {
-        return newBlockWithDepth(pred, loopStack_.length());
+        return newBlockWithDepth(pred, loopStack_.length(), block);
     }
 
-    void bindBreaksOrContinues(BlockVector *preds)
+    bool bindBreaksOrContinues(BlockVector *preds)
     {
         for (unsigned i = 0; i < preds->length(); i++) {
             MBasicBlock *pred = (*preds)[i];
@@ -2617,7 +2664,9 @@ class AsmFunctionCompiler
                 pred->end(MGoto::New(curBlock_));
                 curBlock_->addPredecessor(pred);
             } else {
-                MBasicBlock *next = newBlock(pred);
+                MBasicBlock *next;
+                if (!newBlock(pred, &next))
+                    return false;
                 pred->end(MGoto::New(next));
                 if (curBlock_) {
                     curBlock_->end(MGoto::New(next));
@@ -2628,19 +2677,22 @@ class AsmFunctionCompiler
             JS_ASSERT(curBlock_->begin() == curBlock_->end());
         }
         preds->clear();
+        return true;
     }
 
-    void bindLabeledBreaksOrContinues(const AsmLabelVector *maybeLabels, LabeledBlockMap *map)
+    bool bindLabeledBreaksOrContinues(const AsmLabelVector *maybeLabels, LabeledBlockMap *map)
     {
         if (!maybeLabels)
-            return;
+            return true;
         const AsmLabelVector &labels = *maybeLabels;
         for (unsigned i = 0; i < labels.length(); i++) {
             if (LabeledBlockMap::Ptr p = map->lookup(labels[i])) {
-                bindBreaksOrContinues(&p->value);
+                if (!bindBreaksOrContinues(&p->value))
+                    return false;
                 map->remove(p);
             }
         }
+        return true;
     }
 
     template <class Key, class Map>
@@ -2660,27 +2712,14 @@ class AsmFunctionCompiler
         return true;
     }
 
-    void pushLoop(ParseNode *pn)
-    {
-        loopStack_.append(pn);
-        breakableStack_.append(pn);
-    }
-
-    ParseNode *popLoop()
-    {
-        ParseNode *pn = loopStack_.back();
-        JS_ASSERT(!unlabeledContinues_.has(pn));
-        loopStack_.popBack();
-        breakableStack_.popBack();
-        return pn;
-    }
-
-    void bindUnlabeledBreaks(ParseNode *pn)
+    bool bindUnlabeledBreaks(ParseNode *pn)
     {
         if (UnlabeledBlockMap::Ptr p = unlabeledBreaks_.lookup(pn)) {
-            bindBreaksOrContinues(&p->value);
+            if (!bindBreaksOrContinues(&p->value))
+                return false;
             unlabeledBreaks_.remove(p);
         }
+        return true;
     }
 };
 
@@ -3752,7 +3791,9 @@ CheckInternalCall(AsmFunctionCompiler &f, ParseNode *callNode, const AsmModuleCo
             return f.fail("actual arg type is not subtype of formal arg type", callNode);
     }
 
-    *def = f.internalCall(callee, args);
+    if (!f.internalCall(callee, args, def))
+        return false;
+
     *type = callee.returnType().widen();
     return true;
 }
@@ -3802,7 +3843,9 @@ CheckFuncPtrCall(AsmFunctionCompiler &f, ParseNode *callNode, MDefinition **def,
             return f.fail("actual arg type is not subtype of formal arg type", callNode);
     }
 
-    *def = f.funcPtrCall(*table, indexDef, args);
+    if (!f.funcPtrCall(*table, indexDef, args, def))
+        return false;
+
     *type = table->sig().returnType().widen();
     return true;
 }
@@ -3828,7 +3871,9 @@ CheckFFICall(AsmFunctionCompiler &f, ParseNode *callNode, AsmFFIIndex ffi, AsmUs
     if (!f.m().addExit(ffi, CallCallee(callNode)->name(), Move(argMIRTypes), use, &exitIndex))
         return false;
 
-    *def = f.ffiCall(exitIndex, args, use.toMIRType());
+    if (!f.ffiCall(exitIndex, args, use.toMIRType(), def))
+        return false;
+
     *type = use.toFFIReturnType();
     return true;
 }
@@ -3870,7 +3915,9 @@ CheckMathBuiltinCall(AsmFunctionCompiler &f, ParseNode *callNode, AsmMathBuiltin
             return f.fail("Builtin calls must be passed 1 doublish argument", callNode);
     }
 
-    *def = f.builtinCall(callee, args, MIRType_Double);
+    if (!f.builtinCall(callee, args, MIRType_Double, def))
+        return false;
+
     *type = AsmType::Double;
     return true;
 }
@@ -4041,7 +4088,8 @@ CheckConditional(AsmFunctionCompiler &f, ParseNode *ternary, MDefinition **def, 
         return f.fail("Condition of if must be boolish", cond);
 
     MBasicBlock *thenBlock, *elseBlock;
-    f.branchAndStartThen(condDef, &thenBlock, &elseBlock);
+    if (!f.branchAndStartThen(condDef, &thenBlock, &elseBlock))
+        return false;
 
     MDefinition *thenDef;
     AsmType thenType;
@@ -4057,7 +4105,8 @@ CheckConditional(AsmFunctionCompiler &f, ParseNode *ternary, MDefinition **def, 
         return false;
 
     f.pushPhiInput(elseDef);
-    f.joinIfElse(thenEnd);
+    if (!f.joinIfElse(thenEnd))
+        return false;
     *def = f.popPhiOutput();
 
     if (thenType.isInt() && elseType.isInt())
@@ -4397,7 +4446,9 @@ CheckWhile(AsmFunctionCompiler &f, ParseNode *whileStmt, const AsmLabelVector *m
     ParseNode *cond = BinaryLeft(whileStmt);
     ParseNode *body = BinaryRight(whileStmt);
 
-    MBasicBlock *loopEntry = f.startPendingLoop(whileStmt);
+    MBasicBlock *loopEntry;
+    if (!f.startPendingLoop(whileStmt, &loopEntry))
+        return false;
 
     MDefinition *condDef;
     AsmType condType;
@@ -4407,14 +4458,17 @@ CheckWhile(AsmFunctionCompiler &f, ParseNode *whileStmt, const AsmLabelVector *m
     if (!condType.isInt())
         return f.fail("Condition of while loop must be boolish", cond);
 
-    MBasicBlock *afterLoop = f.branchAndStartLoopBody(condDef);
+    MBasicBlock *afterLoop;
+    if (!f.branchAndStartLoopBody(condDef, &afterLoop))
+        return false;
 
     if (!CheckStatement(f, body))
         return false;
 
-    f.bindContinues(whileStmt, maybeLabels);
-    f.closeLoop(loopEntry, afterLoop);
-    return true;
+    if (!f.bindContinues(whileStmt, maybeLabels))
+        return false;
+
+    return f.closeLoop(loopEntry, afterLoop);
 }
 
 static bool
@@ -4438,7 +4492,9 @@ CheckFor(AsmFunctionCompiler &f, ParseNode *forStmt, const AsmLabelVector *maybe
             return false;
     }
 
-    MBasicBlock *loopEntry = f.startPendingLoop(forStmt);
+    MBasicBlock *loopEntry;
+    if (!f.startPendingLoop(forStmt, &loopEntry))
+        return false;
 
     MDefinition *condDef;
     AsmType condType;
@@ -4448,12 +4504,15 @@ CheckFor(AsmFunctionCompiler &f, ParseNode *forStmt, const AsmLabelVector *maybe
     if (!condType.isInt())
         return f.fail("Condition of while loop must be boolish", cond);
 
-    MBasicBlock *afterLoop = f.branchAndStartLoopBody(condDef);
+    MBasicBlock *afterLoop;
+    if (!f.branchAndStartLoopBody(condDef, &afterLoop))
+        return false;
 
     if (!CheckStatement(f, body))
         return false;
 
-    f.bindContinues(forStmt, maybeLabels);
+    if (!f.bindContinues(forStmt, maybeLabels))
+        return false;
 
     if (maybeInc) {
         MDefinition *_1;
@@ -4462,8 +4521,7 @@ CheckFor(AsmFunctionCompiler &f, ParseNode *forStmt, const AsmLabelVector *maybe
             return false;
     }
 
-    f.closeLoop(loopEntry, afterLoop);
-    return true;
+    return f.closeLoop(loopEntry, afterLoop);
 }
 
 static bool
@@ -4473,12 +4531,15 @@ CheckDoWhile(AsmFunctionCompiler &f, ParseNode *whileStmt, const AsmLabelVector 
     ParseNode *body = BinaryLeft(whileStmt);
     ParseNode *cond = BinaryRight(whileStmt);
 
-    MBasicBlock *loopEntry = f.startPendingLoop(whileStmt);
+    MBasicBlock *loopEntry;
+    if (!f.startPendingLoop(whileStmt, &loopEntry))
+        return false;
 
     if (!CheckStatement(f, body))
         return false;
 
-    f.bindContinues(whileStmt, maybeLabels);
+    if (!f.bindContinues(whileStmt, maybeLabels))
+        return false;
 
     MDefinition *condDef;
     AsmType condType;
@@ -4488,8 +4549,7 @@ CheckDoWhile(AsmFunctionCompiler &f, ParseNode *whileStmt, const AsmLabelVector 
     if (!condType.isInt())
         return f.fail("Condition of while loop must be boolish", cond);
 
-    f.branchAndCloseDoWhileLoop(condDef, loopEntry);
-    return true;
+    return f.branchAndCloseDoWhileLoop(condDef, loopEntry);
 }
 
 static bool
@@ -4514,8 +4574,7 @@ CheckLabel(AsmFunctionCompiler &f, ParseNode *labeledStmt, AsmLabelVector *maybe
     if (!CheckStatement(f, stmt, &labels))
         return false;
 
-    f.bindLabeledBreaks(&labels);
-    return true;
+    return f.bindLabeledBreaks(&labels);
 }
 
 static bool
@@ -4535,7 +4594,8 @@ CheckIf(AsmFunctionCompiler &f, ParseNode *ifStmt)
         return f.fail("Condition of if must be boolish", cond);
 
     MBasicBlock *thenBlock, *elseBlock;
-    f.branchAndStartThen(condDef, &thenBlock, &elseBlock);
+    if (!f.branchAndStartThen(condDef, &thenBlock, &elseBlock))
+        return false;
 
     if (!CheckStatement(f, thenStmt))
         return false;
@@ -4546,7 +4606,8 @@ CheckIf(AsmFunctionCompiler &f, ParseNode *ifStmt)
         MBasicBlock *thenEnd = f.switchToElse(elseBlock);
         if (!CheckStatement(f, elseStmt))
             return false;
-        f.joinIfElse(thenEnd);
+        if (!f.joinIfElse(thenEnd))
+            return false;
     }
 
     return true;
@@ -4654,26 +4715,30 @@ CheckSwitch(AsmFunctionCompiler &f, ParseNode *switchStmt)
     if (!cases.resize(tableLength))
         return false;
 
-    MBasicBlock *switchBlock = f.startSwitch(switchStmt, exprDef, low, high);
+    MBasicBlock *switchBlock;
+    if (!f.startSwitch(switchStmt, exprDef, low, high, &switchBlock))
+        return false;
 
     for (; stmt && stmt->isKind(PNK_CASE); stmt = NextNode(stmt)) {
         int32_t i = ExtractNumericLiteral(CaseExpr(stmt)).toInt32();
 
-        cases[i - low] = f.startSwitchCase(switchBlock);
+        if (!f.startSwitchCase(switchBlock, &cases[i - low]))
+            return false;
 
         if (!CheckStatement(f, CaseBody(stmt)))
             return false;
     }
 
-    MBasicBlock *defaultBlock = f.startSwitchDefault(switchBlock, &cases);
+    MBasicBlock *defaultBlock;
+    if (!f.startSwitchDefault(switchBlock, &cases, &defaultBlock))
+        return false;
 
     if (stmt && stmt->isKind(PNK_DEFAULT)) {
         if (!CheckStatement(f, CaseBody(stmt)))
             return false;
     }
 
-    f.joinSwitch(switchBlock, cases, defaultBlock);
-    return true;
+    return f.joinSwitch(switchBlock, cases, defaultBlock);
 }
 
 static bool
