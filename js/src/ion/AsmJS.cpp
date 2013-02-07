@@ -935,10 +935,6 @@ class AsmExitDescriptor
         }
         return true;
     }
-
-  private:
-    AsmExitDescriptor(const AsmExitDescriptor &) MOZ_DELETE;
-    void operator=(const AsmExitDescriptor &) MOZ_DELETE;
 };
 
 // See "asm.js FFI calls" comment.
@@ -950,12 +946,12 @@ typedef HashMap<AsmExitDescriptor,
 // See "asm.js FFI calls" comment.
 class AsmExit
 {
-    friend class AsmModule;
     AsmFFIIndex ffiIndex_;
     union {
         unsigned codeOffset_;
         uint8_t *code_;
     } u;
+
   public:
     AsmExit(AsmFFIIndex ffiIndex) : ffiIndex_(ffiIndex) { u.codeOffset_ = 0; }
     AsmFFIIndex ffiIndex() const { return ffiIndex_; }
@@ -974,9 +970,6 @@ struct AsmExitGlobalDatum
     uint8_t *exit;
     HeapPtrFunction fun;
 };
-JS_STATIC_ASSERT(sizeof(AsmExitGlobalDatum) == 2 * sizeof(void*));
-JS_STATIC_ASSERT(offsetof(AsmExitGlobalDatum, exit) == 0);
-JS_STATIC_ASSERT(offsetof(AsmExitGlobalDatum, fun) == sizeof(void*));
 
 /*****************************************************************************/
 
@@ -994,6 +987,7 @@ class AsmGlobalVarInit
             AsmVarType::Which type_;
         } import;
     } u;
+
     friend class AsmModule;
 
   public:
@@ -1040,9 +1034,6 @@ enum AsmMathBuiltin
 // no GC during compilation, AsmModule must be GC-safe.
 class AsmModule
 {
-    AsmModule(const AsmModule &) MOZ_DELETE;
-    void operator=(const AsmModule &) MOZ_DELETE;
-
   public:
     class Global
     {
@@ -1075,6 +1066,7 @@ class AsmModule
         } u;
 
         friend class AsmModule;
+
         Global(Which which) : which_(which) {}
 
       public:
@@ -1123,7 +1115,7 @@ class AsmModule
         }
     };
 
-    typedef int32_t (*EntryPtr)(uint8_t *globalData, uint8_t *heap, uint64_t *args);
+    typedef int32_t (*CodePtr)(uint8_t *globalData, uint8_t *heap, uint64_t *args);
 
     class ExportedFunction
     {
@@ -1134,10 +1126,11 @@ class AsmModule
         bool hasCodePtr_;
         union {
             unsigned codeOffset_;
-            EntryPtr code_;
+            CodePtr code_;
         } u;
 
         friend class AsmModule;
+
         ExportedFunction(PropertyName *name,
                          PropertyName *maybeFieldName,
                          MoveRef<Vector<AsmVarType, 0, SystemAllocPolicy> > argTypes,
@@ -1176,16 +1169,12 @@ class AsmModule
             JS_ASSERT(!hasCodePtr_);
             JS_ASSERT(u.codeOffset_);
             hasCodePtr_ = true;
-            u.code_ = JS_DATA_TO_FUNC_PTR(EntryPtr, baseAddress + u.codeOffset_);
+            u.code_ = JS_DATA_TO_FUNC_PTR(CodePtr, baseAddress + u.codeOffset_);
         }
-        EntryPtr code() const {
+        CodePtr code() const {
             JS_ASSERT(hasCodePtr_);
             return u.code_;
         }
-
-      private:
-        ExportedFunction(const ExportedFunction &) MOZ_DELETE;
-        void operator=(const ExportedFunction &) MOZ_DELETE;
     };
 
   private:
@@ -1202,7 +1191,7 @@ class AsmModule
     uint32_t                              numFFIs_;
     uint32_t                              exactHeapSize_;
     uint32_t                              maxConstantPointer_;
-    bool                                  usesArrayBuffer_;
+    bool                                  hasArrayView_;
 
     ScopedReleasePtr<JSC::ExecutablePool> codePool_;
     uint8_t *                             code_;
@@ -1214,11 +1203,12 @@ class AsmModule
         numFFIs_(0),
         exactHeapSize_(0),
         maxConstantPointer_(0),
-        usesArrayBuffer_(false)
+        hasArrayView_(false),
+        code_(NULL),
+        bytesNeeded_(0)
     {}
 
     void trace(JSTracer *trc) {
-        // TODO: write barrier all these for GGC
         for (unsigned i = 0; i < globals_.length(); i++) {
             switch (globals_[i].which()) {
               case Global::Variable:
@@ -1252,28 +1242,22 @@ class AsmModule
     }
 
     bool addGlobalVar(AsmGlobalVarInit init, uint32_t *index) {
-        if (numGlobalVars_ == UINT32_MAX)
-            return false;
         Global g(Global::Variable);
         g.u.var.init_ = init;
         g.u.var.index_ = *index = numGlobalVars_++;
         return globals_.append(g);
     }
     bool addFuncPtrTableElems(uint32_t numElems) {
-        if (UINT32_MAX - funcPtrTableElems_.length() < numElems)
-            return false;
         return funcPtrTableElems_.growBy(numElems);
     }
     bool addFFI(PropertyName *field, uint32_t *index) {
-        if (numFFIs_ == UINT32_MAX)
-            return false;
         Global g(Global::FFI);
         g.u.ffi.field_ = field;
         g.u.ffi.index_ = *index = numFFIs_++;
         return globals_.append(g);
     }
     bool addArrayView(ArrayBufferView::ViewType vt, PropertyName *field) {
-        usesArrayBuffer_ = true;
+        hasArrayView_ = true;
         Global g(Global::ArrayView);
         g.u.view.name_ = field;
         g.u.view.type_ = vt;
@@ -1317,8 +1301,8 @@ class AsmModule
         return exports_[i];
     }
 
-    bool usesArrayBuffer() const {
-        return usesArrayBuffer_;
+    bool hasArrayView() const {
+        return hasArrayView_;
     }
     uint32_t exactHeapSize() const {
         return exactHeapSize_;
@@ -1327,7 +1311,7 @@ class AsmModule
         return maxConstantPointer_;
     }
     bool attemptUseLengthMask(uint32_t mask) {
-        JS_ASSERT(usesArrayBuffer_);
+        JS_ASSERT(hasArrayView_);
         if (maxConstantPointer_ > mask)
             return false;
         if (exactHeapSize_)
@@ -1372,9 +1356,10 @@ class AsmModule
         return exits_[i];
     }
 
-    // The order in the global segment is [globals, func-ptr table elements, exits].
+    // The order in the globalData is [globals, func-ptr table elements, exits].
     // Put the exit array at the end since it grows during the second pass of
-    // module compilation and would otherwise break global/func-ptr offsets.
+    // module compilation which would otherwise invalidate global/func-ptr
+    // offsets.
     uint32_t byteLength() const {
         return numGlobalVars_ * sizeof(uint64_t) +
                funcPtrTableElems_.length() * sizeof(void*) +
@@ -1404,7 +1389,7 @@ class AsmModule
         return *(AsmExitGlobalDatum *)(globalData + exitIndexToGlobalDataOffset(i));
     }
 
-    void ownCodePool(JSC::ExecutablePool *pool, uint8_t *code, size_t bytesNeeded) {
+    void takeOwnershipOfCodePool(JSC::ExecutablePool *pool, uint8_t *code, size_t bytesNeeded) {
         codePool_ = pool;
         code_ = code;
         bytesNeeded_ = bytesNeeded;
@@ -1428,9 +1413,6 @@ class AsmModuleCompiler
         AsmRetType returnType_;
         mutable Label code_;
 
-        Func(const Func &) MOZ_DELETE;
-        void operator=(const Func &) MOZ_DELETE;
-
       public:
         Func(ParseNode *fn, ParseNode *body, MoveRef<MIRTypeVector> types, AsmRetType returnType)
           : fn_(fn),
@@ -1450,13 +1432,10 @@ class AsmModuleCompiler
 
         ParseNode *fn() const { return fn_; }
         ParseNode *body() const { return body_; }
-
         unsigned numArgs() const { return argTypes_.length(); }
         AsmVarType argType(unsigned i) const { return AsmVarType::FromMIRType(argTypes_[i]); }
         const MIRTypeVector &argMIRTypes() const { return argTypes_; }
-
         AsmRetType returnType() const { return returnType_; }
-
         Label *codeLabel() const { return &code_; }
     };
 
@@ -1481,6 +1460,7 @@ class AsmModuleCompiler
         } u;
 
         friend class AsmModuleCompiler;
+
         Global(Which which) : which_(which) {}
 
       public:
@@ -1539,11 +1519,8 @@ class AsmModuleCompiler
         const Func &elem(unsigned i) const { return *elems_[i]; }
         unsigned baseIndex() const { return baseIndex_; }
         unsigned mask() const { JS_ASSERT(IsPowerOfTwo(numElems())); return numElems() - 1; }
-
-      private:
-        FuncPtrTable(const FuncPtrTable &) MOZ_DELETE;
-        void operator=(const FuncPtrTable &) MOZ_DELETE;
     };
+
     typedef Vector<FuncPtrTable> FuncPtrTableVector;
 
   private:
@@ -1552,19 +1529,19 @@ class AsmModuleCompiler
     typedef Vector<Func> FuncVector;
 
     Maybe<AutoAssertNoGC>        noGC_;
+
     JSContext *                  cx_;
     LifoAlloc                    lifo_;
     TempAllocator                alloc_;
     IonContext                   ionContext_;
     MacroAssembler               masm_;
-    Label                        checkStackAndInterrupt_;
 
     ScopedJSDeletePtr<AsmModule> module_;
 
-    PropertyName *               moduleName_;
-    PropertyName *               globalName_;
-    PropertyName *               importName_;
-    PropertyName *               bufferName_;
+    PropertyName *               moduleFunctionName_;
+    PropertyName *               globalArgumentName_;
+    PropertyName *               importArgumentName_;
+    PropertyName *               bufferArgumentName_;
 
     GlobalMap                    globals_;
     FuncVector                   functions_;
@@ -1572,9 +1549,12 @@ class AsmModuleCompiler
     AsmExitMap                   exits_;
     MathNameMap                  standardLibraryMathNames_;
 
+    Label                        checkStackAndInterrupt_;
+
     const char *                 errorString_;
     ParseNode *                  errorNode_;
     TokenStream &                tokenStream_;
+
     DebugOnly<int>               currentPass_;
 
     bool addStandardLibraryMathName(const char *name, AsmMathBuiltin code) {
@@ -1593,10 +1573,10 @@ class AsmModuleCompiler
         alloc_(&lifo_),
         ionContext_(cx, cx->compartment, &alloc_),
         masm_(),
-        moduleName_(NULL),
-        globalName_(NULL),
-        importName_(NULL),
-        bufferName_(NULL),
+        moduleFunctionName_(NULL),
+        globalArgumentName_(NULL),
+        importArgumentName_(NULL),
+        bufferArgumentName_(NULL),
         globals_(cx),
         functions_(cx),
         funcPtrTables_(cx),
@@ -1672,10 +1652,11 @@ class AsmModuleCompiler
     Label *checkStackAndInterrupt() { return &checkStackAndInterrupt_; }
     bool hasError() const { return errorString_ != NULL; }
     const AsmModule &module() const { return *module_.get(); }
-    PropertyName *maybeModuleName() const { return moduleName_; }
-    PropertyName *maybeGlobalName() const { return globalName_; }
-    PropertyName *maybeImportName() const { return importName_; }
-    PropertyName *maybeBufferName() const { return bufferName_; }
+
+    PropertyName *moduleFunctionName() const { return moduleFunctionName_; }
+    PropertyName *globalArgumentName() const { return globalArgumentName_; }
+    PropertyName *importArgumentName() const { return importArgumentName_; }
+    PropertyName *bufferArgumentName() const { return bufferArgumentName_; }
 
     const Global *lookupGlobal(PropertyName *name) const {
         if (GlobalMap::Ptr p = globals_.lookup(name))
@@ -1713,10 +1694,10 @@ class AsmModuleCompiler
 
     /***************************************************** Mutable interface */
 
-    void initModuleName(PropertyName *n) { moduleName_ = n; }
-    void initGlobalName(PropertyName *n) { globalName_ = n; }
-    void initImportName(PropertyName *n) { importName_ = n; }
-    void initBufferName(PropertyName *n) { bufferName_ = n; }
+    void initModuleFunctionName(PropertyName *n) { moduleFunctionName_ = n; }
+    void initGlobalArgumentName(PropertyName *n) { globalArgumentName_ = n; }
+    void initImportArgumentName(PropertyName *n) { importArgumentName_ = n; }
+    void initBufferArgumentName(PropertyName *n) { bufferArgumentName_ = n; }
 
     bool addGlobalVar(PropertyName *varName, AsmVarType type, AsmGlobalVarInit init) {
         JS_ASSERT(currentPass_ == 1);
@@ -1845,7 +1826,7 @@ class AsmModuleCompiler
             return false;
 
         // The ExecutablePool owns the memory and must be released with the AsmModule.
-        module_->ownCodePool(pool, code, masm_.bytesNeeded());
+        module_->takeOwnershipOfCodePool(pool, code, masm_.bytesNeeded());
 
         // Copy the buffer into the executable memory (c.f. IonCode::copyFrom).
         masm_.executableCopy(code);
@@ -2040,8 +2021,6 @@ class AsmFunctionCompiler
 
     /************************************************* Expression generation */
 
-    // TODO: figure out the OOM story
-
     MDefinition *constant(const Value &v)
     {
         if (!curBlock_)
@@ -2185,16 +2164,22 @@ class AsmFunctionCompiler
 
     /***************************************************************** Calls */
 
-    // To implement calls, we must accumulate, for the entire function, the
-    // maximum required stack space for argument passing. Naively, this would
-    // just be the maximum of the stack space required for each individual call
-    // (as determined by the call ABI). However, as an optimization, we store
-    // stack arguments to the stack immediately after evaluation (to decrease
-    // live ranges and reduce spilling). This introduces the complexity that,
+    // The IonMonkey backend maintains a single stack offset (from the stack
+    // pointer to the base of the frame) by adding the total amount of spill
+    // space required plus the maximum stack required for argument passing.
+    // Since we do not use IonMonkey's MPrepareCall/MPassArg/MCall, we must
+    // manually accumulate, for the entire function, the maximum required stack
+    // space for argument passing. (This is passed to the CodeGenerator via
+    // MIRGenerator::maxAsmStackArgBytes.) Naively, this would just be the
+    // maximum of the stack space required for each individual call (as
+    // determined by the call ABI). However, as an optimization, arguments are
+    // stored to the stack immediately after evaluation (to decrease live
+    // ranges and reduce spilling). This introduces the complexity that,
     // between evaluating an argument and making the call, another argument
     // evaluation could perform a call that also needs to store to the stack.
-    // When this occurs childClobbers_ = true and the parent's arguments are
-    // stored above the maximum depth clobbered by a child expression.
+    // When this occurs childClobbers_ = true and the parent expression's
+    // arguments are stored above the maximum depth clobbered by a child
+    // expression.
 
     class Args
     {
@@ -2205,7 +2190,9 @@ class AsmFunctionCompiler
         MAsmCall::Args regArgs_;
         MIRStackArgVector stackArgs_;
         bool childClobbers_;
+
         friend class AsmFunctionCompiler;
+
       public:
         Args(AsmFunctionCompiler &f)
           : prevMaxStackBytes_(0),
@@ -2318,6 +2305,7 @@ class AsmFunctionCompiler
         if (!curBlock_)
             return NULL;
 
+        JS_STATIC_ASSERT(offsetof(AsmExitGlobalDatum, exit) == 0);
         int32_t offset = m_.module().exitIndexToGlobalDataOffset(exitIndex);
         MDefinition *index = constant(Int32Value(offset));
         MAsmLoad *ptrFun = MAsmLoad::New(MAsmLoad::FUNC_PTR, MAsmLoad::Global, index);
@@ -2864,9 +2852,9 @@ CheckModuleLevelName(AsmModuleCompiler &m, PropertyName *name, ParseNode *nameNo
     if (!CheckIdentifier(m, name, nameNode))
         return false;
 
-    if (name == m.maybeModuleName() ||
-        name == m.maybeGlobalName() ||
-        name == m.maybeImportName() ||
+    if (name == m.moduleFunctionName() ||
+        name == m.globalArgumentName() ||
+        name == m.importArgumentName() ||
         m.lookupGlobal(name))
     {
         return m.fail("Duplicate names not allowed", nameNode);
@@ -2927,17 +2915,17 @@ CheckModuleArguments(AsmModuleCompiler &m, ParseNode *fn)
     PropertyName *arg1Name = NULL;
     if (numFormals >= 1 && !CheckModuleArgument(m, arg1, &arg1Name))
         return false;
-    m.initGlobalName(arg1Name);
+    m.initGlobalArgumentName(arg1Name);
 
     PropertyName *arg2Name = NULL;
     if (numFormals >= 2 && !CheckModuleArgument(m, arg2, &arg2Name))
         return false;
-    m.initImportName(arg2Name);
+    m.initImportArgumentName(arg2Name);
 
     PropertyName *arg3Name = NULL;
     if (numFormals >= 3 && !CheckModuleArgument(m, arg3, &arg3Name))
         return false;
-    m.initBufferName(arg3Name);
+    m.initBufferArgumentName(arg3Name);
 
     return true;
 }
@@ -3020,7 +3008,7 @@ CheckGlobalVariableInitImport(AsmModuleCompiler &m, PropertyName *varName, Parse
     ParseNode *base = DotBase(coercedExpr);
     PropertyName *field = DotMember(coercedExpr);
 
-    if (!IsUseOfName(base, m.maybeImportName()))
+    if (!IsUseOfName(base, m.importArgumentName()))
         return m.fail("Expecting c.y where c is the import parameter", coercedExpr);
 
     return m.addGlobalVar(varName, coercionType, AsmGlobalVarImport(field, coercionType));
@@ -3036,7 +3024,7 @@ CheckNewArrayView(AsmModuleCompiler &m, PropertyName *varName, ParseNode *newExp
     ParseNode *base = DotBase(ctorExpr);
     PropertyName *field = DotMember(ctorExpr);
 
-    if (!IsUseOfName(base, m.maybeGlobalName()))
+    if (!IsUseOfName(base, m.globalArgumentName()))
         return m.fail("Expecting global.y", base);
 
     ParseNode *bufArg = NextNode(ctorExpr);
@@ -3049,7 +3037,7 @@ CheckNewArrayView(AsmModuleCompiler &m, PropertyName *varName, ParseNode *newExp
     if (!bufArg->isKind(PNK_NAME))
         return m.fail("Argument to typed array constructor must be ArrayBuffer name", bufArg);
 
-    if (bufArg->name() != m.maybeBufferName())
+    if (bufArg->name() != m.bufferArgumentName())
         return m.fail("Argument to typed array constructor must be ArrayBuffer name", bufArg);
 
     JSAtomState &names = m.cx()->names();
@@ -3085,7 +3073,7 @@ CheckGlobalDotImport(AsmModuleCompiler &m, PropertyName *varName, ParseNode *ini
     if (base->isKind(PNK_DOT)) {
         ParseNode *global = DotBase(base);
         PropertyName *math = DotMember(base);
-        if (!IsUseOfName(global, m.maybeGlobalName()) || math != m.cx()->names().Math)
+        if (!IsUseOfName(global, m.globalArgumentName()) || math != m.cx()->names().Math)
             return m.fail("Expecting global.Math", base);
 
         Maybe<AsmMathBuiltin> mathBuiltin = m.lookupStandardLibraryMathName(field);
@@ -3095,7 +3083,7 @@ CheckGlobalDotImport(AsmModuleCompiler &m, PropertyName *varName, ParseNode *ini
         return m.addMathBuiltin(varName, mathBuiltin.get(), field);
     }
 
-    if (IsUseOfName(base, m.maybeGlobalName())) {
+    if (IsUseOfName(base, m.globalArgumentName())) {
         if (field == m.cx()->names().NaN)
             return m.addGlobalConstant(varName, js_NaN, field);
         if (field == m.cx()->names().Infinity)
@@ -3103,7 +3091,7 @@ CheckGlobalDotImport(AsmModuleCompiler &m, PropertyName *varName, ParseNode *ini
         return m.fail("Does not match a standard global constant", initExpr);
     }
 
-    if (IsUseOfName(base, m.maybeImportName()))
+    if (IsUseOfName(base, m.importArgumentName()))
         return m.addFFI(varName, field);
 
     return m.fail("Expecting c.y where c is either the global or import parameter", initExpr);
@@ -4341,6 +4329,9 @@ CheckExpr(AsmFunctionCompiler &f, ParseNode *expr, AsmUse use, MDefinition **def
 {
     JS_CHECK_RECURSION(f.cx(), return false);
 
+    if (!f.m().alloc().ensureBallast())
+        return false;
+
     if (IsNumericLiteral(expr))
         return CheckNumericLiteral(f, expr, def, type);
 
@@ -4745,6 +4736,9 @@ static bool
 CheckStatement(AsmFunctionCompiler &f, ParseNode *stmt, AsmLabelVector *maybeLabels)
 {
     JS_CHECK_RECURSION(f.cx(), return false);
+
+    if (!f.m().alloc().ensureBallast())
+        return false;
 
     switch (stmt->getKind()) {
       case PNK_SEMI:          return CheckExprStatement(f, stmt);
@@ -5212,10 +5206,10 @@ CheckModule(JSContext *cx, TokenStream &ts, ParseNode *fn, ScopedJSDeletePtr<Asm
     if (!m.init())
         return false;
 
-    if (PropertyName *maybeModuleName = FunctionName(fn)) {
-        if (!CheckModuleLevelName(m, maybeModuleName, fn))
+    if (PropertyName *moduleFunctionName = FunctionName(fn)) {
+        if (!CheckModuleLevelName(m, moduleFunctionName, fn))
             return false;
-        m.initModuleName(maybeModuleName);
+        m.initModuleFunctionName(moduleFunctionName);
     }
 
     ParseNode *stmtIter = NULL;
@@ -5440,7 +5434,7 @@ DynamicallyLinkModule(JSContext *cx, StackFrame *fp, HandleObject moduleObj, Mut
         bufferVal = fp->unaliasedActual(2);
 
     Rooted<ArrayBufferObject*> heap(cx);
-    if (module.usesArrayBuffer()) {
+    if (module.hasArrayView()) {
         if (!IsTypedArrayBuffer(bufferVal))
             return AsmLinkFail(cx, "bad ArrayBuffer argument");
         heap = &bufferVal.toObject().asArrayBuffer();
