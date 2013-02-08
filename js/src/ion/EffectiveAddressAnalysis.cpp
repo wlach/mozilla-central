@@ -10,9 +10,6 @@
 using namespace js;
 using namespace ion;
 
-// Recognize patterns of the form (x + (y << {0,1,2,3}) + imm32) and convert
-// them into an MEffectiveAddress which, on x86/x64 can be emitted with a
-// single instruction.
 static void
 AnalyzeLsh(MBasicBlock *block, MLsh *lsh)
 {
@@ -102,6 +99,15 @@ AnalyzeAsmMemoryOp(T *ins)
     }
 }
 
+// This analysis recognizes patterns of the form
+//   truncate(x + (y << {0,1,2,3}) + imm32)
+// and
+//   truncate(x + (y << {0,1,2,3}))
+//
+// TODO: optimize forms
+//   truncate((y << {0,1,2,3}) + imm32)
+// and
+//   truncate(x + y + imm32)
 bool
 EffectiveAddressAnalysis::analyze()
 {
@@ -113,7 +119,6 @@ EffectiveAddressAnalysis::analyze()
                 AnalyzeAsmMemoryOp(i->toAsmLoad());
             else if (i->isAsmStore())
                 AnalyzeAsmMemoryOp(i->toAsmStore());
-
         }
     }
 

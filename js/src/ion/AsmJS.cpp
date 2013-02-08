@@ -1202,8 +1202,6 @@ class AsmModule
     FuncPtrTableElemVector                funcPtrTableElems_;
     uint32_t                              numGlobalVars_;
     uint32_t                              numFFIs_;
-    uint32_t                              exactHeapSize_;
-    uint32_t                              maxConstantPointer_;
     bool                                  hasArrayView_;
 
     ScopedReleasePtr<JSC::ExecutablePool> codePool_;
@@ -1214,8 +1212,6 @@ class AsmModule
     AsmModule()
       : numGlobalVars_(0),
         numFFIs_(0),
-        exactHeapSize_(0),
-        maxConstantPointer_(0),
         hasArrayView_(false),
         code_(NULL),
         bytesNeeded_(0)
@@ -1291,30 +1287,6 @@ class AsmModule
     bool hasArrayView() const {
         return hasArrayView_;
     }
-    uint32_t exactHeapSize() const {
-        return exactHeapSize_;
-    }
-    uint32_t maxConstantPointer() const {
-        return maxConstantPointer_;
-    }
-    bool attemptUseLengthMask(uint32_t mask) {
-        JS_ASSERT(hasArrayView_);
-        if (maxConstantPointer_ > mask)
-            return false;
-        if (exactHeapSize_)
-            return mask == exactHeapSize_ - 1;
-        if (!IsPowerOfTwo(mask + 1))
-            return false;
-        exactHeapSize_ = mask + 1;
-        return true;
-    }
-    bool attemptUseConstantPointer(uint32_t pointer) {
-        if (exactHeapSize_ && pointer >= exactHeapSize_)
-            return false;
-        maxConstantPointer_ = Max(maxConstantPointer_, pointer);
-        return true;
-    }
-
     unsigned numFFIs() const {
         return numFFIs_;
     }
@@ -1777,14 +1749,6 @@ class AsmModuleCompiler
             return false;
         return exits_.add(p, Move(exitDescriptor), *i);
     }
-    bool attemptUseLengthMask(uint32_t mask) {
-        JS_ASSERT(currentPass_ == 2);
-        return module_->attemptUseLengthMask(mask);
-    }
-    bool attemptUseConstantPointer(uint32_t pointer) {
-        JS_ASSERT(currentPass_ == 2);
-        return module_->attemptUseConstantPointer(pointer);
-    }
     void setExitOffset(AsmExitIndex exitIndex) {
         JS_ASSERT(currentPass_ == 2);
         module_->exit(exitIndex.value()).initCodeOffset(masm_.size());
@@ -2104,20 +2068,20 @@ class AsmFunctionCompiler
         curBlock_->setSlot(compileInfo_.localSlot(local.slot), def);
     }
 
-    MDefinition *loadHeap(ArrayBufferView::ViewType vt, uint32_t mask, MDefinition *ptr)
+    MDefinition *loadHeap(ArrayBufferView::ViewType vt, MDefinition *ptr)
     {
         if (!curBlock_)
             return NULL;
-        MAsmLoad *load = MAsmLoad::New(vt, MAsmLoad::Heap, maskArrayAccess(ptr, mask));
+        MAsmLoad *load = MAsmLoad::New(vt, MAsmLoad::Heap, ptr);
         curBlock_->add(load);
         return load;
     }
 
-    void storeHeap(ArrayBufferView::ViewType vt, uint32_t mask, MDefinition *ptr, MDefinition *v)
+    void storeHeap(ArrayBufferView::ViewType vt, MDefinition *ptr, MDefinition *v)
     {
         if (!curBlock_)
             return;
-        curBlock_->add(MAsmStore::New(vt, MAsmStore::Heap, maskArrayAccess(ptr, mask), v));
+        curBlock_->add(MAsmStore::New(vt, MAsmStore::Heap, ptr, v));
     }
 
     MDefinition *loadGlobalVar(const AsmModuleCompiler::Global &global)
@@ -2612,22 +2576,6 @@ class AsmFunctionCompiler
 
     /*************************************************************************/
   private:
-    MDefinition *maskArrayAccess(MDefinition *ptr, uint32_t mask)
-    {
-        // If unsafe, pretend this is a DataView access guarded by a signal
-        // handler. In that case, there is no checking required at the load; we
-        // depend on signal handlers and carefully setting everything up so
-        // that out of bounds access always trap.
-        if (m_.cx()->runtime->asmJSUnsafe || mask == UINT32_MAX)
-            return ptr;
-
-        MConstant *constant = MConstant::New(Int32Value(mask));
-        curBlock_->add(constant);
-        MBitAnd *bitAnd = MBitAnd::NewAsm(ptr, constant);
-        curBlock_->add(bitAnd);
-        return bitAnd;
-    }
-
     bool newBlockWithDepth(MBasicBlock *pred, unsigned loopDepth, MBasicBlock **block)
     {
         *block = MBasicBlock::New(mirGraph_, compileInfo_, pred, /* pc = */ NULL, MBasicBlock::NORMAL);
@@ -3517,7 +3465,7 @@ CheckVarRef(AsmFunctionCompiler &f, ParseNode *varRef, MDefinition **def, AsmTyp
 
 static bool
 CheckArrayAccess(AsmFunctionCompiler &f, ParseNode *elem, ArrayBufferView::ViewType *viewType,
-                 uint32_t *mask, MDefinition **def)
+                 MDefinition **def)
 {
     ParseNode *viewName = ElemBase(elem);
     ParseNode *indexExpr = ElemIndex(elem);
@@ -3534,15 +3482,11 @@ CheckArrayAccess(AsmFunctionCompiler &f, ParseNode *elem, ArrayBufferView::ViewT
     uint32_t pointer;
     if (IsLiteralUint32(indexExpr, &pointer)) {
         pointer <<= TypedArrayShift(*viewType);
-        if (!f.m().attemptUseConstantPointer(pointer))
-            return f.fail("Constant pointer out of heap mask range", indexExpr);
-
-        *mask = UINT32_MAX;
         *def = f.constant(Int32Value(pointer));
         return true;
     }
 
-    ParseNode *maskExpr;
+    ParseNode *pointerNode;
     if (indexExpr->isKind(PNK_RSH)) {
         ParseNode *shiftNode = BinaryRight(indexExpr);
 
@@ -3551,24 +3495,13 @@ CheckArrayAccess(AsmFunctionCompiler &f, ParseNode *elem, ArrayBufferView::ViewT
             return f.fail("The shift amount must be a constant matching the array "
                           "element size", shiftNode);
 
-        maskExpr = BinaryLeft(indexExpr);
+        pointerNode = BinaryLeft(indexExpr);
     } else {
         if (TypedArrayShift(*viewType) != 0)
             return f.fail("The shift amount is 0 so this must be a Int8/Uint8 array", indexExpr);
 
-        maskExpr = indexExpr;
+        pointerNode = indexExpr;
     }
-
-    if (!maskExpr->isKind(PNK_BITAND))
-        return f.fail("Expecting & mask in shifted expression", maskExpr);
-
-    ParseNode *maskNode = BinaryRight(maskExpr);
-    ParseNode *pointerNode = BinaryLeft(maskExpr);
-
-    uint32_t lengthMask;
-    if (!IsLiteralUint32(maskNode, &lengthMask) || !f.m().attemptUseLengthMask(lengthMask))
-        return f.fail("Expecting rhs of & mask to have the same value as other masks and "
-                      "subsume all preceding constant pointer loads", maskNode);
 
     MDefinition *pointerDef;
     AsmType pointerType;
@@ -3578,14 +3511,14 @@ CheckArrayAccess(AsmFunctionCompiler &f, ParseNode *elem, ArrayBufferView::ViewT
     if (!pointerType.isIntish())
         return f.fail("Pointer input must be intish", pointerNode);
 
-    // For a typed array access, there are two masks we need to perform
-    // (that we fold into one 'and' operation):
-    //  1. wrap around the length to keep the access in-bounds.
-    //  2. mask off the low bits to account for clearing effect of a right
-    //     shift followed by the left shift implicit in the array access.
-    //     E.g., H32[i>>2] loses the low two bits.
-    *mask = lengthMask & ~((uint32_t(1) << TypedArrayShift(*viewType)) - 1);
-    *def = pointerDef;
+    // Mask off the low bits to account for clearing effect of a right shift
+    // followed by the left shift implicit in the array access. E.g., H32[i>>2]
+    // loses the low two bits.
+    int32_t mask = ~((uint32_t(1) << TypedArrayShift(*viewType)) - 1);
+    if (f.m().cx()->runtime->asmJSUnsafe)
+        *def = pointerDef;
+    else
+        *def = f.bitwise<MBitAnd>(pointerDef, f.constant(Int32Value(mask)));
     return true;
 }
 
@@ -3593,12 +3526,11 @@ static bool
 CheckArrayLoad(AsmFunctionCompiler &f, ParseNode *elem, MDefinition **def, AsmType *type)
 {
     ArrayBufferView::ViewType viewType;
-    uint32_t mask;
     MDefinition *pointerDef;
-    if (!CheckArrayAccess(f, elem, &viewType, &mask, &pointerDef))
+    if (!CheckArrayAccess(f, elem, &viewType, &pointerDef))
         return false;
 
-    *def = f.loadHeap(viewType, mask, pointerDef);
+    *def = f.loadHeap(viewType, pointerDef);
     *type = TypedArrayLoadType(viewType);
     return true;
 }
@@ -3607,9 +3539,8 @@ static bool
 CheckStoreArray(AsmFunctionCompiler &f, ParseNode *lhs, ParseNode *rhs, MDefinition **def, AsmType *type)
 {
     ArrayBufferView::ViewType viewType;
-    uint32_t mask;
     MDefinition *pointerDef;
-    if (!CheckArrayAccess(f, lhs, &viewType, &mask, &pointerDef))
+    if (!CheckArrayAccess(f, lhs, &viewType, &pointerDef))
         return false;
 
     MDefinition *rhsDef;
@@ -3628,7 +3559,7 @@ CheckStoreArray(AsmFunctionCompiler &f, ParseNode *lhs, ParseNode *rhs, MDefinit
         break;
     }
 
-    f.storeHeap(viewType, mask, pointerDef, rhsDef);
+    f.storeHeap(viewType, pointerDef, rhsDef);
 
     *def = rhsDef;
     *type = rhsType;
@@ -5485,10 +5416,6 @@ DynamicallyLinkModule(JSContext *cx, StackFrame *fp, HandleObject moduleObj, Mut
         if (!IsTypedArrayBuffer(bufferVal))
             return AsmLinkFail(cx, "bad ArrayBuffer argument");
         heap = &bufferVal.toObject().asArrayBuffer();
-        if (module.exactHeapSize() && heap->byteLength() != module.exactHeapSize())
-            return AsmLinkFail(cx, "asm.js module function heap must be exactly TODO bytes");
-        if (module.maxConstantPointer() && heap->byteLength() <= module.maxConstantPointer())
-            return AsmLinkFail(cx, "asm.js module function heap too small");
     }
 
     ScopedJSDeletePtr<uint8_t> globalDataGuard;
