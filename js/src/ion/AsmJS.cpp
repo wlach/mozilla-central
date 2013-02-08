@@ -1119,7 +1119,7 @@ class AsmModule
 
     class ExportedFunction
     {
-        PropertyName *name_;
+        JSFunction *fun_;
         PropertyName *maybeFieldName_;
         Vector<AsmVarType, 0, SystemAllocPolicy> argTypes_;
         AsmRetType returnType_;
@@ -1131,11 +1131,11 @@ class AsmModule
 
         friend class AsmModule;
 
-        ExportedFunction(PropertyName *name,
+        ExportedFunction(JSFunction *fun,
                          PropertyName *maybeFieldName,
                          MoveRef<Vector<AsmVarType, 0, SystemAllocPolicy> > argTypes,
                          AsmRetType returnType)
-          : name_(name),
+          : fun_(fun),
             maybeFieldName_(maybeFieldName),
             argTypes_(argTypes),
             returnType_(returnType),
@@ -1146,7 +1146,7 @@ class AsmModule
 
       public:
         ExportedFunction(MoveRef<ExportedFunction> rhs)
-          : name_(rhs->name_),
+          : fun_(rhs->fun_),
             maybeFieldName_(rhs->maybeFieldName_),
             argTypes_(Move(rhs->argTypes_)),
             returnType_(rhs->returnType_),
@@ -1154,7 +1154,8 @@ class AsmModule
             u(rhs->u)
         {}
 
-        PropertyName *name() const { return name_; }
+        PropertyName *name() const { return fun_->name(); }
+        JSFunction *unclonedFunObj() const { return fun_; }
         PropertyName *maybeFieldName() const { return maybeFieldName_; }
         unsigned numArgs() const { return argTypes_.length(); }
         AsmVarType argType(unsigned i) const { return argTypes_[i]; }
@@ -1235,7 +1236,7 @@ class AsmModule
             }
         }
         for (unsigned i = 0; i < exports_.length(); i++) {
-            MarkStringUnbarriered(trc, &exports_[i].name_, "asm export name");
+            MarkObjectUnbarriered(trc, &exports_[i].fun_, "asm export name");
             if (exports_[i].maybeFieldName_)
                 MarkStringUnbarriered(trc, &exports_[i].maybeFieldName_, "asm export field");
         }
@@ -1280,7 +1281,7 @@ class AsmModule
         return exits_.append(exit);
     }
 
-    bool addExportedFunction(PropertyName *name, PropertyName *maybeFieldName,
+    bool addExportedFunction(JSFunction *fun, PropertyName *maybeFieldName,
                              const MIRTypeVector &args, AsmRetType ret)
     {
         Vector<AsmVarType, 0, SystemAllocPolicy> argTypes;
@@ -1288,7 +1289,7 @@ class AsmModule
             if (!argTypes.append(AsmVarType::FromMIRType(args[i])))
                 return false;
         }
-        ExportedFunction func(name, maybeFieldName, Move(argTypes), ret);
+        ExportedFunction func(fun, maybeFieldName, Move(argTypes), ret);
         return exports_.append(Move(func));
     }
     unsigned numExportedFunctions() const {
@@ -1763,7 +1764,7 @@ class AsmModuleCompiler
     }
     bool addExportedFunction(const Func *func, PropertyName *maybeFieldName) {
         JS_ASSERT(currentPass_ == 1);
-        return module_->addExportedFunction(FunctionName(func->fn()), maybeFieldName,
+        return module_->addExportedFunction(FunctionObject(func->fn()), maybeFieldName,
                                             func->argMIRTypes(), func->returnType());
     }
 
@@ -5562,20 +5563,30 @@ DynamicallyLinkModule(JSContext *cx, StackFrame *fp, HandleObject moduleObj, Mut
     return true;
 }
 
-AsmJSActivation::AsmJSActivation(JSContext *cx)
+AsmJSActivation::AsmJSActivation(JSContext *cx, UnrootedFunction fun)
   : prev_(cx->runtime->asmJSActivation),
     cx_(cx),
     errorRejoinPC_(NULL),
-    errorRejoinSP_(NULL)
+    errorRejoinSP_(NULL),
+    profiler_(NULL),
+    fun_(cx, fun)
 {
     cx->runtime->asmJSActivation = this;
     cx->runtime->resetIonStackLimit();
+
+    if (cx->runtime->spsProfiler.enabled()) {
+        profiler_ = &cx->runtime->spsProfiler;
+        profiler_->enter(cx_, fun_->nonLazyScript(), fun_);
+    }
 }
 
 AsmJSActivation::~AsmJSActivation()
 {
     JS_ASSERT(cx_->runtime->asmJSActivation == this);
     cx_->runtime->asmJSActivation = prev_;
+
+    if (profiler_)
+        profiler_->exit(cx_, fun_->nonLazyScript(), fun_);
 }
 
 static const unsigned ASM_LINKED_MODULE_SLOT = 0;
@@ -5630,7 +5641,7 @@ CallAsmJS(JSContext *cx, unsigned argc, Value *vp)
         }
     }
 
-    AsmJSActivation activation(cx);
+    AsmJSActivation activation(cx, func.unclonedFunObj());
 
     if (!func.code()(heap, globalData, coercedArgs.begin()))
         return false;

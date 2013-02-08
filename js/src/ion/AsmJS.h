@@ -10,6 +10,7 @@
 
 namespace js {
 
+class SPSProfiler;
 namespace frontend { struct ParseNode; struct TokenStream; }
 
 // The JSRuntime maintains a stack of asm.js module activations. A "module"
@@ -30,9 +31,11 @@ class AsmJSActivation
     JSContext *cx_;
     void *errorRejoinPC_;
     void *errorRejoinSP_;
+    SPSProfiler *profiler_;
+    RootedFunction fun_;
 
   public:
-    AsmJSActivation(JSContext *cx);
+    AsmJSActivation(JSContext *cx, UnrootedFunction fun);
     ~AsmJSActivation();
 
     // Read by JIT code:
