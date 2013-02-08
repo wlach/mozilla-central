@@ -1047,27 +1047,21 @@ class AsmModule
                 AsmGlobalVarInit init_;
                 uint32_t index_;
             } var;
-            struct {
-                PropertyName *field_;
-                uint32_t index_;
-            } ffi;
-            struct {
-                PropertyName *name_;
-                ArrayBufferView::ViewType type_;
-            } view;
-            struct {
-                PropertyName *name_;
-                AsmMathBuiltin builtin_;
-            } math;
-            struct {
-                PropertyName *name_;
-                double value_;
-            } constant;
+            uint32_t ffiIndex_;
+            ArrayBufferView::ViewType viewType_;
+            AsmMathBuiltin mathBuiltin_;
+            double constantValue_;
         } u;
+        HeapPtrPropertyName name_;
 
         friend class AsmModule;
 
-        Global(Which which) : which_(which) {}
+        Global(Which which)
+          : which_(which)
+        {}
+        void trace(JSTracer *trc) {
+            if (name_) MarkString(trc, &name_, "asm.js global name");
+        }
 
       public:
         Which which() const {
@@ -1083,35 +1077,35 @@ class AsmModule
         }
         PropertyName *ffiField() const {
             JS_ASSERT(which_ == FFI);
-            return u.ffi.field_;
+            return name_;
         }
         uint32_t ffiIndex() const {
             JS_ASSERT(which_ == FFI);
-            return u.ffi.index_;
+            return u.ffiIndex_;
         }
         PropertyName *viewName() const {
             JS_ASSERT(which_ == ArrayView);
-            return u.view.name_;
+            return name_;
         }
         ArrayBufferView::ViewType viewType() const {
             JS_ASSERT(which_ == ArrayView);
-            return u.view.type_;
+            return u.viewType_;
         }
         PropertyName *mathName() const {
             JS_ASSERT(which_ == MathBuiltin);
-            return u.math.name_;
+            return name_;
         }
         AsmMathBuiltin mathBuiltin() const {
             JS_ASSERT(which_ == MathBuiltin);
-            return u.math.builtin_;
+            return u.mathBuiltin_;
         }
         PropertyName *constantName() const {
             JS_ASSERT(which_ == Constant);
-            return u.constant.name_;
+            return name_;
         }
         double constantValue() const {
             JS_ASSERT(which_ == Constant);
-            return u.constant.value_;
+            return u.constantValue_;
         }
     };
 
@@ -1119,8 +1113,8 @@ class AsmModule
 
     class ExportedFunction
     {
-        JSFunction *fun_;
-        PropertyName *maybeFieldName_;
+        HeapPtrFunction fun_;
+        HeapPtrPropertyName maybeFieldName_;
         Vector<AsmVarType, 0, SystemAllocPolicy> argTypes_;
         AsmRetType returnType_;
         bool hasCodePtr_;
@@ -1154,12 +1148,11 @@ class AsmModule
             u(rhs->u)
         {}
 
-        PropertyName *name() const { return fun_->name(); }
-        JSFunction *unclonedFunObj() const { return fun_; }
-        PropertyName *maybeFieldName() const { return maybeFieldName_; }
-        unsigned numArgs() const { return argTypes_.length(); }
-        AsmVarType argType(unsigned i) const { return argTypes_[i]; }
-        AsmRetType returnType() const { return returnType_; }
+        void trace(JSTracer *trc) {
+            MarkObject(trc, &fun_, "asm export name");
+            if (maybeFieldName_)
+                MarkString(trc, &maybeFieldName_, "asm export field");
+        }
 
         void initCodeOffset(unsigned off) {
             JS_ASSERT(!hasCodePtr_); 
@@ -1171,6 +1164,25 @@ class AsmModule
             JS_ASSERT(u.codeOffset_);
             hasCodePtr_ = true;
             u.code_ = JS_DATA_TO_FUNC_PTR(CodePtr, baseAddress + u.codeOffset_);
+        }
+
+        PropertyName *name() const {
+            return fun_->name();
+        }
+        JSFunction *unclonedFunObj() const {
+            return fun_;
+        }
+        PropertyName *maybeFieldName() const {
+            return maybeFieldName_;
+        }
+        unsigned numArgs() const {
+            return argTypes_.length();
+        }
+        AsmVarType argType(unsigned i) const {
+            return argTypes_[i];
+        }
+        AsmRetType returnType() const {
+            return returnType_;
         }
         CodePtr code() const {
             JS_ASSERT(hasCodePtr_);
@@ -1210,36 +1222,10 @@ class AsmModule
     {}
 
     void trace(JSTracer *trc) {
-        for (unsigned i = 0; i < globals_.length(); i++) {
-            switch (globals_[i].which()) {
-              case Global::Variable:
-                switch (globals_[i].u.var.init_.which()) {
-                  case AsmGlobalVarInit::Import:
-                    MarkStringUnbarriered(trc, &globals_[i].u.var.init_.u.import.field_, "asm.js global");
-                    break;
-                  case AsmGlobalVarInit::Constant:
-                    break;
-                }
-                break;
-              case Global::FFI:
-                MarkStringUnbarriered(trc, &globals_[i].u.ffi.field_, "asm.js global");
-                break;
-              case Global::ArrayView:
-                MarkStringUnbarriered(trc, &globals_[i].u.view.name_, "asm.js global");
-                break;
-              case Global::MathBuiltin:
-                MarkStringUnbarriered(trc, &globals_[i].u.math.name_, "asm.js global");
-                break;
-              case Global::Constant:
-                MarkStringUnbarriered(trc, &globals_[i].u.constant.name_, "asm.js global");
-                break;
-            }
-        }
-        for (unsigned i = 0; i < exports_.length(); i++) {
-            MarkObjectUnbarriered(trc, &exports_[i].fun_, "asm export name");
-            if (exports_[i].maybeFieldName_)
-                MarkStringUnbarriered(trc, &exports_[i].maybeFieldName_, "asm export field");
-        }
+        for (unsigned i = 0; i < globals_.length(); i++)
+            globals_[i].trace(trc);
+        for (unsigned i = 0; i < exports_.length(); i++)
+            exports_[i].trace(trc);
     }
 
     bool addGlobalVar(AsmGlobalVarInit init, uint32_t *index) {
@@ -1253,27 +1239,27 @@ class AsmModule
     }
     bool addFFI(PropertyName *field, uint32_t *index) {
         Global g(Global::FFI);
-        g.u.ffi.field_ = field;
-        g.u.ffi.index_ = *index = numFFIs_++;
+        g.u.ffiIndex_ = *index = numFFIs_++;
+        g.name_ = field;
         return globals_.append(g);
     }
     bool addArrayView(ArrayBufferView::ViewType vt, PropertyName *field) {
         hasArrayView_ = true;
         Global g(Global::ArrayView);
-        g.u.view.name_ = field;
-        g.u.view.type_ = vt;
+        g.u.viewType_ = vt;
+        g.name_ = field;
         return globals_.append(g);
     }
     bool addMathBuiltin(AsmMathBuiltin mathBuiltin, PropertyName *field) {
         Global g(Global::MathBuiltin);
-        g.u.math.name_ = field;
-        g.u.math.builtin_ = mathBuiltin;
+        g.u.mathBuiltin_ = mathBuiltin;
+        g.name_ = field;
         return globals_.append(g);
     }
     bool addGlobalConstant(double value, PropertyName *fieldName) {
         Global g(Global::Constant);
-        g.u.constant.name_ = fieldName;
-        g.u.constant.value_ = value;
+        g.u.constantValue_ = value;
+        g.name_ = fieldName;
         return globals_.append(g);
     }
     bool addExit(AsmExit exit, AsmExitIndex *index) {
