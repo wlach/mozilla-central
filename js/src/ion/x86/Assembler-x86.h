@@ -312,9 +312,6 @@ class Assembler : public AssemblerX86Shared
     void lea(const Operand &src, const Register &dest) {
         return leal(src, dst);
     }
-    void cvttsd2s(const FloatRegister &src, const Register &dest) {
-        cvttsd2si(src, dest);
-    }
 
     void cmpl(const Register src, ImmWord ptr) {
         masm.cmpl_ir(ptr.value, src.code());
