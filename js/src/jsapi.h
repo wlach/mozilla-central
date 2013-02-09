@@ -112,7 +112,7 @@ class JS_PUBLIC_API(AutoGCRooter) {
 
     enum {
         JSVAL =        -1, /* js::AutoValueRooter */
-        VALARRAY =     -2, /* js::AutoValueArrayRooter */
+        VALARRAY =     -2, /* js::AutoValueArray */
         PARSER =       -3, /* js::frontend::Parser */
         SHAPEVECTOR =  -4, /* js::AutoShapeVector */
         IDARRAY =      -6, /* js::AutoIdArray */
@@ -140,7 +140,9 @@ class JS_PUBLIC_API(AutoGCRooter) {
         IONALLOC =    -29, /* js::ion::AutoTempAllocatorRooter */
         WRAPVECTOR =  -30, /* js::AutoWrapperVector */
         WRAPPER =     -31, /* js::AutoWrapperRooter */
-        OBJOBJHASHMAP=-32  /* js::AutoObjectObjectHashMap */
+        OBJOBJHASHMAP=-32, /* js::AutoObjectObjectHashMap */
+        OBJU32HASHMAP=-33, /* js::AutoObjectUnsigned32HashMap */
+        OBJHASHSET =  -34  /* js::AutoObjectHashSet */
     };
 
   private:
@@ -431,7 +433,7 @@ class AutoHashMapRooter : protected AutoGCRooter
 
     template<typename KeyInput, typename ValueInput>
     bool add(AddPtr &p, const KeyInput &k, const ValueInput &v) {
-        return map.add(k, v);
+        return map.add(p, k, v);
     }
 
     bool add(AddPtr &p, const Key &k) {
@@ -516,6 +518,115 @@ class AutoHashMapRooter : protected AutoGCRooter
     MOZ_DECL_USE_GUARD_OBJECT_NOTIFIER
 };
 
+template<class T>
+class AutoHashSetRooter : protected AutoGCRooter
+{
+  private:
+    typedef js::HashSet<T> HashSetImpl;
+
+  public:
+    explicit AutoHashSetRooter(JSContext *cx, ptrdiff_t tag
+                               MOZ_GUARD_OBJECT_NOTIFIER_PARAM)
+      : AutoGCRooter(cx, tag), set(cx)
+    {
+        MOZ_GUARD_OBJECT_NOTIFIER_INIT;
+    }
+
+    typedef typename HashSetImpl::Lookup Lookup;
+    typedef typename HashSetImpl::Ptr Ptr;
+    typedef typename HashSetImpl::AddPtr AddPtr;
+
+    bool init(uint32_t len = 16) {
+        return set.init(len);
+    }
+    bool initialized() const {
+        return set.initialized();
+    }
+    Ptr lookup(const Lookup &l) const {
+        return set.lookup(l);
+    }
+    void remove(Ptr p) {
+        set.remove(p);
+    }
+    AddPtr lookupForAdd(const Lookup &l) const {
+        return set.lookupForAdd(l);
+    }
+
+    bool add(AddPtr &p, const T &t) {
+        return set.add(p, t);
+    }
+
+    bool relookupOrAdd(AddPtr &p, const Lookup &l, const T &t) {
+        return set.relookupOrAdd(p, l, t);
+    }
+
+    typedef typename HashSetImpl::Range Range;
+    Range all() const {
+        return set.all();
+    }
+
+    typedef typename HashSetImpl::Enum Enum;
+
+    void clear() {
+        set.clear();
+    }
+
+    void finish() {
+        set.finish();
+    }
+
+    bool empty() const {
+        return set.empty();
+    }
+
+    uint32_t count() const {
+        return set.count();
+    }
+
+    size_t capacity() const {
+        return set.capacity();
+    }
+
+    size_t sizeOfExcludingThis(JSMallocSizeOfFun mallocSizeOf) const {
+        return set.sizeOfExcludingThis(mallocSizeOf);
+    }
+    size_t sizeOfIncludingThis(JSMallocSizeOfFun mallocSizeOf) const {
+        return set.sizeOfIncludingThis(mallocSizeOf);
+    }
+
+    unsigned generation() const {
+        return set.generation();
+    }
+
+    /************************************************** Shorthand operations */
+
+    bool has(const Lookup &l) const {
+        return set.has(l);
+    }
+
+    bool put(const T &t) {
+        return set.put(t);
+    }
+
+    bool putNew(const T &t) {
+        return set.putNew(t);
+    }
+
+    void remove(const Lookup &l) {
+        set.remove(l);
+    }
+
+    friend void AutoGCRooter::trace(JSTracer *trc);
+
+  private:
+    AutoHashSetRooter(const AutoHashSetRooter &hmr) MOZ_DELETE;
+    AutoHashSetRooter &operator=(const AutoHashSetRooter &hmr) MOZ_DELETE;
+
+    HashSetImpl set;
+
+    MOZ_DECL_USE_GUARD_OBJECT_NOTIFIER
+};
+
 class AutoValueVector : public AutoVectorRooter<Value>
 {
   public:
@@ -582,6 +693,10 @@ class CallReceiver
         return JS::HandleValue::fromMarkedLocation(&argv_[-1]);
     }
 
+    JS::MutableHandleValue mutableThisv() const {
+        return JS::MutableHandleValue::fromMarkedLocation(&argv_[-1]);
+    }
+
     JS::MutableHandleValue rval() const {
         setUsedRval();
         return JS::MutableHandleValue::fromMarkedLocation(&argv_[-2]);
@@ -628,6 +743,20 @@ class CallArgs : public CallReceiver
     friend CallArgs CallArgsFromArgv(unsigned, Value *);
     friend CallArgs CallArgsFromSp(unsigned, Value *);
     Value &operator[](unsigned i) const { JS_ASSERT(i < argc_); return argv_[i]; }
+    MutableHandleValue handleAt(unsigned i)
+    {
+        JS_ASSERT(i < argc_);
+        return MutableHandleValue::fromMarkedLocation(&argv_[i]);
+    }
+    HandleValue handleAt(unsigned i) const
+    {
+        JS_ASSERT(i < argc_);
+        return HandleValue::fromMarkedLocation(&argv_[i]);
+    }
+    Value get(unsigned i) const
+    {
+        return i < length() ? argv_[i] : UndefinedValue();
+    }
     Value *array() const { return argv_; }
     unsigned length() const { return argc_; }
     Value *end() const { return argv_ + argc_; }
@@ -2028,11 +2157,7 @@ JS_StringToVersion(const char *string);
 
 #define JSOPTION_ION            JS_BIT(20)      /* IonMonkey */
 
-/* Options which reflect compile-time properties of scripts. */
-#define JSCOMPILEOPTION_MASK    0
-
-#define JSRUNOPTION_MASK        (JS_BITMASK(21) & ~JSCOMPILEOPTION_MASK)
-#define JSALLOPTION_MASK        (JSCOMPILEOPTION_MASK | JSRUNOPTION_MASK)
+#define JSOPTION_MASK           JS_BITMASK(21)
 
 extern JS_PUBLIC_API(uint32_t)
 JS_GetOptions(JSContext *cx);

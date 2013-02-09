@@ -62,7 +62,7 @@ FindExceptionHandler(JSContext *cx)
         for (TryNoteIter tni(cx, cx->regs()); !tni.done(); ++tni) {
             JSTryNote *tn = *tni;
 
-            UnwindScope(cx, tn->stackDepth);
+            UnwindScope(cx, cx->fp(), tn->stackDepth);
 
             /*
              * Set pc to the first bytecode after the the try note to point
@@ -558,11 +558,11 @@ js_InternalThrow(VMFrame &f)
             // Call the throw hook if necessary
             JSThrowHook handler = cx->runtime->debugHooks.throwHook;
             if (handler || !cx->compartment->getDebuggees().empty()) {
-                Value rval;
+                RootedValue rval(cx);
                 JSTrapStatus st = Debugger::onExceptionUnwind(cx, &rval);
                 if (st == JSTRAP_CONTINUE && handler) {
                     RootedScript fscript(cx, cx->fp()->script());
-                    st = handler(cx, fscript, cx->regs().pc, &rval,
+                    st = handler(cx, fscript, cx->regs().pc, rval.address(),
                                  cx->runtime->debugHooks.throwHookData);
                 }
 
@@ -599,7 +599,7 @@ js_InternalThrow(VMFrame &f)
         // prologues and epilogues. Interpret(), and Invoke() all rely on this
         // property.
         JS_ASSERT(!f.fp()->finishedInInterpreter());
-        UnwindScope(cx, 0);
+        UnwindScope(cx, cx->fp(), 0);
         f.regs.setToEndOfScript();
 
         if (cx->compartment->debugMode()) {

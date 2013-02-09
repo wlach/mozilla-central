@@ -1123,7 +1123,7 @@ NS_IMETHODIMP nsSVGElement::SetId(const nsAString & aId)
 
 /* readonly attribute nsIDOMSVGSVGElement ownerSVGElement; */
 NS_IMETHODIMP
-nsSVGElement::GetOwnerSVGElement(nsIDOMSVGSVGElement * *aOwnerSVGElement)
+nsSVGElement::GetOwnerSVGElement(nsIDOMSVGElement * *aOwnerSVGElement)
 {
   ErrorResult rv;
   NS_IF_ADDREF(*aOwnerSVGElement = GetOwnerSVGElement(rv));
@@ -1163,9 +1163,7 @@ nsSVGElement::GetViewportElement()
 already_AddRefed<nsIDOMSVGAnimatedString>
 nsSVGElement::ClassName()
 {
-  nsCOMPtr<nsIDOMSVGAnimatedString> className;
-  mClassAttribute.ToDOMAnimatedString(getter_AddRefs(className), this);
-  return className.forget();
+  return mClassAttribute.ToDOMAnimatedString(this);
 }
 
 //------------------------------------------------------------------------

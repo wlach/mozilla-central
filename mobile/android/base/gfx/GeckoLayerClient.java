@@ -12,8 +12,6 @@ import org.mozilla.gecko.GeckoApp;
 import org.mozilla.gecko.Tab;
 import org.mozilla.gecko.Tabs;
 import org.mozilla.gecko.ZoomConstraints;
-import org.mozilla.gecko.ui.PanZoomController;
-import org.mozilla.gecko.ui.PanZoomTarget;
 import org.mozilla.gecko.util.EventDispatcher;
 import org.mozilla.gecko.util.FloatUtils;
 
@@ -116,7 +114,7 @@ public class GeckoLayerClient implements LayerView.Listener, PanZoomTarget
         mViewportMetrics = new ImmutableViewportMetrics(displayMetrics);
         mZoomConstraints = new ZoomConstraints(false);
 
-        mPanZoomController = new PanZoomController(this, eventDispatcher);
+        mPanZoomController = PanZoomController.Factory.create(this, view, eventDispatcher);
         mView = view;
         mView.setListener(this);
     }
@@ -582,7 +580,13 @@ public class GeckoLayerClient implements LayerView.Listener, PanZoomTarget
 
     /** Implementation of LayerView.Listener */
     public void renderRequested() {
-        GeckoAppShell.scheduleComposite();
+        try {
+            GeckoAppShell.scheduleComposite();
+        } catch (UnsupportedOperationException uoe) {
+            // In some very rare cases this gets called before libxul is loaded,
+            // so catch and ignore the exception that will throw. See bug 837821
+            Log.d(LOGTAG, "Dropping renderRequested call before libxul load.");
+        }
     }
 
     /** Implementation of LayerView.Listener */

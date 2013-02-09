@@ -31,19 +31,30 @@ EXPORTS_NAMESPACES = mozilla/dom
 
 EXPORTS_mozilla/dom = \
 		HTMLAnchorElement.h \
+		HTMLAreaElement.h \
 		HTMLBodyElement.h \
 		HTMLBRElement.h \
+		HTMLButtonElement.h \
 		HTMLDataListElement.h \
 		HTMLDivElement.h \
+		HTMLFieldSetElement.h \
 		HTMLFontElement.h \
 		HTMLFrameSetElement.h \
 		HTMLHeadingElement.h \
+		HTMLHRElement.h \
 		HTMLImageElement.h \
 		HTMLLabelElement.h \
 		HTMLLIElement.h \
+		HTMLLinkElement.h \
+		HTMLMapElement.h \
+		HTMLMetaElement.h \
+		HTMLMeterElement.h \
+		HTMLModElement.h \
+		HTMLOptGroupElement.h \
 		HTMLParagraphElement.h \
 		HTMLPreElement.h \
 		HTMLScriptElement.h \
+		HTMLSharedElement.h \
 		HTMLSharedListElement.h \
 		HTMLSpanElement.h \
 		HTMLStyleElement.h \
@@ -69,19 +80,19 @@ CPPSRCS		= \
 		nsTextEditorState.cpp \
 		HTMLElement.cpp \
 		HTMLAnchorElement.cpp \
-		nsHTMLAreaElement.cpp \
+		HTMLAreaElement.cpp \
 		HTMLBRElement.cpp \
 		HTMLBodyElement.cpp \
-		nsHTMLButtonElement.cpp \
+		HTMLButtonElement.cpp \
 		HTMLCanvasElement.cpp \
 		HTMLDataListElement.cpp \
 		HTMLDivElement.cpp \
-		nsHTMLFieldSetElement.cpp \
+		HTMLFieldSetElement.cpp \
 		HTMLFontElement.cpp \
 		nsHTMLFormElement.cpp \
 		nsHTMLFrameElement.cpp \
 		HTMLFrameSetElement.cpp \
-		nsHTMLHRElement.cpp \
+		HTMLHRElement.cpp \
 		HTMLHeadingElement.cpp \
 		nsHTMLIFrameElement.cpp \
 		HTMLImageElement.cpp \
@@ -89,26 +100,26 @@ CPPSRCS		= \
 		HTMLLIElement.cpp \
 		HTMLLabelElement.cpp \
 		nsHTMLLegendElement.cpp \
-		nsHTMLLinkElement.cpp \
-		nsHTMLMapElement.cpp \
+		HTMLLinkElement.cpp \
+		HTMLMapElement.cpp \
 		nsHTMLMenuElement.cpp \
 		nsHTMLMenuItemElement.cpp \
-		nsHTMLMetaElement.cpp \
-		nsHTMLMeterElement.cpp \
-		nsHTMLModElement.cpp \
+		HTMLMetaElement.cpp \
+		HTMLMeterElement.cpp \
+		HTMLModElement.cpp \
 		HTMLObjectElement.cpp \
 		nsHTMLSharedObjectElement.cpp \
 		nsHTMLOptionElement.cpp \
-		nsHTMLOptGroupElement.cpp \
+		HTMLOptGroupElement.cpp \
 		nsHTMLOutputElement.cpp \
 		HTMLParagraphElement.cpp \
 		HTMLPreElement.cpp \
 		nsHTMLProgressElement.cpp \
 		HTMLScriptElement.cpp \
 		nsHTMLSelectElement.cpp \
-		nsHTMLSharedElement.cpp \
-		HTMLSpanElement.cpp \
+		HTMLSharedElement.cpp \
 		HTMLSharedListElement.cpp \
+		HTMLSpanElement.cpp \
 		HTMLStyleElement.cpp \
 		HTMLTableElement.cpp \
 		HTMLTableCaptionElement.cpp \
@@ -127,12 +138,16 @@ CPPSRCS		= \
 		$(NULL)
 
 ifdef MOZ_MEDIA
+EXPORTS_mozilla/dom += \
+		HTMLSourceElement.h \
+		$(NULL)
+
 CPPSRCS		+= \
 		nsHTMLAudioElement.cpp \
 		nsHTMLMediaElement.cpp \
 		nsMediaError.cpp \
 		nsMediaFragmentURIParser.cpp \
-		nsHTMLSourceElement.cpp \
+		HTMLSourceElement.cpp \
 		nsTimeRanges.cpp \
 		nsHTMLVideoElement.cpp \
 		$(NULL)

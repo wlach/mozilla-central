@@ -133,9 +133,6 @@ class AutoVersionAPI
     JSVersion   oldDefaultVersion;
     bool        oldHasVersionOverride;
     JSVersion   oldVersionOverride;
-#ifdef DEBUG
-    unsigned       oldCompileOptions;
-#endif
     JSVersion   newVersion;
 
   public:
@@ -144,9 +141,6 @@ class AutoVersionAPI
         oldDefaultVersion(cx->getDefaultVersion()),
         oldHasVersionOverride(cx->isVersionOverridden()),
         oldVersionOverride(oldHasVersionOverride ? cx->findVersion() : JSVERSION_UNKNOWN)
-#ifdef DEBUG
-        , oldCompileOptions(cx->getCompileOptions())
-#endif
     {
         this->newVersion = newVersion;
         cx->clearVersionOverride();
@@ -159,7 +153,6 @@ class AutoVersionAPI
             cx->overrideVersion(oldVersionOverride);
         else
             cx->clearVersionOverride();
-        JS_ASSERT(oldCompileOptions == cx->getCompileOptions());
     }
 
     /* The version that this scoped-entity establishes. */
@@ -810,8 +803,8 @@ JSRuntime::JSRuntime(JSUseHelperThreads useHelperThreads)
     gcInterFrameGC(0),
     gcSliceBudget(SliceBudget::Unlimited),
     gcIncrementalEnabled(true),
-    gcManipulatingDeadCompartments(false),
-    gcObjectsMarkedInDeadCompartments(0),
+    gcManipulatingDeadZones(false),
+    gcObjectsMarkedInDeadZones(0),
     gcPoke(false),
     heapState(Idle),
 #ifdef JSGC_GENERATIONAL
@@ -884,6 +877,7 @@ JSRuntime::JSRuntime(JSUseHelperThreads useHelperThreads)
     ionPcScriptCache(NULL),
     threadPool(this),
     ctypesActivityCallback(NULL),
+    parallelWarmup(0),
     ionReturnOverride_(MagicValue(JS_ARG_POISON)),
     useHelperThreads_(useHelperThreads),
     requestedHelperThreadCount(-1),
@@ -931,8 +925,8 @@ JSRuntime::init(uint32_t maxbytes)
         return false;
     }
 
-    atomsCompartment->isSystem = true;
-    atomsCompartment->setGCLastBytes(8192, GC_NORMAL);
+    atomsCompartment->zone()->isSystem = true;
+    atomsCompartment->zone()->setGCLastBytes(8192, GC_NORMAL);
 
     if (!InitAtoms(this))
         return false;
@@ -1129,6 +1123,9 @@ JS_NewRuntime(uint32_t maxbytes, JSUseHelperThreads useHelperThreads)
         return NULL;
 #endif
 
+    if (!ForkJoinSlice::InitializeTLS())
+        return NULL;
+
     if (!rt->init(maxbytes)) {
         JS_DestroyRuntime(rt);
         return NULL;
@@ -1310,9 +1307,6 @@ JS_SetVersion(JSContext *cx, JSVersion newVersion)
     JS_ASSERT(!VersionHasFlags(newVersion));
     JSVersion newVersionNumber = newVersion;
 
-#ifdef DEBUG
-    unsigned coptsBefore = cx->getCompileOptions();
-#endif
     JSVersion oldVersion = cx->findVersion();
     JSVersion oldVersionNumber = VersionNumber(oldVersion);
     if (oldVersionNumber == newVersionNumber)
@@ -1320,7 +1314,6 @@ JS_SetVersion(JSContext *cx, JSVersion newVersion)
 
     VersionCopyFlags(&newVersion, oldVersion);
     cx->maybeOverrideVersion(newVersion);
-    JS_ASSERT(cx->getCompileOptions() == coptsBefore);
     return oldVersionNumber;
 }
 
@@ -1373,18 +1366,16 @@ JS_GetOptions(JSContext *cx)
      * We may have been synchronized with a script version that was formerly on
      * the stack, but has now been popped.
      */
-    return cx->allOptions();
+    return cx->options();
 }
 
 static unsigned
 SetOptionsCommon(JSContext *cx, unsigned options)
 {
-    JS_ASSERT((options & JSALLOPTION_MASK) == options);
-    unsigned oldopts = cx->allOptions();
-    unsigned newropts = options & JSRUNOPTION_MASK;
-    unsigned newcopts = options & JSCOMPILEOPTION_MASK;
-    cx->setRunOptions(newropts);
-    cx->setCompileOptions(newcopts);
+    JS_ASSERT((options & JSOPTION_MASK) == options);
+    unsigned oldopts = cx->options();
+    unsigned newopts = options & JSOPTION_MASK;
+    cx->setOptions(newopts);
     cx->updateJITEnabled();
     return oldopts;
 }
@@ -1398,7 +1389,7 @@ JS_SetOptions(JSContext *cx, uint32_t options)
 JS_PUBLIC_API(uint32_t)
 JS_ToggleOptions(JSContext *cx, uint32_t options)
 {
-    unsigned oldopts = cx->allOptions();
+    unsigned oldopts = cx->options();
     unsigned newopts = oldopts ^ options;
     return SetOptionsCommon(cx, newopts);
 }
@@ -1522,7 +1513,10 @@ JS_WrapValue(JSContext *cx, jsval *vp)
 {
     AssertHeapIsIdle(cx);
     CHECK_REQUEST(cx);
-    return cx->compartment->wrap(cx, vp);
+    RootedValue value(cx, *vp);
+    bool ok = cx->compartment->wrap(cx, &value);
+    *vp = value.get();
+    return ok;
 }
 
 JS_PUBLIC_API(JSBool)
@@ -1574,7 +1568,7 @@ JS_TransplantObject(JSContext *cx, JSObject *origobjArg, JSObject *targetArg)
     JS_ASSERT(!IsCrossCompartmentWrapper(origobj));
     JS_ASSERT(!IsCrossCompartmentWrapper(target));
 
-    AutoMaybeTouchDeadCompartments agc(cx);
+    AutoMaybeTouchDeadZones agc(cx);
 
     JSCompartment *destination = target->compartment();
     RootedValue origv(cx, ObjectValue(*origobj));
@@ -1647,7 +1641,7 @@ js_TransplantObjectWithWrapper(JSContext *cx,
     RootedObject targetobj(cx, targetobjArg);
     RootedObject targetwrapper(cx, targetwrapperArg);
 
-    AutoMaybeTouchDeadCompartments agc(cx);
+    AutoMaybeTouchDeadZones agc(cx);
 
     AssertHeapIsIdle(cx);
     JS_ASSERT(!IsCrossCompartmentWrapper(origobj));
@@ -2273,7 +2267,7 @@ JS_GetDefaultFreeOp(JSRuntime *rt)
 JS_PUBLIC_API(void)
 JS_updateMallocCounter(JSContext *cx, size_t nbytes)
 {
-    return cx->runtime->updateMallocCounter(cx->compartment, nbytes);
+    return cx->runtime->updateMallocCounter(cx->zone(), nbytes);
 }
 
 JS_PUBLIC_API(char *)
@@ -5063,7 +5057,7 @@ struct AutoLastFrameCheck
     ~AutoLastFrameCheck() {
         if (cx->isExceptionPending() &&
             !JS_IsRunning(cx) &&
-            !cx->hasRunOption(JSOPTION_DONT_REPORT_UNCAUGHT)) {
+            !cx->hasOption(JSOPTION_DONT_REPORT_UNCAUGHT)) {
             js_ReportUncaughtException(cx);
         }
     }
@@ -5162,8 +5156,8 @@ JS::CompileOptions::CompileOptions(JSContext *cx)
       utf8(false),
       filename(NULL),
       lineno(1),
-      compileAndGo(cx->hasRunOption(JSOPTION_COMPILE_N_GO)),
-      noScriptRval(cx->hasRunOption(JSOPTION_NO_SCRIPT_RVAL)),
+      compileAndGo(cx->hasOption(JSOPTION_COMPILE_N_GO)),
+      noScriptRval(cx->hasOption(JSOPTION_NO_SCRIPT_RVAL)),
       selfHostingMode(false),
       userBit(false),
       sourcePolicy(SAVE_SOURCE)
@@ -5541,14 +5535,19 @@ JS::Evaluate(JSContext *cx, HandleObject obj, CompileOptions options,
 
     options.setCompileAndGo(true);
     options.setNoScriptRval(!rval);
+    SourceCompressionToken sct(cx);
     RootedScript script(cx, frontend::CompileScript(cx, obj, NullFramePtr(), options,
-                                                    StableCharPtr(chars, length), length));
+                                                    StableCharPtr(chars, length), length,
+                                                    NULL, 0, &sct));
     if (!script)
         return false;
 
     JS_ASSERT(script->getVersion() == options.version);
 
-    return Execute(cx, script, *obj, rval);
+    bool result = Execute(cx, script, *obj, rval);
+    if (!sct.complete())
+        result = false;
+    return result;
 }
 
 extern JS_PUBLIC_API(bool)
@@ -6681,8 +6680,14 @@ JS_ExecuteRegExp(JSContext *cx, JSObject *objArg, JSObject *reobjArg, jschar *ch
     RegExpStatics *res = obj->asGlobal().getRegExpStatics();
     StableCharPtr charPtr(chars, length);
 
-    return ExecuteRegExpLegacy(cx, res, reobj->asRegExp(), NullPtr(),
-                               charPtr, length, indexp, test, rval);
+    RootedValue val(cx);
+    if (!ExecuteRegExpLegacy(cx, res, reobj->asRegExp(), NullPtr(), charPtr, length, indexp, test,
+                             &val))
+    {
+        return false;
+    }
+    *rval = val;
+    return true;
 }
 
 JS_PUBLIC_API(JSObject *)
@@ -6717,8 +6722,15 @@ JS_ExecuteRegExpNoStatics(JSContext *cx, JSObject *objArg, jschar *chars, size_t
     CHECK_REQUEST(cx);
 
     StableCharPtr charPtr(chars, length);
-    return ExecuteRegExpLegacy(cx, NULL, obj->asRegExp(), NullPtr(),
-                               charPtr, length, indexp, test, rval);
+
+    RootedValue val(cx);
+    if (!ExecuteRegExpLegacy(cx, NULL, obj->asRegExp(), NullPtr(), charPtr, length, indexp, test,
+                             &val))
+    {
+        return false;
+    }
+    *rval = val;
+    return true;
 }
 
 JS_PUBLIC_API(JSBool)

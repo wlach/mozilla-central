@@ -27,11 +27,9 @@ nsSVGElement::StringInfo SVGAltGlyphElement::sStringInfo[1] =
 //----------------------------------------------------------------------
 // nsISupports methods
 
-NS_IMPL_ISUPPORTS_INHERITED6(SVGAltGlyphElement, SVGAltGlyphElementBase,
+NS_IMPL_ISUPPORTS_INHERITED4(SVGAltGlyphElement, SVGAltGlyphElementBase,
                              nsIDOMNode, nsIDOMElement,
                              nsIDOMSVGElement,
-                             nsIDOMSVGTextPositioningElement,
-                             nsIDOMSVGTextContentElement,
                              nsIDOMSVGURIReference)
 
 //----------------------------------------------------------------------
@@ -61,9 +59,7 @@ NS_IMETHODIMP SVGAltGlyphElement::GetHref(nsIDOMSVGAnimatedString * *aHref)
 already_AddRefed<nsIDOMSVGAnimatedString>
 SVGAltGlyphElement::Href()
 {
-  nsCOMPtr<nsIDOMSVGAnimatedString> href;
-  mStringAttributes[HREF].ToDOMAnimatedString(getter_AddRefs(href), this);
-  return href.forget();
+  return mStringAttributes[HREF].ToDOMAnimatedString(this);
 }
 
 void

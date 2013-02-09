@@ -10,9 +10,10 @@ import org.mozilla.gecko.db.BrowserDB;
 import org.mozilla.gecko.db.BrowserContract;
 import org.mozilla.gecko.gfx.Layer;
 import org.mozilla.gecko.gfx.LayerView;
+import org.mozilla.gecko.gfx.PanZoomController;
 import org.mozilla.gecko.gfx.PluginLayer;
 import org.mozilla.gecko.gfx.PointUtils;
-import org.mozilla.gecko.ui.PanZoomController;
+import org.mozilla.gecko.mozglue.GeckoLoader;
 import org.mozilla.gecko.util.GeckoAsyncTask;
 import org.mozilla.gecko.util.GeckoBackgroundThread;
 import org.mozilla.gecko.util.GeckoEventListener;
@@ -522,7 +523,7 @@ abstract public class GeckoApp
     @Override
     public boolean onMenuOpened(int featureId, Menu menu) {
         // exit full-screen mode whenever the menu is opened
-        if (mLayerView.isFullScreen()) {
+        if (mLayerView != null && mLayerView.isFullScreen()) {
             GeckoAppShell.sendEventToGecko(GeckoEvent.createBroadcastEvent("FullScreen:Exit", null));
         }
 
@@ -862,16 +863,6 @@ abstract public class GeckoApp
                 if (layerView != null && Tabs.getInstance().isSelectedTab(tab)) {
                     layerView.setZoomConstraints(tab.getZoomConstraints());
                 }
-            } else if (event.equals("Tab:HasTouchListener")) {
-                int tabId = message.getInt("tabID");
-                final Tab tab = Tabs.getInstance().getTab(tabId);
-                tab.setHasTouchListeners(true);
-                mMainHandler.post(new Runnable() {
-                    public void run() {
-                        if (Tabs.getInstance().isSelectedTab(tab))
-                            mLayerView.getTouchEventHandler().setWaitForTouchListeners(true);
-                    }
-                });
             } else if (event.equals("Session:StatePurged")) {
                 onStatePurged();
             } else if (event.equals("Bookmark:Insert")) {
@@ -1490,7 +1481,7 @@ abstract public class GeckoApp
             enableStrictMode();
         }
 
-        GeckoAppShell.loadMozGlue(this);
+        GeckoLoader.loadMozGlue(this);
         if (sGeckoThread != null) {
             // this happens when the GeckoApp activity is destroyed by android
             // without killing the entire application (see bug 769269)
@@ -1778,7 +1769,6 @@ abstract public class GeckoApp
         registerEventListener("ToggleChrome:Show");
         registerEventListener("ToggleChrome:Focus");
         registerEventListener("Permissions:Data");
-        registerEventListener("Tab:HasTouchListener");
         registerEventListener("Tab:ViewportMetadata");
         registerEventListener("Session:StatePurged");
         registerEventListener("Bookmark:Insert");
@@ -2178,7 +2168,6 @@ abstract public class GeckoApp
         unregisterEventListener("ToggleChrome:Show");
         unregisterEventListener("ToggleChrome:Focus");
         unregisterEventListener("Permissions:Data");
-        unregisterEventListener("Tab:HasTouchListener");
         unregisterEventListener("Tab:ViewportMetadata");
         unregisterEventListener("Session:StatePurged");
         unregisterEventListener("Bookmark:Insert");
@@ -2558,7 +2547,7 @@ abstract public class GeckoApp
     protected void connectGeckoLayerClient() {
         mLayerView.getLayerClient().notifyGeckoReady();
 
-        mLayerView.getTouchEventHandler().setOnTouchListener(new OnInterceptTouchListener() {
+        mLayerView.setTouchIntercepter(new OnInterceptTouchListener() {
             private PointF initialPoint = null;
 
             @Override
@@ -2626,10 +2615,6 @@ abstract public class GeckoApp
             // animations (see PropertyAnimator)
             super.setChildrenDrawnWithCacheEnabled(enabled);
         }
-    }
-
-    public boolean linkerExtract() {
-        return false;
     }
 
     private class FullScreenHolder extends FrameLayout {
@@ -2759,7 +2744,7 @@ abstract public class GeckoApp
         assertOnThread(sGeckoThread);
     }
 
-    private static void assertOnThread(Thread expectedThread) {
+    public static void assertOnThread(Thread expectedThread) {
         Thread currentThread = Thread.currentThread();
         long currentThreadId = currentThread.getId();
         long expectedThreadId = expectedThread.getId();

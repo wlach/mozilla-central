@@ -8,7 +8,7 @@
 #ifndef jsion_compileinfo_h__
 #define jsion_compileinfo_h__
 
-#include "ion/IonMacroAssembler.h"
+#include "Registers.h"
 
 namespace js {
 namespace ion {
@@ -43,7 +43,6 @@ class CompileInfo
         nlocals_ = script->nfixed;
         nstack_ = script->nslots - script->nfixed;
         nslots_ = nimplicit_ + nargs_ + nlocals_ + nstack_;
-        stackFrameSize_ = sizeof(IonJSFrameLayout);
     }
 
     // XXX: perhaps we should consider a way to statically distinguish:
@@ -55,9 +54,8 @@ class CompileInfo
         nimplicit_ = 0;
         nargs_ = 0;
         nlocals_ = nlocals;
-        nstack_ = 1 /* for ?: (pushPhiInput/popPhiOutpu) */;
+        nstack_ = 1 /* for ?: (pushPhiInput/popPhiOutput) */;
         nslots_ = nlocals_ + nstack_;
-        stackFrameSize_ = NativeFrameSize;
     }
 
     UnrootedScript script() const {
@@ -166,10 +164,6 @@ class CompileInfo
         return script()->argumentsHasVarBinding();
     }
 
-    uint32_t stackFrameSize() const {
-        return stackFrameSize_;
-    }
-
     ExecutionMode executionMode() const {
         return executionMode_;
     }
@@ -184,7 +178,6 @@ class CompileInfo
     unsigned nlocals_;
     unsigned nstack_;
     unsigned nslots_;
-    unsigned stackFrameSize_;
     JSScript *script_;
     JSFunction *fun_;
     jsbytecode *osrPc_;

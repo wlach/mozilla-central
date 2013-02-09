@@ -2177,6 +2177,11 @@ ia64*-hpux*)
         dnl Probably also a compiler bug, but what can you do?
         PROFILE_USE_LDFLAGS="-LTCG:PGUPDATE"
         LDFLAGS="$LDFLAGS -DYNAMICBASE"
+        if test "$_MSC_VER" -ge 1500; then
+            dnl VS2008 or later supports SSSE3
+            HAVE_TOOLCHAIN_SUPPORT_MSSSE3=1
+            AC_SUBST(HAVE_TOOLCHAIN_SUPPORT_MSSSE3)
+        fi
     fi
     AC_DEFINE(HAVE_SNPRINTF)
     AC_DEFINE(_WINDOWS)
@@ -4227,6 +4232,7 @@ MOZ_SAFE_BROWSING=
 MOZ_HELP_VIEWER=
 MOZ_SPELLCHECK=1
 MOZ_ANDROID_OMTC=
+MOZ_ANDROID_ANR_REPORTER=
 MOZ_ONLY_TOUCH_EVENTS=
 MOZ_TOOLKIT_SEARCH=1
 MOZ_UI_LOCALE=en-US
@@ -5082,6 +5088,13 @@ if test -n "$MOZ_ANDROID_OMTC"; then
 fi
 
 dnl ========================================================
+dnl = Android App Not Responding (ANR) reporter
+dnl ========================================================
+if test -n "$MOZ_ANDROID_ANR_REPORTER"; then
+    AC_DEFINE(MOZ_ANDROID_ANR_REPORTER)
+fi
+
+dnl ========================================================
 dnl = Disable WebSMS backend
 dnl ========================================================
 MOZ_ARG_DISABLE_BOOL(websms-backend,
@@ -5808,12 +5821,13 @@ fi
 
 MOZ_PATH_PROG(JAVA, java, :, [$JAVA_PATH])
 MOZ_PATH_PROG(JAVAC, javac, :, [$JAVA_PATH])
+MOZ_PATH_PROG(JAVAH, javah, :, [$JAVA_PATH])
 MOZ_PATH_PROG(JAR, jar, :, [$JAVA_PATH])
 
 if test -n "${JAVA_BIN_PATH}" -o \
   \( "$OS_TARGET" = Android -a x"$MOZ_WIDGET_TOOLKIT" != x"gonk" \); then
-  if test -z "$JAVA" -o "$JAVA" = ":" -o -z "$JAVAC" -o "$JAVAC" = ":" -o -z "$JAR" -o "$JAR" = ":"; then
-    AC_MSG_ERROR([The programs java, javac and jar were not found.  Set \$JAVA_HOME to your java sdk directory or use --with-java-bin-path={java-bin-dir}])
+  if test -z "$JAVA" -o "$JAVA" = ":" -o -z "$JAVAC" -o "$JAVAC" = ":" -o -z "$JAVAH" -o "$JAVAH" = ":" -o -z "$JAR" -o "$JAR" = ":"; then
+    AC_MSG_ERROR([The programs java, javac, javah and jar were not found.  Set \$JAVA_HOME to your java sdk directory or use --with-java-bin-path={java-bin-dir}])
   fi
 fi
 
@@ -8450,6 +8464,7 @@ AC_SUBST(TOOLCHAIN_PREFIX)
 
 AC_SUBST(JAVA)
 AC_SUBST(JAVAC)
+AC_SUBST(JAVAH)
 AC_SUBST(JAR)
 
 AC_SUBST(MOZ_PROFILELOCKING)
@@ -8461,6 +8476,7 @@ AC_SUBST(MOZ_UNIVERSALCHARDET)
 AC_SUBST(ACCESSIBILITY)
 AC_SUBST(MOZ_SPELLCHECK)
 AC_SUBST(MOZ_ANDROID_OMTC)
+AC_SUBST(MOZ_ANDROID_ANR_REPORTER)
 AC_SUBST(MOZ_ONLY_TOUCH_EVENTS)
 AC_SUBST(MOZ_CRASHREPORTER)
 AC_SUBST(MOZ_CRASHREPORTER_INJECTOR)
@@ -9263,6 +9279,7 @@ export MOZILLA_CENTRAL_PATH=$_topsrcdir
 export STLPORT_CPPFLAGS
 export STLPORT_LDFLAGS
 export STLPORT_LIBS
+export JS_STANDALONE=no
 AC_OUTPUT_SUBDIRS(js/src)
 ac_configure_args="$_SUBDIR_CONFIG_ARGS"
 

@@ -212,10 +212,12 @@ class CGPrototypeJSClass(CGThing):
     JSCLASS_NO_INTERNAL_MEMBERS
   },
   eInterfacePrototype,
-  %s
+  %s,
+  "[object %sPrototype]"
 };
 """ % (self.descriptor.interface.identifier.name,
-       NativePropertyHooks(self.descriptor))
+       NativePropertyHooks(self.descriptor),
+       self.descriptor.interface.identifier.name)
 
 class CGInterfaceObjectJSClass(CGThing):
     def __init__(self, descriptor, properties):
@@ -254,9 +256,11 @@ static DOMIfaceAndProtoJSClass InterfaceObjectClass = {
     JSCLASS_NO_INTERNAL_MEMBERS
   },
   eInterface,
-  %s
+  %s,
+  "function %s() {\\n    [native code]\\n}"
 };
-""" % (ctorname, hasinstance, ctorname, NativePropertyHooks(self.descriptor))
+""" % (ctorname, hasinstance, ctorname, NativePropertyHooks(self.descriptor),
+       self.descriptor.interface.identifier.name)
 
 class CGList(CGThing):
     """
@@ -6957,10 +6961,10 @@ class CGBindingRoot(CGThing):
                                           descriptors)
         traitsClasses = [CGPrototypeTraitsClass(d) for d in descriptorsWithPrototype]
 
-        # We must have a 1:1 mapping here, skip for prototypes that have more
-        # than one concrete class implementation.
+        # We must have a 1:1 mapping here, skip for prototypes which
+        # share an implementation with other prototypes.
         traitsClasses.extend([CGPrototypeIDMapClass(d) for d in descriptorsWithPrototype
-                              if d.uniqueImplementation])
+                              if d.unsharedImplementation])
 
         # Wrap all of that in our namespaces.
         if len(traitsClasses) > 0:

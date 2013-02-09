@@ -548,7 +548,7 @@ js::Execute(JSContext *cx, HandleScript script, JSObject &scopeChainArg, Value *
 #endif
 
     /* The VAROBJFIX option makes varObj == globalObj in global code. */
-    if (!cx->hasRunOption(JSOPTION_VAROBJFIX)) {
+    if (!cx->hasOption(JSOPTION_VAROBJFIX)) {
         if (!scopeChain->setVarObj(cx))
             return false;
     }
@@ -629,9 +629,9 @@ js::LooselyEqual(JSContext *cx, const Value &lval, const Value &rval, bool *resu
     RootedValue lvalue(cx, lval);
     RootedValue rvalue(cx, rval);
 
-    if (!ToPrimitive(cx, lvalue.address()))
+    if (!ToPrimitive(cx, &lvalue))
         return false;
-    if (!ToPrimitive(cx, rvalue.address()))
+    if (!ToPrimitive(cx, &rvalue))
         return false;
 
     if (lvalue.get().isString() && rvalue.get().isString()) {
@@ -770,22 +770,22 @@ EnterWith(JSContext *cx, int stackIndex)
 
 /* Unwind block and scope chains to match the given depth. */
 void
-js::UnwindScope(JSContext *cx, uint32_t stackDepth)
+js::UnwindScope(JSContext *cx, AbstractFramePtr frame, uint32_t stackDepth)
 {
-    StackFrame *fp = cx->fp();
-    JS_ASSERT(stackDepth <= cx->regs().stackDepth());
+    JS_ASSERT_IF(frame.isStackFrame(), cx->fp() == frame.asStackFrame());
+    JS_ASSERT_IF(frame.isStackFrame(), stackDepth <= cx->regs().stackDepth());
 
-    for (ScopeIter si(fp, cx); !si.done(); ++si) {
+    for (ScopeIter si(frame, cx); !si.done(); ++si) {
         switch (si.type()) {
           case ScopeIter::Block:
             if (si.staticBlock().stackDepth() < stackDepth)
                 return;
-            fp->popBlock(cx);
+            frame.popBlock(cx);
             break;
           case ScopeIter::With:
             if (si.scope().asWith().stackDepth() < stackDepth)
                 return;
-            fp->popWith(cx);
+            frame.popWith(cx);
             break;
           case ScopeIter::Call:
           case ScopeIter::StrictEvalScope:
@@ -1262,10 +1262,10 @@ js::Interpret(JSContext *cx, StackFrame *entryFrame, InterpMode interpMode)
 
         JSInterruptHook hook = cx->runtime->debugHooks.interruptHook;
         if (hook || script->stepModeEnabled()) {
-            Value rval;
+            RootedValue rval(cx);
             JSTrapStatus status = JSTRAP_CONTINUE;
             if (hook)
-                status = hook(cx, script, regs.pc, &rval, cx->runtime->debugHooks.interruptHookData);
+                status = hook(cx, script, regs.pc, rval.address(), cx->runtime->debugHooks.interruptHookData);
             if (status == JSTRAP_CONTINUE && script->stepModeEnabled())
                 status = Debugger::onSingleStep(cx, &rval);
             switch (status) {
@@ -1289,7 +1289,7 @@ js::Interpret(JSContext *cx, StackFrame *entryFrame, InterpMode interpMode)
             moreInterrupts = true;
 
         if (script->hasBreakpointsAt(regs.pc) && interpMode != JSINTERP_SKIP_TRAP) {
-            Value rval;
+            RootedValue rval(cx);
             JSTrapStatus status = Debugger::onTrap(cx, &rval);
             switch (status) {
               case JSTRAP_ERROR:
@@ -3136,9 +3136,9 @@ END_CASE(JSOP_INSTANCEOF)
 BEGIN_CASE(JSOP_DEBUGGER)
 {
     JSTrapStatus st = JSTRAP_CONTINUE;
-    Value rval;
+    RootedValue rval(cx);
     if (JSDebuggerHandler handler = cx->runtime->debugHooks.debuggerHandler)
-        st = handler(cx, script, regs.pc, &rval, cx->runtime->debugHooks.debuggerHandlerData);
+        st = handler(cx, script, regs.pc, rval.address(), cx->runtime->debugHooks.debuggerHandlerData);
     if (st == JSTRAP_CONTINUE)
         st = Debugger::onDebuggerStatement(cx, &rval);
     switch (st) {
@@ -3293,7 +3293,7 @@ END_CASE(JSOP_ARRAYPUSH)
         for (TryNoteIter tni(cx, regs); !tni.done(); ++tni) {
             JSTryNote *tn = *tni;
 
-            UnwindScope(cx, tn->stackDepth);
+            UnwindScope(cx, cx->fp(), tn->stackDepth);
 
             /*
              * Set pc to the first bytecode after the the try note to point
@@ -3364,7 +3364,7 @@ END_CASE(JSOP_ARRAYPUSH)
     }
 
   forced_return:
-    UnwindScope(cx, 0);
+    UnwindScope(cx, cx->fp(), 0);
     regs.setToEndOfScript();
 
     if (entryFrame != regs.fp())

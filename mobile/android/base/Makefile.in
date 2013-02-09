@@ -20,6 +20,10 @@ MOZGLUE_JAVA_FILES := \
   mozglue/DirectBufferAllocator.java \
   $(NULL)
 
+MOZGLUE_PP_JAVA_FILES := \
+  mozglue/GeckoLoader.java \
+  $(NULL)
+
 UTIL_JAVA_FILES := \
   ActivityResultHandler.java \
   ActivityResultHandlerMap.java \
@@ -40,11 +44,11 @@ FENNEC_JAVA_FILES = \
   AboutHomePromoBox.java \
   AboutHomeSection.java \
   ActivityHandlerHelper.java \
+  AlertNotification.java \
+  AllCapsTextView.java \
   AndroidImport.java \
   AndroidImportPreference.java \
   AnimatorProxy.java \
-  AlertNotification.java \
-  AllCapsTextView.java \
   AnimatedHeightLayout.java \
   AwesomeBar.java \
   AwesomebarResultHandler.java \
@@ -145,6 +149,7 @@ FENNEC_JAVA_FILES = \
   ThumbnailHelper.java \
   WebAppAllocator.java \
   ZoomConstraints.java \
+  gfx/Axis.java \
   gfx/BitmapUtils.java \
   gfx/BufferedCairoImage.java \
   gfx/CairoGLInfo.java \
@@ -160,17 +165,22 @@ FENNEC_JAVA_FILES = \
   gfx/ImmutableViewportMetrics.java \
   gfx/InputConnectionHandler.java \
   gfx/IntSize.java \
+  gfx/JavaPanZoomController.java \
   gfx/Layer.java \
   gfx/LayerRenderer.java \
   gfx/LayerView.java \
   gfx/PluginLayer.java \
   gfx/NinePatchTileLayer.java \
   gfx/PanningPerfAPI.java \
+  gfx/PanZoomController.java \
+  gfx/PanZoomTarget.java \
   gfx/PointUtils.java \
   gfx/ProgressiveUpdateData.java \
   gfx/RectUtils.java \
   gfx/ScrollbarLayer.java \
+  gfx/SimpleScaleGestureDetector.java \
   gfx/SingleTileLayer.java \
+  gfx/SubdocumentScrollHelper.java \
   gfx/TextLayer.java \
   gfx/TextureGenerator.java \
   gfx/TextureReaper.java \
@@ -178,11 +188,6 @@ FENNEC_JAVA_FILES = \
   gfx/TouchEventHandler.java \
   gfx/ViewTransform.java \
   gfx/VirtualLayer.java \
-  ui/Axis.java \
-  ui/PanZoomController.java \
-  ui/PanZoomTarget.java \
-  ui/SimpleScaleGestureDetector.java \
-  ui/SubdocumentScrollHelper.java \
   widget/DateTimePicker.java \
   widget/IconTabWidget.java \
   widget/TabRow.java \
@@ -196,6 +201,10 @@ FENNEC_JAVA_FILES = \
 
 ifdef MOZ_WEBSMS_BACKEND
 FENNEC_JAVA_FILES += GeckoSmsManager.java
+endif
+
+ifdef MOZ_ANDROID_ANR_REPORTER
+FENNEC_JAVA_FILES += ANRReporter.java
 endif
 
 FENNEC_PP_JAVA_VIEW_FILES = \
@@ -216,6 +225,7 @@ FENNEC_PP_JAVA_FILES = \
   WebApp.java \
   WebApps.java \
   GeckoActivity.java \
+  GeckoAppInfo.java \
   GeckoAppWidgetProvider.java \
   LauncherShortcuts.java \
   NotificationHandler.java \
@@ -297,6 +307,7 @@ DEFINES += \
   -DMOZ_APP_DISPLAYNAME="$(MOZ_APP_DISPLAYNAME)" \
   -DMOZ_APP_NAME=$(MOZ_APP_NAME) \
   -DMOZ_APP_VERSION=$(MOZ_APP_VERSION) \
+  -DMOZ_APP_ID=$(MOZ_APP_ID) \
   -DMOZ_CHILD_PROCESS_NAME=$(MOZ_CHILD_PROCESS_NAME) \
   -DMOZ_MIN_CPU_VERSION=$(MIN_CPU_VERSION) \
   -DMOZ_CRASHREPORTER=$(MOZ_CRASHREPORTER) \
@@ -309,6 +320,7 @@ DEFINES += \
   -DMOZ_APP_ABI=$(TARGET_XPCOM_ABI) \
   -DMOZ_BUILD_TIMESTAMP=$(MOZ_BUILD_TIMESTAMP) \
   -DMOZ_UPDATER=$(MOZ_UPDATER) \
+  -DOS_TARGET=$(OS_TARGET) \
   $(NULL)
 
 ifdef MOZ_PKG_SPECIAL
@@ -322,6 +334,7 @@ endif
 GARBAGE += \
   AndroidManifest.xml  \
   classes.dex  \
+  $(MOZGLUE_PP_JAVA_FILES) \
   $(FENNEC_PP_JAVA_FILES) \
   $(FENNEC_PP_JAVA_VIEW_FILES) \
   $(SYNC_PP_JAVA_FILES) \
@@ -332,6 +345,8 @@ GARBAGE += \
   $(SYNC_PP_RES_XML) \
   package-name.txt \
   Manifest.java \
+  javah.out \
+  jni-stubs.inc \
   $(NULL)
 
 GARBAGE_DIRS += classes db jars res sync services
@@ -580,7 +595,6 @@ RES_DRAWABLE_BASE = \
   res/drawable/menu_item_uncheck.png \
   res/drawable/site_security_identified.png \
   res/drawable/site_security_verified.png \
-  res/drawable/tabs_menu.png \
   res/drawable/tabs_normal.png \
   res/drawable/tabs_private.png \
   res/drawable/tabs_synced.png \
@@ -681,7 +695,6 @@ RES_DRAWABLE_HDPI = \
   res/drawable-hdpi/menu_item_uncheck.png \
   res/drawable-hdpi/site_security_identified.png \
   res/drawable-hdpi/site_security_verified.png \
-  res/drawable-hdpi/tabs_menu.png \
   res/drawable-hdpi/tabs_normal.png \
   res/drawable-hdpi/tabs_private.png \
   res/drawable-hdpi/tabs_synced.png \
@@ -776,7 +789,6 @@ RES_DRAWABLE_XHDPI = \
   res/drawable-xhdpi/tab_indicator_selected_focused.9.png \
   res/drawable-xhdpi/site_security_identified.png \
   res/drawable-xhdpi/site_security_verified.png \
-  res/drawable-xhdpi/tabs_menu.png \
   res/drawable-xhdpi/tabs_normal.png \
   res/drawable-xhdpi/tabs_private.png \
   res/drawable-xhdpi/tabs_synced.png \
@@ -879,16 +891,11 @@ RES_DRAWABLE_LAND_MDPI_V14 = \
   res/drawable-land-mdpi-v14/address_bar_url_pressed_pb.9.png \
   res/drawable-land-mdpi-v14/remote_tabs_off.png \
   res/drawable-land-mdpi-v14/remote_tabs_on.png \
-  res/drawable-land-mdpi-v14/tab_new.png \
-  res/drawable-land-mdpi-v14/tab_new_pb.png \
   res/drawable-land-mdpi-v14/tabs_carat.png \
   res/drawable-land-mdpi-v14/urlbar_stop.png \
-  res/drawable-land-mdpi-v14/menu.png \
-  res/drawable-land-mdpi-v14/menu_pb.png \
   res/drawable-land-mdpi-v14/reader.png \
   res/drawable-land-mdpi-v14/site_security_identified.png \
   res/drawable-land-mdpi-v14/site_security_verified.png \
-  res/drawable-land-mdpi-v14/tabs_menu.png \
   $(NULL)
 
 RES_DRAWABLE_LAND_HDPI_V14 = \
@@ -902,16 +909,11 @@ RES_DRAWABLE_LAND_HDPI_V14 = \
   res/drawable-land-hdpi-v14/address_bar_url_pressed_pb.9.png \
   res/drawable-land-hdpi-v14/remote_tabs_off.png \
   res/drawable-land-hdpi-v14/remote_tabs_on.png \
-  res/drawable-land-hdpi-v14/tab_new.png \
-  res/drawable-land-hdpi-v14/tab_new_pb.png \
   res/drawable-land-hdpi-v14/tabs_carat.png \
   res/drawable-land-hdpi-v14/urlbar_stop.png \
-  res/drawable-land-hdpi-v14/menu.png \
-  res/drawable-land-hdpi-v14/menu_pb.png \
   res/drawable-land-hdpi-v14/reader.png \
   res/drawable-land-hdpi-v14/site_security_identified.png \
   res/drawable-land-hdpi-v14/site_security_verified.png \
-  res/drawable-land-hdpi-v14/tabs_menu.png \
   $(NULL)
 
 RES_DRAWABLE_LAND_XHDPI_V14 = \
@@ -925,16 +927,11 @@ RES_DRAWABLE_LAND_XHDPI_V14 = \
   res/drawable-land-xhdpi-v14/address_bar_url_pressed_pb.9.png \
   res/drawable-land-xhdpi-v14/remote_tabs_off.png \
   res/drawable-land-xhdpi-v14/remote_tabs_on.png \
-  res/drawable-land-xhdpi-v14/tab_new.png \
-  res/drawable-land-xhdpi-v14/tab_new_pb.png \
   res/drawable-land-xhdpi-v14/tabs_carat.png \
   res/drawable-land-xhdpi-v14/urlbar_stop.png \
-  res/drawable-land-xhdpi-v14/menu.png \
-  res/drawable-land-xhdpi-v14/menu_pb.png \
   res/drawable-land-xhdpi-v14/reader.png \
   res/drawable-land-xhdpi-v14/site_security_identified.png \
   res/drawable-land-xhdpi-v14/site_security_verified.png \
-  res/drawable-land-xhdpi-v14/tabs_menu.png \
   $(NULL)
 
 RES_DRAWABLE_LARGE_MDPI_V11 = \
@@ -948,25 +945,15 @@ RES_DRAWABLE_LARGE_MDPI_V11 = \
   res/drawable-large-mdpi-v11/address_bar_url_pressed_pb.9.png \
   res/drawable-large-mdpi-v11/ic_awesomebar_go.png \
   res/drawable-large-mdpi-v11/ic_awesomebar_search.png \
-  res/drawable-large-mdpi-v11/ic_menu_bookmark_add.png \
-  res/drawable-large-mdpi-v11/ic_menu_bookmark_remove.png \
   res/drawable-large-mdpi-v11/ic_menu_reload.png \
   res/drawable-large-mdpi-v11/ic_menu_forward.png \
   res/drawable-large-mdpi-v11/remote_tabs_off.png \
   res/drawable-large-mdpi-v11/remote_tabs_on.png \
-  res/drawable-large-mdpi-v11/tab_new.png \
-  res/drawable-large-mdpi-v11/tab_new_pb.png \
   res/drawable-large-mdpi-v11/urlbar_stop.png \
   res/drawable-large-mdpi-v11/reader.png \
   res/drawable-large-mdpi-v11/site_security_identified.png \
   res/drawable-large-mdpi-v11/site_security_verified.png \
-  res/drawable-large-mdpi-v11/menu.png \
-  res/drawable-large-mdpi-v11/menu_pb.png \
   res/drawable-large-mdpi-v11/tabs_carat.png \
-  res/drawable-large-mdpi-v11/tabs_menu.png \
-  res/drawable-large-mdpi-v11/tabs_normal.png \
-  res/drawable-large-mdpi-v11/tabs_private.png \
-  res/drawable-large-mdpi-v11/tabs_synced.png \
   $(NULL)
 
 RES_DRAWABLE_LARGE_HDPI_V11 = \
@@ -978,25 +965,15 @@ RES_DRAWABLE_LARGE_HDPI_V11 = \
   res/drawable-large-hdpi-v11/address_bar_url_pressed_pb.9.png \
   res/drawable-large-hdpi-v11/ic_awesomebar_go.png \
   res/drawable-large-hdpi-v11/ic_awesomebar_search.png \
-  res/drawable-large-hdpi-v11/ic_menu_bookmark_add.png \
-  res/drawable-large-hdpi-v11/ic_menu_bookmark_remove.png \
   res/drawable-large-hdpi-v11/ic_menu_reload.png \
   res/drawable-large-hdpi-v11/ic_menu_forward.png \
   res/drawable-large-hdpi-v11/remote_tabs_off.png \
   res/drawable-large-hdpi-v11/remote_tabs_on.png \
-  res/drawable-large-hdpi-v11/tab_new.png \
-  res/drawable-large-hdpi-v11/tab_new_pb.png \
   res/drawable-large-hdpi-v11/urlbar_stop.png \
   res/drawable-large-hdpi-v11/reader.png \
   res/drawable-large-hdpi-v11/site_security_identified.png \
   res/drawable-large-hdpi-v11/site_security_verified.png \
-  res/drawable-large-hdpi-v11/menu.png \
-  res/drawable-large-hdpi-v11/menu_pb.png \
   res/drawable-large-hdpi-v11/tabs_carat.png \
-  res/drawable-large-hdpi-v11/tabs_menu.png \
-  res/drawable-large-hdpi-v11/tabs_normal.png \
-  res/drawable-large-hdpi-v11/tabs_private.png \
-  res/drawable-large-hdpi-v11/tabs_synced.png \
   $(NULL)
 
 RES_DRAWABLE_LARGE_XHDPI_V11 = \
@@ -1008,64 +985,58 @@ RES_DRAWABLE_LARGE_XHDPI_V11 = \
   res/drawable-large-xhdpi-v11/address_bar_url_pressed_pb.9.png \
   res/drawable-large-xhdpi-v11/ic_awesomebar_go.png \
   res/drawable-large-xhdpi-v11/ic_awesomebar_search.png \
-  res/drawable-large-xhdpi-v11/ic_menu_bookmark_add.png \
-  res/drawable-large-xhdpi-v11/ic_menu_bookmark_remove.png \
   res/drawable-large-xhdpi-v11/ic_menu_reload.png \
   res/drawable-large-xhdpi-v11/ic_menu_forward.png \
   res/drawable-large-xhdpi-v11/remote_tabs_on.png \
   res/drawable-large-xhdpi-v11/remote_tabs_off.png \
-  res/drawable-large-xhdpi-v11/tab_new.png \
-  res/drawable-large-xhdpi-v11/tab_new_pb.png \
   res/drawable-large-xhdpi-v11/urlbar_stop.png \
   res/drawable-large-xhdpi-v11/reader.png \
   res/drawable-large-xhdpi-v11/site_security_identified.png \
   res/drawable-large-xhdpi-v11/site_security_verified.png \
-  res/drawable-large-xhdpi-v11/menu.png \
-  res/drawable-large-xhdpi-v11/menu_pb.png \
   res/drawable-large-xhdpi-v11/tabs_carat.png \
-  res/drawable-large-xhdpi-v11/tabs_menu.png \
-  res/drawable-large-xhdpi-v11/tabs_normal.png \
-  res/drawable-large-xhdpi-v11/tabs_private.png \
-  res/drawable-large-xhdpi-v11/tabs_synced.png \
   $(NULL)
 
 RES_DRAWABLE_XLARGE_MDPI_V11 = \
   res/drawable-xlarge-mdpi-v11/awesomebar_tab_center.9.png \
   res/drawable-xlarge-mdpi-v11/awesomebar_tab_left.9.png \
   res/drawable-xlarge-mdpi-v11/awesomebar_tab_right.9.png \
+  res/drawable-xlarge-mdpi-v11/ic_menu_bookmark_add.png \
+  res/drawable-xlarge-mdpi-v11/ic_menu_bookmark_remove.png \
   res/drawable-xlarge-mdpi-v11/menu.png \
-  res/drawable-xlarge-mdpi-v11/menu_pb.png \
   res/drawable-xlarge-mdpi-v11/tabs_button.xml \
-  res/drawable-xlarge-mdpi-v11/tabs_level.xml \
   res/drawable-xlarge-mdpi-v11/tabs_carat_contracted.png \
   res/drawable-xlarge-mdpi-v11/tabs_carat_expanded.png \
+  res/drawable-xlarge-mdpi-v11/tabs_level.xml \
+  res/drawable-xlarge-mdpi-v11/tabs_menu.png \
   $(NULL)
 
 RES_DRAWABLE_XLARGE_HDPI_V11 = \
   res/drawable-xlarge-hdpi-v11/awesomebar_tab_center.9.png \
   res/drawable-xlarge-hdpi-v11/awesomebar_tab_left.9.png \
   res/drawable-xlarge-hdpi-v11/awesomebar_tab_right.9.png \
+  res/drawable-xlarge-hdpi-v11/ic_menu_bookmark_add.png \
+  res/drawable-xlarge-hdpi-v11/ic_menu_bookmark_remove.png \
   res/drawable-xlarge-hdpi-v11/menu.png \
-  res/drawable-xlarge-hdpi-v11/menu_pb.png \
   res/drawable-xlarge-hdpi-v11/tabs_carat_contracted.png \
   res/drawable-xlarge-hdpi-v11/tabs_carat_expanded.png \
+  res/drawable-xlarge-hdpi-v11/tabs_menu.png \
   $(NULL)
 
 RES_DRAWABLE_XLARGE_XHDPI_V11 = \
   res/drawable-xlarge-xhdpi-v11/awesomebar_tab_center.9.png \
   res/drawable-xlarge-xhdpi-v11/awesomebar_tab_left.9.png \
   res/drawable-xlarge-xhdpi-v11/awesomebar_tab_right.9.png \
+  res/drawable-xlarge-xhdpi-v11/ic_menu_bookmark_add.png \
+  res/drawable-xlarge-xhdpi-v11/ic_menu_bookmark_remove.png \
   res/drawable-xlarge-xhdpi-v11/menu.png \
-  res/drawable-xlarge-xhdpi-v11/menu_pb.png \
   res/drawable-xlarge-xhdpi-v11/tabs_carat_contracted.png \
   res/drawable-xlarge-xhdpi-v11/tabs_carat_expanded.png \
+  res/drawable-xlarge-xhdpi-v11/tabs_menu.png \
   $(NULL)
 
 RES_COLOR = \
   res/color/menu_item_title.xml \
   res/color/select_item_multichoice.xml \
-  res/color/tab_title.xml \
-  res/color/tabs_counter_color.xml \
   $(NULL)
 
 RES_MENU = \
@@ -1124,6 +1095,7 @@ MOZ_ANDROID_DRAWABLES += \
   mobile/android/base/resources/drawable/spinner.xml                            \
   mobile/android/base/resources/drawable/suggestion_selector.xml                \
   mobile/android/base/resources/drawable/tab_new_level.xml                      \
+  mobile/android/base/resources/drawable/tab_row.xml                            \
   mobile/android/base/resources/drawable/tab_thumbnail.xml                      \
   mobile/android/base/resources/drawable/tabs_button.xml                        \
   mobile/android/base/resources/drawable/tabs_level.xml                         \
@@ -1200,10 +1172,10 @@ jars/gecko-browser.jar: jars/gecko-mozglue.jar jars/gecko-util.jar jars/sync-thi
 	$(JAVAC) $(JAVAC_FLAGS) -Xlint:all,-deprecation,-fallthrough -d classes/gecko-browser -classpath "jars/gecko-mozglue.jar:jars/gecko-util.jar:jars/sync-thirdparty.jar" $(addprefix $(srcdir)/,$(FENNEC_JAVA_FILES)) $(FENNEC_PP_JAVA_FILES) $(FENNEC_PP_JAVA_VIEW_FILES) $(addprefix $(srcdir)/,$(SYNC_JAVA_FILES)) $(SYNC_PP_JAVA_FILES) R.java
 	$(JAR) cMf jars/gecko-browser.jar -C classes/gecko-browser .
 
-jars/gecko-mozglue.jar: $(addprefix $(srcdir)/,$(MOZGLUE_JAVA_FILES)) jars
+jars/gecko-mozglue.jar: $(addprefix $(srcdir)/,$(MOZGLUE_JAVA_FILES)) $(MOZGLUE_PP_JAVA_FILES) jars
 	@echo "JAR gecko-mozglue.jar"
 	$(NSINSTALL) -D classes/gecko-mozglue
-	$(JAVAC) $(JAVAC_FLAGS) -Xlint:all -d classes/gecko-mozglue $(addprefix $(srcdir)/,$(MOZGLUE_JAVA_FILES))
+	$(JAVAC) $(JAVAC_FLAGS) -Xlint:all -d classes/gecko-mozglue $(addprefix $(srcdir)/,$(MOZGLUE_JAVA_FILES)) $(MOZGLUE_PP_JAVA_FILES)
 	$(JAR) cMf jars/gecko-mozglue.jar -C classes/gecko-mozglue .
 
 jars/gecko-util.jar: $(addprefix $(srcdir)/,$(UTIL_JAVA_FILES)) jars
@@ -1222,6 +1194,23 @@ jars:
 	@echo "MKDIR jars"
 	$(NSINSTALL) -D jars
 
+CLASSES_WITH_JNI= \
+    org.mozilla.gecko.GeckoAppShell \
+    $(NULL)
+
+ifdef MOZ_WEBSMS_BACKEND
+# Note: if you are building with MOZ_WEBSMS_BACKEND turned on, then
+# you will get a build error because the generated jni-stubs.inc will
+# be different than the one checked in (i.e. it will have the sms-related
+# JNI stubs as well). Just copy the generated file to mozglue/android/
+# like the error message says and rebuild. All should be well after that.
+CLASSES_WITH_JNI += org.mozilla.gecko.GeckoSmsManager
+endif
+
+jni-stubs.inc: jars/gecko-browser.jar jars/gecko-mozglue.jar jars/gecko-util.jar jars/sync-thirdparty.jar
+	$(JAVAH) -o javah.out -bootclasspath $(JAVA_BOOTCLASSPATH) -classpath $(subst $(NULL) $(NULL),:,$^) $(CLASSES_WITH_JNI)
+	$(PYTHON) $(topsrcdir)/mobile/android/base/jni-generator.py javah.out $@
+
 PP_RES_XML= \
   $(SYNC_PP_RES_XML) \
   $(FENNEC_PP_XML_FILES) \
@@ -1237,6 +1226,7 @@ SERVICES_MANIFEST_FRAGMENTS = $(wildcard $(topsrcdir)/mobile/android/services/ma
 
 android-tgts = \
   AndroidManifest.xml \
+  $(MOZGLUE_PP_JAVA_FILES) \
   $(FENNEC_PP_JAVA_FILES) \
   $(SYNC_PP_JAVA_FILES) \
   package-name.txt \
@@ -1244,7 +1234,7 @@ android-tgts = \
 
 android-preqs = \
   Makefile.in \
-  $(call mkdir_deps,db,sync/repositories/android,background/announcements) \
+  $(call mkdir_deps,mozglue,db,sync/repositories/android,background/announcements) \
   $(SERVICES_MANIFEST_FRAGMENTS) \
   WebAppManifestFragment.xml.in \
   WebAppsFragments.java \
@@ -1330,6 +1320,8 @@ R.java: $(MOZ_APP_ICON) $(RESOURCES) $(RES_DRAWABLE) $(RES_BRANDING_DRAWABLE_MDP
 gecko.ap_: AndroidManifest.xml res/drawable/icon.png res/drawable-hdpi/icon.png res/drawable-xhdpi/icon.png res/drawable-xxhdpi/icon.png $(RESOURCES) $(RES_DRAWABLE) $(RES_BRANDING_DRAWABLE_MDPI) $(RES_BRANDING_DRAWABLE_HDPI) $(RES_BRANDING_DRAWABLE_XHDPI) $(PP_RES_XML) res/values/defaults.xml res/values/strings.xml FORCE
 	$(AAPT) package -f -M AndroidManifest.xml -I $(ANDROID_SDK)/android.jar  -S res -F $@
 
-libs:: classes.dex package-name.txt
+libs:: classes.dex package-name.txt jni-stubs.inc
 	$(INSTALL) classes.dex $(FINAL_TARGET)
 	$(INSTALL) package-name.txt $(FINAL_TARGET)
+	@(diff jni-stubs.inc $(topsrcdir)/mozglue/android/jni-stubs.inc >/dev/null) || \
+	 (echo "*** Error: The jni-stubs have changed. Copy $(CURDIR)/jni-stubs.inc to $(topsrcdir)/mozglue/android" && exit 1)

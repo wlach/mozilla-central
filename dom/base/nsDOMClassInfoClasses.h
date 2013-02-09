@@ -193,7 +193,6 @@ DOMCI_CLASS(SVGDocument)
 // SVG element classes
 DOMCI_CLASS(SVGAElement)
 DOMCI_CLASS(TimeEvent)
-DOMCI_CLASS(SVGClipPathElement)
 DOMCI_CLASS(SVGFEBlendElement)
 DOMCI_CLASS(SVGFEColorMatrixElement)
 DOMCI_CLASS(SVGFEComponentTransferElement)
@@ -222,16 +221,8 @@ DOMCI_CLASS(SVGFilterElement)
 DOMCI_CLASS(SVGImageElement)
 DOMCI_CLASS(SVGMarkerElement)
 DOMCI_CLASS(SVGMaskElement)
-DOMCI_CLASS(SVGSVGElement)
-DOMCI_CLASS(SVGSwitchElement)
-DOMCI_CLASS(SVGSymbolElement)
-DOMCI_CLASS(SVGTextElement)
-DOMCI_CLASS(SVGTextPathElement)
 DOMCI_CLASS(SVGTitleElement)
-DOMCI_CLASS(SVGTSpanElement)
 DOMCI_CLASS(SVGUnknownElement)
-DOMCI_CLASS(SVGUseElement)
-DOMCI_CLASS(SVGViewElement)
 
 // other SVG classes
 DOMCI_CLASS(SVGAnimatedEnumeration)
@@ -314,7 +305,6 @@ DOMCI_CLASS(MozWakeLock)
 
 DOMCI_CLASS(MozSmsManager)
 DOMCI_CLASS(MozSmsMessage)
-DOMCI_CLASS(MozSmsEvent)
 DOMCI_CLASS(MozSmsRequest)
 DOMCI_CLASS(MozSmsFilter)
 DOMCI_CLASS(MozSmsCursor)
@@ -324,12 +314,7 @@ DOMCI_CLASS(MozConnection)
 #ifdef MOZ_B2G_RIL
 DOMCI_CLASS(MozMobileConnection)
 DOMCI_CLASS(MozCellBroadcast)
-DOMCI_CLASS(CFStateChangeEvent)
 #endif
-
-DOMCI_CLASS(USSDReceivedEvent)
-
-DOMCI_CLASS(DataErrorEvent)
 
 // @font-face in CSS
 DOMCI_CLASS(CSSFontFaceRule)

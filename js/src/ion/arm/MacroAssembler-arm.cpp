@@ -68,6 +68,30 @@ MacroAssemblerARM::branchTruncateDouble(const FloatRegister &src, const Register
     ma_b(fail, Assembler::Equal);
 }
 
+// Checks whether a double is representable as a 32-bit integer. If so, the
+// integer is written to the output register. Otherwise, a bailout is taken to
+// the given snapshot. This function overwrites the scratch float register.
+void
+MacroAssemblerARM::convertDoubleToInt32(const FloatRegister &src, const Register &dest, Label *fail, bool negativeZeroCheck)
+{
+    // convert the floating point value to an integer, if it did not fit,
+    //     then when we convert it *back* to  a float, it will have a
+    //     different value, which we can test.
+    ma_vcvt_F64_I32(src, ScratchFloatReg);
+    // move the value into the dest register.
+    ma_vxfer(ScratchFloatReg, dest);
+    ma_vcvt_I32_F64(ScratchFloatReg, ScratchFloatReg);
+    ma_vcmp(src, ScratchFloatReg);
+    as_vmrs(pc);
+    ma_b(fail, Assembler::VFP_NotEqualOrUnordered);
+    // If they're equal, test for 0.  It would be nicer to test for -0.0 explicitly, but that seems hard.
+    if (negativeZeroCheck) {
+        ma_cmp(dest, Imm32(0));
+        ma_b(fail, Assembler::Equal);
+        // guard for != 0.
+    }
+}
+
 void
 MacroAssemblerARM::negateDouble(FloatRegister reg)
 {
@@ -1463,6 +1487,12 @@ MacroAssemblerARMCompat::add32(Imm32 imm, Register dest)
 }
 
 void
+MacroAssemblerARMCompat::xor32(Imm32 imm, Register dest)
+{
+    ma_eor(imm, dest, SetCond);
+}
+
+void
 MacroAssemblerARMCompat::add32(Imm32 imm, const Address &dest)
 {
     load32(dest, ScratchRegister);
@@ -2227,6 +2257,19 @@ MacroAssemblerARMCompat::branchTestValue(Condition cond, const ValueOperand &val
         ma_cmp(value.payloadReg(), Imm32(jv.s.payload.i32));
     ma_cmp(value.typeReg(), Imm32(jv.s.tag), Equal);
     ma_b(label, cond);
+}
+
+void
+MacroAssemblerARMCompat::branchTestValue(Condition cond, const Address &valaddr,
+                                         const ValueOperand &value, Label *label)
+{
+    JS_ASSERT(cond == Equal || cond == NotEqual);
+
+    ma_ldr(tagOf(valaddr), ScratchRegister);
+    branchPtr(cond, ScratchRegister, value.typeReg(), label);
+
+    ma_ldr(payloadOf(valaddr), ScratchRegister);
+    branchPtr(cond, ScratchRegister, value.payloadReg(), label);
 }
 
 // unboxing code
