@@ -629,6 +629,10 @@ public class GeckoAppShell
         }
     }
 
+    public static Context getContext() {
+        return GeckoApp.mAppContext;
+    }
+  
     private static CountDownLatch sGeckoPendingAcks = null;
 
     // Block the current thread until the Gecko event loop is caught up

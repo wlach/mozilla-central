@@ -221,6 +221,7 @@ AndroidBridge::Init(JNIEnv *jEnv,
     jAddPluginView = jEnv->GetStaticMethodID(jGeckoAppShellClass, "addPluginView", "(Landroid/view/View;DDDD)V");
     jRemovePluginView = jEnv->GetStaticMethodID(jGeckoAppShellClass, "removePluginView", "(Landroid/view/View;)V");
 #endif
+    jGetContext = (jmethodID)jEnv->GetStaticMethodID(jGeckoAppShellClass, "getContext", "()Landroid/content/Context;");
 
     InitAndroidJavaWrappers(jEnv);
 
@@ -2076,6 +2077,28 @@ AndroidBridge::LockWindow(void *window, unsigned char **bits, int *width, int *h
     } else return false;
 
     return true;
+}
+
+jobject
+AndroidBridge::GetGlobalContextRef() {
+    JNIEnv *env = GetJNIForThread();
+    if (!env)
+        return 0;
+
+    AutoLocalJNIFrame jniFrame(env, 0);
+
+    jobject context = env->CallStaticObjectMethod(mGeckoAppShellClass, jGetContext);
+    if (jniFrame.CheckForException()) {
+        return 0;
+    }
+
+    jobject globalRef = env->NewGlobalRef(context);
+    MOZ_ASSERT(globalRef);
+
+    // we've got our global reference; free the local one
+    env->DeleteLocalRef(context);
+
+    return globalRef;
 }
 
 bool
