@@ -45,7 +45,6 @@ AnalyzeLsh(MBasicBlock *block, MLsh *lsh)
             break;
 
         MDefinition *other = add->getOperand(1 - use->index());
-        JS_ASSERT(other->type() == MIRType_Int32);
 
         if (other->isConstant()) {
             displacement += other->toConstant()->value().toInt32();
@@ -58,13 +57,34 @@ AnalyzeLsh(MBasicBlock *block, MLsh *lsh)
         last = add;
     }
 
-    if (!base)
+    if (!base) {
+        uint32_t elemSize = 1 << ScaleToShift(scale);
+        if (displacement % elemSize != 0)
+            return;
+
+        if (last->useCount() != 1)
+            return;
+
+        MUseIterator use = last->usesBegin();
+        if (!use->consumer()->isDefinition() || !use->consumer()->toDefinition()->isBitAnd())
+            return;
+
+        MBitAnd *bitAnd = use->consumer()->toDefinition()->toBitAnd();
+        MDefinition *other = bitAnd->getOperand(1 - use->index());
+        if (!other->isConstant() || !other->toConstant()->value().isInt32())
+            return;
+
+        uint32_t bitsClearedByShift = elemSize - 1;
+        uint32_t bitsClearedByMask = ~uint32_t(other->toConstant()->value().toInt32());
+        if ((bitsClearedByShift & bitsClearedByMask) != bitsClearedByMask)
+            return;
+
+        bitAnd->replaceAllUsesWith(last);
         return;
+    }
 
     MEffectiveAddress *eaddr = MEffectiveAddress::New(base, index, scale, displacement);
-
-    for (MUseIterator i = last->usesBegin(); i != last->usesEnd();)
-        i = i->consumer()->replaceOperand(i, eaddr);
+    last->replaceAllUsesWith(eaddr);
     block->insertAfter(last, eaddr);
 }
 
@@ -99,15 +119,20 @@ AnalyzeAsmMemoryOp(T *ins)
     }
 }
 
-// This analysis recognizes patterns of the form
-//   truncate(x + (y << {0,1,2,3}) + imm32)
-// and
+// This analysis converts patterns of the form:
 //   truncate(x + (y << {0,1,2,3}))
+//   truncate(x + (y << {0,1,2,3}) + imm32)
+// into a single lea instruction, and patterns of the form:
+//   asmload(x + imm32)
+//   asmload(x << {0,1,2,3})
+//   asmload((x << {0,1,2,3}) + imm32)
+//   asmload((x << {0,1,2,3}) & mask)            (where mask is redundant with shift)
+//   asmload(((x << {0,1,2,3}) + imm32) & mask)  (where mask is redundant with shift + imm32)
+// into a single asmload instruction (and for asmstore too).
 //
-// TODO: optimize forms
-//   truncate((y << {0,1,2,3}) + imm32)
-// and
+// TODO: optimize the forms
 //   truncate(x + y + imm32)
+//   truncate((y << {0,1,2,3}) + imm32)
 bool
 EffectiveAddressAnalysis::analyze()
 {

@@ -90,6 +90,28 @@ assertEq(f(0x7f),0x7f);
 assertEq(f(0xff),0xff);
 assertEq(f(0x100),0);
 
+var i32 = new Int32Array(2);
+i32[0] = 13;
+i32[1] = 0xfffeeee;
+var f = asmLink(asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) {i=i|0; return i32[((i<<2)+1)>>2]|0 }; return f'), this, null, i32.buffer);
+assertEq(f(0), 13);
+assertEq(f(1), 0xfffeeee);
+var f = asmLink(asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) {i=i|0; return i32[((i<<2)+2)>>2]|0 }; return f'), this, null, i32.buffer);
+assertEq(f(0), 13);
+assertEq(f(1), 0xfffeeee);
+var f = asmLink(asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) {i=i|0; return i32[(i<<1)>>2]|0 }; return f'), this, null, i32.buffer);
+assertEq(f(0), 13);
+assertEq(f(1), 13);
+assertEq(f(2), 0xfffeeee);
+assertEq(f(3), 0xfffeeee);
+
+var f = asmLink(asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) {i=i|0; return i32[(i<<2)>>2]|0 }; return f'), this, null, i32.buffer);
+assertEq(f(0), 13);
+assertEq(f(1), 0xfffeeee);
+
+var f = asmLink(asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) {i=i|0; return i32[((i<<2)+4)>>2]|0 }; return f'), this, null, i32.buffer);
+assertEq(f(0), 0xfffeeee);
+
 asmLink(asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f() { u8[7&0xffff] = 41 } return f'), this, null, BUF_64KB)();
 assertEq(new Uint8Array(BUF_64KB)[7], 41);
 asmLink(asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f() { i8[7&0xffff] = -41 } return f'), this, null, BUF_64KB)();
