@@ -32,6 +32,7 @@ CPPSRCS	= \
 	AndroidLayerViewWrapper.cpp \
 	AndroidGraphicBuffer.cpp \
 	AndroidJNI.cpp \
+	AndroidJNIWrapper.cpp \
 	nsWindow.cpp \
 	nsLookAndFeel.cpp \
 	nsScreenManagerAndroid.cpp \
@@ -58,7 +59,7 @@ XPIDLSRCS	= \
 
 SHARED_LIBRARY_LIBS = ../xpwidgets/libxpwidgets_s.a
 
-EXPORTS = AndroidBridge.h AndroidJavaWrappers.h AndroidLayerViewWrapper.h
+EXPORTS = AndroidBridge.h AndroidJavaWrappers.h AndroidLayerViewWrapper.h AndroidJNIWrapper.h
 
 include $(topsrcdir)/config/rules.mk
 
