@@ -29,6 +29,9 @@ GetUserMediaLog()
 
 #include "MediaEngineWebRTC.h"
 #include "ImageContainer.h"
+#ifdef ANDROID
+#include "AndroidBridge.h"
+#endif
 
 namespace mozilla {
 
@@ -39,6 +42,22 @@ MediaEngineWebRTC::EnumerateVideoDevices(nsTArray<nsRefPtr<MediaEngineVideoSourc
   webrtc::ViECapture* ptrViECapture;
   // We spawn threads to handle gUM runnables, so we must protect the member vars
   MutexAutoLock lock(mMutex);
+
+#ifdef ANDROID
+  // XXX right now, we leak this.  We need to figure out where the matching
+  // DeleteGlobalRef this wants to live.  Maybe the SetAndroidObjects destructor?
+  void *context = mozilla::AndroidBridge::Bridge()->GetGlobalContextRef();
+
+  // get the JVM
+  JavaVM *jvm = mozilla::AndroidBridge::Bridge()->GetVM();
+
+  // XXX since we seem to not need env, maybe AttachCurrentThread will let us pass in null?
+  JNIEnv *env;
+  jint res = jvm->AttachCurrentThread(&env, NULL);
+
+  webrtc::VideoEngine::SetAndroidObjects(jvm, context);
+#endif
+
 
   if (!mVideoEngine) {
     if (!(mVideoEngine = webrtc::VideoEngine::Create())) {
