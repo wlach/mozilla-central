@@ -12,6 +12,7 @@
 #include "mozilla/Assertions.h"
 #include "nsThreadUtils.h"
 #include "AndroidBridge.h"
+#include "runnable_utils.h"
 
 #ifdef DEBUG
 #define ALOG_BRIDGE(args...) ALOG(args)
@@ -29,6 +30,42 @@ extern "C" {
     JNIEnv *env = mozilla::AndroidBridge::GetJNIEnv();
     if (!env) return NULL;
     return env->FindClass(className);
+  }
+
+  jclass
+  __jsjni_GetGlobalClassRef(const char *className) {
+
+    jclass foundClass = jsjni_FindClass(className);
+    // XXX not finding a class should not cause an assertion; we should behave similarly to
+    // jsjni_FindClass does instead, and we should document the behavior in the .h
+    MOZ_ASSERT(foundClass);
+
+    // root class globally
+    JNIEnv *env = mozilla::AndroidBridge::GetJNIEnv();
+    jclass globalRef = static_cast<jclass>(env->NewGlobalRef(foundClass));
+    // XXX this probably wants better error-handling too
+    MOZ_ASSERT(globalRef);
+
+    // return the newly create global reference
+    return globalRef;
+  }
+
+  __attribute__ ((visibility("default")))
+  jclass
+  jsjni_GetGlobalClassRef(const char *className) {
+    nsCOMPtr<nsIThread> mainThread;
+    nsresult rv = NS_GetMainThread(getter_AddRefs(mainThread));
+    MOZ_ASSERT(NS_SUCCEEDED(rv));
+
+    jclass foundClass;
+    mozilla::RUN_ON_THREAD(mainThread,
+                           mozilla::WrapRunnableNMRet(__jsjni_GetGlobalClassRef,
+                                                      className,
+                                                      &foundClass),
+                           NS_DISPATCH_SYNC);
+    MOZ_ASSERT(foundClass);
+
+    return foundClass;
   }
 
   __attribute__ ((visibility("default")))
