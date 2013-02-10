@@ -1200,10 +1200,10 @@ jars/sync-thirdparty.jar: $(addprefix $(srcdir)/,$(SYNC_THIRDPARTY_JAVA_FILES)) 
 	$(JAR) cMf jars/sync-thirdparty.jar -C classes/sync-thirdparty .
 
 ifdef MOZ_WEBRTC
-jars/webrtc.jar: $(addprefix $(srcdir)/, $(WEBRTC_JAVA_FILES)) jars
+jars/webrtc.jar: $(addprefix $(srcdir)/, $(WEBRTC_JAVA_FILES)) jars jars/gecko-browser.jar jars/gecko-util.jar
 	@echo "JAR webrtc.jar"
 	$(NSINSTALL) -D classes/webrtc
-	$(JAVAC) $(JAVAC_FLAGS) -d classes/webrtc $(addprefix $(srcdir)/,$(WEBRTC_JAVA_FILES))
+	$(JAVAC) $(JAVAC_FLAGS) -d classes/webrtc -classpath classes/gecko-browser:classes/gecko-util $(addprefix $(srcdir)/,$(WEBRTC_JAVA_FILES))
 	$(JAR) cMf jars/webrtc.jar -C classes/webrtc .
 endif
 
