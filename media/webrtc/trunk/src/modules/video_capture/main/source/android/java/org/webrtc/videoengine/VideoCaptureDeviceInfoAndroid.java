@@ -99,9 +99,10 @@ public class VideoCaptureDeviceInfoAndroid {
                     newDevice.index = i;
                     newDevice.orientation=info.orientation;
                     if(info.facing == Camera.CameraInfo.CAMERA_FACING_BACK) {
-                        newDevice.deviceUniqueName =
-                                "Camera " + i +", Facing back, Orientation "+ info.orientation;
-                        Log.d(TAG, "Camera " + i +", Facing back, Orientation "+ info.orientation);
+                        continue; // XXX ignore back facing cameras for now
+			//newDevice.deviceUniqueName =
+			//                                "Camera " + i +", Facing back, Orientation "+ info.orientation;
+			//                        Log.d(TAG, "Camera " + i +", Facing back, Orientation "+ info.orientation);
 
                     }
                     else {
