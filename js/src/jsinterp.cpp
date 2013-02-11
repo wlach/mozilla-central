@@ -1445,15 +1445,14 @@ BEGIN_CASE(JSOP_LOOPENTRY)
 END_CASE(JSOP_LOOPENTRY)
 
 BEGIN_CASE(JSOP_LINKASMJS)
-#ifdef JS_ION
 {
     RootedValue &rval = rootValue0;
 
     /*
-     * This function specified "use asm" in its directives and the entire body
-     * type-checked according to the asm.js specification. However, there are
-     * still a handful of dynamic checks required of the input parameters to
-     * this function which much be checked at runtime by LinkAsmJS.
+     * The callee specified "use asm" and the entire body type-checked
+     * according to the asm.js type system. However, there are still a set of
+     * dynamic checks required to validate the input parameters which are
+     * performed by LinkAsmJS.
      */
     rval = NullValue();
     if (!LinkAsmJS(cx, regs.fp(), &rval))
@@ -1461,8 +1460,8 @@ BEGIN_CASE(JSOP_LINKASMJS)
 
     /*
      * If the linking step succeeded, then 'rval' contains the result of
-     * executing the entire "use asm" function we can simply return this value.
-     * (The return value is a tuple of exported super-optimized functions.)
+     * executing the "use asm" function (i.e., the exported functions) so we
+     * can just return.
      */
     if (rval.isObject()) {
         regs.fp()->setReturnValue(rval);
@@ -1478,7 +1477,6 @@ BEGIN_CASE(JSOP_LINKASMJS)
      * otherwise a JS semantic error so we keep executing as normal.
      */
 }
-#endif  /* JS_ION */
 END_CASE(JSOP_LINKASMJS)
 
 BEGIN_CASE(JSOP_NOTEARG)

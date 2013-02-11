@@ -22,9 +22,9 @@ namespace frontend { struct ParseNode; struct TokenStream; }
 //  - record the correct cx to pass to VM calls from asm.js;
 //  - record enough information to pop all the frames of an activation if an
 //    exception is thrown;
-//  - (TODO) record the information necessary for asm.js signal handlers to
-//    safely recover from (expected) out-of-bounds access, the operation
-//    callback, stack overflow, division by zero, etc.
+//  - record the information necessary for asm.js signal handlers to safely
+//    recover from (expected) out-of-bounds access, the operation callback,
+//    stack overflow, division by zero, etc.
 class AsmJSActivation
 {
     AsmJSActivation *prev_;

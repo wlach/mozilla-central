@@ -423,14 +423,6 @@ class CodeLocationJump
 
   public:
     CodeLocationJump() {}
-    // TODO: all wrong; don't even use CodeLocationJump to link asm.js calls
-    CodeLocationJump(uint8_t *code, size_t offset) {
-        raw_ = code + offset;
-#ifdef JS_SMALL_BRANCH
-        jumpTableEntry_ = NULL;
-#endif
-        absolute_ = true;
-    }
     CodeLocationJump(IonCode *code, CodeOffsetJump base) {
         *this = base;
         repoint(code);

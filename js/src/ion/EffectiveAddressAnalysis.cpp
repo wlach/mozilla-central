@@ -130,7 +130,7 @@ AnalyzeAsmMemoryOp(T *ins)
 //   asmload(((x << {0,1,2,3}) + imm32) & mask)  (where mask is redundant with shift + imm32)
 // into a single asmload instruction (and for asmstore too).
 //
-// TODO: optimize the forms
+// Additionally, we should consider the general forms:
 //   truncate(x + y + imm32)
 //   truncate((y << {0,1,2,3}) + imm32)
 bool
