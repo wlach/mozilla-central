@@ -4834,7 +4834,11 @@ CheckFunctionBody(AsmModuleCompiler &m, AsmModuleCompiler::Func &func)
     if (!codegen)
         return false;
 
-    return codegen->generateAsm();
+    // Unlike regular IonMonkey which links and generates a new IonCode for
+    // every function, we accumulate all the functions in the module in a
+    // single MacroAssembler and link at end. Linking asm.js doesn't require a
+    // CodeGenerator so we can destory it now.
+    return true;
 }
 
 // TODO: consider 16-byte alignment like GCC; note: execAlloc only

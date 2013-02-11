@@ -327,7 +327,7 @@ class IonBuilder;
 class MIRGenerator;
 class CodeGenerator;
 
-CodeGenerator *CompileBackEnd(MIRGenerator *mir, MacroAssembler *masm = NULL);
+CodeGenerator *CompileBackEnd(MIRGenerator *mir, MacroAssembler *maybeMasm = NULL);
 void AttachFinishedCompilations(JSContext *cx);
 void FinishOffThreadBuilder(IonBuilder *builder);
 

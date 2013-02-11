@@ -976,7 +976,7 @@ OptimizeMIR(MIRGenerator *mir)
 }
 
 CodeGenerator *
-GenerateLIR(MIRGenerator *mir, MacroAssembler *masm = NULL)
+GenerateLIR(MIRGenerator *mir, MacroAssembler *maybeMasm = NULL)
 {
     MIRGraph &graph = mir->graph();
 
@@ -1050,26 +1050,33 @@ GenerateLIR(MIRGenerator *mir, MacroAssembler *masm = NULL)
     if (mir->shouldCancel("Allocate Registers"))
         return NULL;
 
-    CodeGenerator *codegen = js_new<CodeGenerator>(mir, lir, masm);
+    CodeGenerator *codegen = js_new<CodeGenerator>(mir, lir, maybeMasm);
     if (!codegen) {
         js_delete(codegen);
         return NULL;
     }
 
-    if (!masm && !codegen->generate()) {
-        js_delete(codegen);
-        return NULL;
+    if (mir->compilingAsmJS()) {
+        if (!codegen->generateAsm()) {
+            js_delete(codegen);
+            return NULL;
+        }
+    } else {
+        if (!codegen->generate()) {
+            js_delete(codegen);
+            return NULL;
+        }
     }
 
     return codegen;
 }
 
 CodeGenerator *
-CompileBackEnd(MIRGenerator *mir, MacroAssembler *masm)
+CompileBackEnd(MIRGenerator *mir, MacroAssembler *maybeMasm)
 {
     if (!OptimizeMIR(mir))
         return NULL;
-    return GenerateLIR(mir, masm);
+    return GenerateLIR(mir, maybeMasm);
 }
 
 class SequentialCompileContext {
