@@ -5683,6 +5683,7 @@ CodeGenerator::visitAsmCall(LAsmCall *ins)
 
     if (mir->spIncrement())
         masm.freeStack(mir->spIncrement());    
+
     MAsmCall::Callee callee = mir->callee();
     switch (callee.which()) {
       case MAsmCall::Callee::Internal:
