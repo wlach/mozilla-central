@@ -377,8 +377,7 @@ FunctionBox::FunctionBox(JSContext *cx, ObjectBox* traceListHead, JSFunction *fu
     inWith(false),                  // initialized below
     inGenexpLambda(false),
     useAsm(false),
-    insideUseAsm(outerpc && outerpc->sc->isFunctionBox() &&
-                 outerpc->sc->asFunctionBox()->useAsmOrInsideUseAsm()),
+    insideUseAsm(outerpc && outerpc->useAsmOrInsideUseAsm()),
     funCxFlags()
 {
     if (!outerpc) {

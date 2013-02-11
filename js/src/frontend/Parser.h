@@ -214,8 +214,9 @@ struct ParseContext                 /* tree context for semantic checks */
     //
     bool atBodyLevel();
 
-    // TODO
-    inline bool useAsmOrInsideUseAsm() const;
+    inline bool useAsmOrInsideUseAsm() const {
+        return sc->isFunctionBox() && sc->asFunctionBox()->useAsmOrInsideUseAsm();
+    }
 };
 
 bool

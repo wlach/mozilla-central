@@ -27,12 +27,6 @@ ParseContext::atBodyLevel()
     return !topStmt;
 }
 
-inline bool
-ParseContext::useAsmOrInsideUseAsm() const
-{
-    return sc->isFunctionBox() && sc->asFunctionBox()->useAsmOrInsideUseAsm();
-}
-
 inline
 ParseContext::ParseContext(Parser *prs, SharedContext *sc, unsigned staticLevel, uint32_t bodyid)
   : sc(sc),
