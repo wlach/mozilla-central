@@ -38,7 +38,6 @@
 #include "vm/Stack.h"
 #include "vm/ThreadPool.h"
 
-#include "ion/AsmJS.h"
 #include "ion/PcScriptCache.h"
 
 #ifdef _MSC_VER
@@ -134,6 +133,37 @@ class IonActivation;
 class WeakMapBase;
 class InterpreterFrames;
 class WorkerThreadState;
+
+/*
+ * The JSRuntime maintains a stack of AsmJSModule activations. An "activation"
+ * of module A is an initial call from outside A into a function inside A,
+ * followed by a sequence of calls inside A, and terminated by a call that
+ * leaves A. The AsmJSActivation stack serves three purposes:
+ *  - record the correct cx to pass to VM calls from asm.js;
+ *  - record enough information to pop all the frames of an activation if an
+ *    exception is thrown;
+ *  - record the information necessary for asm.js signal handlers to safely
+ *    recover from (expected) out-of-bounds access, the operation callback,
+ *    stack overflow, division by zero, etc.
+ */
+class AsmJSActivation
+{
+    AsmJSActivation *prev_;
+    JSContext *cx_;
+    void *errorRejoinSP_;
+    SPSProfiler *profiler_;
+    RootedFunction fun_;
+
+  public:
+    AsmJSActivation(JSContext *cx, UnrootedFunction fun);
+    ~AsmJSActivation();
+
+    // Read by JIT code:
+    static unsigned offsetOfContext() { return offsetof(AsmJSActivation, cx_); }
+
+    // Initialized by JIT code:
+    static unsigned offsetOfErrorRejoinSP() { return offsetof(AsmJSActivation, errorRejoinSP_); }
+};
 
 /*
  * GetSrcNote cache to avoid O(n^2) growth in finding a source note for a

@@ -313,6 +313,28 @@ IsTypedArrayConstructor(const Value &v, uint32_t type);
 bool
 IsTypedArrayBuffer(const Value &v);
 
+static inline unsigned
+TypedArrayShift(ArrayBufferView::ViewType viewType)
+{
+    switch (viewType) {
+      case ArrayBufferView::TYPE_INT8:
+      case ArrayBufferView::TYPE_UINT8:
+        return 0;
+      case ArrayBufferView::TYPE_INT16:
+      case ArrayBufferView::TYPE_UINT16:
+        return 1;
+      case ArrayBufferView::TYPE_INT32:
+      case ArrayBufferView::TYPE_UINT32:
+      case ArrayBufferView::TYPE_FLOAT32:
+        return 2;
+      case ArrayBufferView::TYPE_FLOAT64:
+        return 3;
+      default:;
+    }
+    JS_NOT_REACHED("Unexpected array type");
+    return 0;
+}
+
 class DataViewObject : public JSObject, public BufferView
 {
 public:

@@ -10,15 +10,14 @@
 
 namespace js {
 
-class SPSProfiler;
-namespace frontend { struct ParseNode; struct TokenStream; }
+namespace frontend { struct TokenStream; struct ParseNode; }
 
 // Called after parsing a function 'fn' which contains the "use asm" directive.
 // This function performs type-checking and code-generation. If type-checking
 // succeeds, the generated module is assigned to script->asmJS. Otherwise, a
 // warning will be emitted and script->asmJS is left null. The function returns
 // 'false' only if a real JS semantic error (probably OOM) is pending.
-bool
+extern bool
 CompileAsmJS(JSContext *cx, frontend::TokenStream &ts, frontend::ParseNode *fn, HandleScript s);
 
 // Called by the JSOP_LINKASMJS opcode (which is emitted as the first opcode of
@@ -30,39 +29,9 @@ CompileAsmJS(JSContext *cx, frontend::TokenStream &ts, frontend::ParseNode *fn, 
 // normally in the interpreter. The function returns 'false' only if a real JS
 // semantic error (OOM or exception thrown when executing GetProperty on the
 // arguments) is pending.
-bool
+// (Implemented in AsmJSLink.cpp.)
+extern bool
 LinkAsmJS(JSContext *cx, StackFrame *fp, MutableHandleValue rval);
-
-// The JSRuntime maintains a stack of asm.js module activations. A "module"
-// is the collection of functions from one (function() { "use asm"; ... }); an
-// "activation" of module A is an initial call from outside A into a function
-// in A, followed by a sequence of calls inside A, and terminated by a call
-// that leaves A. Modules can call between each other; each cross-module call
-// pushes a new activation. Activations serve three primary purposes:
-//  - record the correct cx to pass to VM calls from asm.js;
-//  - record enough information to pop all the frames of an activation if an
-//    exception is thrown;
-//  - record the information necessary for asm.js signal handlers to safely
-//    recover from (expected) out-of-bounds access, the operation callback,
-//    stack overflow, division by zero, etc.
-class AsmJSActivation
-{
-    AsmJSActivation *prev_;
-    JSContext *cx_;
-    void *errorRejoinSP_;
-    SPSProfiler *profiler_;
-    RootedFunction fun_;
-
-  public:
-    AsmJSActivation(JSContext *cx, UnrootedFunction fun);
-    ~AsmJSActivation();
-
-    // Read by JIT code:
-    static unsigned offsetOfContext() { return offsetof(AsmJSActivation, cx_); }
-
-    // Initialized by JIT code:
-    static unsigned offsetOfErrorRejoinSP() { return offsetof(AsmJSActivation, errorRejoinSP_); }
-};
 
 } // namespace js
 
