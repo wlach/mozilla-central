@@ -68,15 +68,10 @@ class AsmJSModule
         HeapPtrPropertyName name_;
 
         friend class AsmJSModule;
-
         Global(Which which) : which_(which) {}
+        void trace(JSTracer *trc);
 
       public:
-        void trace(JSTracer *trc) {
-            if (name_)
-                MarkString(trc, &name_, "asm.js global name");
-        }
-
         Which which() const {
             return which_;
         }
@@ -203,6 +198,8 @@ class AsmJSModule
             u.codeOffset_ = 0;
         }
 
+        void trace(JSTracer *trc);
+
       public:
         ExportedFunction(MoveRef<ExportedFunction> rhs)
           : fun_(rhs->fun_),
@@ -212,12 +209,6 @@ class AsmJSModule
             hasCodePtr_(rhs->hasCodePtr_),
             u(rhs->u)
         {}
-
-        void trace(JSTracer *trc) {
-            MarkObject(trc, &fun_, "asm export name");
-            if (maybeFieldName_)
-                MarkString(trc, &maybeFieldName_, "asm export field");
-        }
 
         void initCodeOffset(unsigned off) {
             JS_ASSERT(!hasCodePtr_); 
@@ -282,12 +273,7 @@ class AsmJSModule
         bytesNeeded_(0)
     {}
 
-    void trace(JSTracer *trc) {
-        for (unsigned i = 0; i < globals_.length(); i++)
-            globals_[i].trace(trc);
-        for (unsigned i = 0; i < exports_.length(); i++)
-            exports_[i].trace(trc);
-    }
+    void trace(JSTracer *trc);
 
     bool addGlobalVarInitConstant(const Value &v, uint32_t *globalIndex) {
         Global g(Global::Variable);
