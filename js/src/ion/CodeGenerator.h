@@ -45,11 +45,9 @@ class CodeGenerator : public CodeGeneratorSpecific
     CodeGenerator(MIRGenerator *gen, LIRGraph *graph, MacroAssembler *masm = NULL);
 
   public:
-
     bool generate();
-    bool link();
-
     bool generateAsm();
+    bool link();
 
     bool visitLabel(LLabel *lir);
     bool visitNop(LNop *lir);
