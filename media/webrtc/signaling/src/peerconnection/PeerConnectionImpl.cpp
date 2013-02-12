@@ -248,6 +248,7 @@ PeerConnectionImpl::PeerConnectionImpl()
 
 PeerConnectionImpl::~PeerConnectionImpl()
 {
+  // This aborts if not on main thread (in Debug builds)
   PC_AUTO_ENTER_API_CALL_NO_CHECK();
   PeerConnectionCtx::GetInstance()->mPeerConnections.erase(mHandle);
   CloseInt(false);
