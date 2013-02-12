@@ -4872,6 +4872,20 @@ static RegisterSet VolatileRegs = RegisterSet(GeneralRegisterSet(Registers::Vola
 static RegisterSet NonVolatileRegs = RegisterSet(GeneralRegisterSet(Registers::NonVolatileMask),
                                                  FloatRegisterSet(FloatRegisters::NonVolatileMask));
 
+static void
+LoadAsmJSActivationIntoRegister(MacroAssembler &masm, Register reg)
+{
+    masm.movePtr(ImmWord(GetIonContext()->compartment->rt), reg);
+    masm.loadPtr(Address(reg, offsetof(JSRuntime, asmJSActivation)), reg);
+}
+
+static void
+LoadJSContextIntoRegister(MacroAssembler &masm, Register reg)
+{
+    LoadAsmJSActivationIntoRegister(masm, reg);
+    masm.loadPtr(Address(reg, AsmJSActivation::offsetOfContext()), reg);
+}
+
 #if defined(JS_CPU_X64)
 static bool
 GenerateEntry(AsmModuleCompiler &m, const AsmModule::ExportedFunction &exportedFunc)
@@ -4896,8 +4910,7 @@ GenerateEntry(AsmModuleCompiler &m, const AsmModule::ExportedFunction &exportedF
     // used by error exit paths to set the stack pointer back to what it was
     // right after the (C++) caller's non-volatile registers were saved so that
     // they can be restored.
-    masm.movq(ImmWord(GetIonContext()->compartment->rt), ScratchReg);
-    masm.movq(Operand(ScratchReg, offsetof(JSRuntime, asmJSActivation)), ScratchReg);
+    LoadAsmJSActivationIntoRegister(masm, ScratchReg);
     masm.movq(StackPointer, Operand(ScratchReg, AsmJSActivation::offsetOfErrorRejoinSP()));
 
     // Move the parameters into non-argument registers since we are about to
@@ -5080,9 +5093,7 @@ GenerateExit(AsmModuleCompiler &m, MacroAssembler &masm, const AsmExitDescriptor
     }
 
     // argument 0: cx
-    masm.movePtr(ImmWord(GetIonContext()->compartment->rt), IntArgReg0);
-    masm.loadPtr(Address(IntArgReg0, offsetof(JSRuntime, asmJSActivation)), IntArgReg0);
-    masm.loadPtr(Address(IntArgReg0, AsmJSActivation::offsetOfContext()), IntArgReg0);
+    LoadJSContextIntoRegister(masm, IntArgReg0);
 
     // argument 1: exitDatum
     masm.lea(Operand(GlobalReg, m.module().exitIndexToGlobalDataOffset(exitIndex)), IntArgReg1);
@@ -5118,14 +5129,6 @@ GenerateExit(AsmModuleCompiler &m, MacroAssembler &masm, const AsmExitDescriptor
     masm.freeStack(reserveSize);
     masm.ret();
     return true;
-}
-
-static void
-LoadJSContextIntoRegister(MacroAssembler &masm, Register reg)
-{
-    masm.movePtr(ImmWord(GetIonContext()->compartment->rt), reg);
-    masm.loadPtr(Address(reg, offsetof(JSRuntime, asmJSActivation)), reg);
-    masm.loadPtr(Address(reg, AsmJSActivation::offsetOfContext()), reg);
 }
 
 static bool
@@ -5171,8 +5174,7 @@ GenerateExits(AsmModuleCompiler &m)
         masm.setFramePushed(NonVolatileRegs.gprs().size() * STACK_SLOT_SIZE +
                             NonVolatileRegs.fpus().size() * sizeof(double));
         masm.bind(&popAllFramesLabel);
-        masm.movq(ImmWord(GetIonContext()->compartment->rt), ScratchReg);
-        masm.movq(Operand(ScratchReg, offsetof(JSRuntime, asmJSActivation)), ScratchReg);
+        LoadAsmJSActivationIntoRegister(masm, ScratchReg);
         masm.movq(Operand(ScratchReg, AsmJSActivation::offsetOfErrorRejoinSP()), StackPointer);
         masm.PopRegsInMask(NonVolatileRegs);
         masm.ret();
