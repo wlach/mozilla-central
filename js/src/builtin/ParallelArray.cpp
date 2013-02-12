@@ -974,7 +974,6 @@ Class ParallelArrayObject::class_ = {
         deleteElement,
         deleteSpecial,
         NULL,                // enumerate
-        NULL,                // typeof
         NULL,                // thisObject
     }
 };
@@ -1260,7 +1259,7 @@ ParallelArrayObject::construct(JSContext *cx, unsigned argc, Value *vp)
         return ReportBadLength(cx);
 
     // Extract second argument, the elemental function.
-    RootedObject elementalFun(cx, ValueToCallable(cx, &args[1]));
+    RootedObject elementalFun(cx, ValueToCallable(cx, args[1], args.length() - 2));
     if (!elementalFun)
         return false;
 
@@ -1301,7 +1300,7 @@ ParallelArrayObject::map(JSContext *cx, CallArgs args)
     if (!buffer)
         return false;
 
-    RootedObject elementalFun(cx, ValueToCallable(cx, &args[0]));
+    RootedObject elementalFun(cx, ValueToCallable(cx, args[0], args.length() - 1));
     if (!elementalFun)
         return false;
 
@@ -1339,7 +1338,7 @@ ParallelArrayObject::reduce(JSContext *cx, CallArgs args)
         return false;
     }
 
-    RootedObject elementalFun(cx, ValueToCallable(cx, &args[0]));
+    RootedObject elementalFun(cx, ValueToCallable(cx, args[0], args.length() - 1));
     if (!elementalFun)
         return false;
 
@@ -1377,7 +1376,7 @@ ParallelArrayObject::scan(JSContext *cx, CallArgs args)
     if (!buffer)
         return false;
 
-    RootedObject elementalFun(cx, ValueToCallable(cx, &args[0]));
+    RootedObject elementalFun(cx, ValueToCallable(cx, args[0], args.length() - 1));
     if (!elementalFun)
         return false;
 
@@ -1419,7 +1418,7 @@ ParallelArrayObject::scatter(JSContext *cx, CallArgs args)
         return false;
 
     // The default value is optional and defaults to undefined.
-    Value defaultValue;
+    RootedValue defaultValue(cx);
     if (args.length() >= 2)
         defaultValue = args[1];
     else
@@ -1428,7 +1427,7 @@ ParallelArrayObject::scatter(JSContext *cx, CallArgs args)
     // The conflict function is optional.
     RootedObject conflictFun(cx);
     if (args.length() >= 3 && !args[2].isUndefined()) {
-        conflictFun = ValueToCallable(cx, &args[2]);
+        conflictFun = ValueToCallable(cx, args[2], args.length() - 3);
         if (!conflictFun)
             return false;
     }

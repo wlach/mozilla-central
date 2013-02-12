@@ -163,7 +163,8 @@ EvalKernel(JSContext *cx, const CallArgs &args, EvalType evalType, AbstractFrame
     JS_ASSERT_IF(evalType == INDIRECT_EVAL, scopeobj->isGlobal());
     AssertInnerizedScopeChain(cx, *scopeobj);
 
-    if (!scopeobj->global().isRuntimeCodeGenEnabled(cx)) {
+    Rooted<GlobalObject*> scopeObjGlobal(cx, &scopeobj->global());
+    if (!GlobalObject::isRuntimeCodeGenEnabled(cx, scopeObjGlobal)) {
         JS_ReportErrorNumber(cx, js_GetErrorMessage, NULL, JSMSG_CSP_BLOCKED_EVAL);
         return false;
     }
@@ -275,7 +276,7 @@ EvalKernel(JSContext *cx, const CallArgs &args, EvalType evalType, AbstractFrame
                .setPrincipals(principals)
                .setOriginPrincipals(originPrincipals);
         UnrootedScript compiled = frontend::CompileScript(cx, scopeobj, caller, options,
-                                                          chars, length, stableStr, staticLevel);
+                                                          chars.get(), length, stableStr, staticLevel);
         if (!compiled)
             return false;
 

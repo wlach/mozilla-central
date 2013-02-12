@@ -1170,9 +1170,7 @@ JSContext::JSContext(JSRuntime *rt)
     throwing(false),
     exception(UndefinedValue()),
     options_(0),
-    defaultLocale(NULL),
     reportGranularity(JS_DEFAULT_JITREPORT_GRANULARITY),
-    localeCallbacks(NULL),
     resolvingList(NULL),
     generatingError(false),
     enterCompartmentDepth_(0),
@@ -1216,7 +1214,6 @@ JSContext::JSContext(JSRuntime *rt)
 JSContext::~JSContext()
 {
     /* Free the stuff hanging off of cx. */
-    js_free(defaultLocale);
     if (parseMapPool_)
         js_delete(parseMapPool_);
 
@@ -1224,7 +1221,7 @@ JSContext::~JSContext()
 }
 
 bool
-JSContext::setDefaultLocale(const char *locale)
+JSRuntime::setDefaultLocale(const char *locale)
 {
     if (!locale)
         return false;
@@ -1234,14 +1231,14 @@ JSContext::setDefaultLocale(const char *locale)
 }
 
 void
-JSContext::resetDefaultLocale()
+JSRuntime::resetDefaultLocale()
 {
     js_free(defaultLocale);
     defaultLocale = NULL;
 }
 
 const char *
-JSContext::getDefaultLocale()
+JSRuntime::getDefaultLocale()
 {
     if (defaultLocale)
         return defaultLocale;
@@ -1254,7 +1251,7 @@ JSContext::getDefaultLocale()
 #endif
     // convert to a well-formed BCP 47 language tag
     if (!locale || !strcmp(locale, "C"))
-        locale = (char *) "und";
+        locale = const_cast<char*>("und");
     lang = JS_strdup(this, locale);
     if (!lang)
         return NULL;

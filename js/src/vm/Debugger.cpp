@@ -1722,7 +1722,7 @@ Debugger::setHookImpl(JSContext *cx, unsigned argc, Value *vp, Hook which)
     THIS_DEBUGGER(cx, argc, vp, "setHook", args, dbg);
     if (args[0].isObject()) {
         if (!args[0].toObject().isCallable())
-            return ReportIsNotFunction(cx, &args[0]);
+            return ReportIsNotFunction(cx, args[0], args.length() - 1);
     } else if (!args[0].isUndefined()) {
         JS_ReportErrorNumber(cx, js_GetErrorMessage, NULL, JSMSG_NOT_CALLABLE_OR_UNDEFINED);
         return false;
@@ -3708,7 +3708,7 @@ js::EvaluateInEnv(JSContext *cx, Handle<Env*> env, HandleValue thisv, AbstractFr
            .setCompileAndGo(true)
            .setNoScriptRval(false)
            .setFileAndLine(filename, lineno);
-    RootedScript script(cx, frontend::CompileScript(cx, env, frame, options, chars, length,
+    RootedScript script(cx, frontend::CompileScript(cx, env, frame, options, chars.get(), length,
                                                     /* source = */ NULL,
                                                     /* staticLevel = */ frame ? 1 : 0));
     if (!script)

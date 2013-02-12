@@ -1406,6 +1406,7 @@ pref("security.checkloaduri", true);
 pref("security.xpconnect.plugin.unrestricted", true);
 // security-sensitive dialogs should delay button enabling. In milliseconds.
 pref("security.dialog_enable_delay", 2000);
+pref("security.notification_enable_delay", 500);
 
 pref("security.csp.enable", true);
 pref("security.csp.debug", false);
@@ -1784,7 +1785,7 @@ pref("dom.ipc.plugins.processLaunchTimeoutSecs", 45);
 #ifdef XP_WIN
 // How long a plugin is allowed to process a synchronous IPC message 
 // before we display the plugin hang UI
-pref("dom.ipc.plugins.hangUITimeoutSecs", 5);
+pref("dom.ipc.plugins.hangUITimeoutSecs", 11);
 // Minimum time that the plugin hang UI will be displayed
 pref("dom.ipc.plugins.hangUIMinDisplaySecs", 10);
 #endif
@@ -1824,6 +1825,9 @@ pref("svg.paint-order.enabled", false);
 #else
 pref("svg.paint-order.enabled", true);
 #endif
+
+// Is support for the new SVG text implementation enabled?
+pref("svg.text.css-frames.enabled", false);
 
 pref("font.minimum-size.ar", 0);
 pref("font.minimum-size.x-armn", 0);

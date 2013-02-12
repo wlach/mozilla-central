@@ -1503,6 +1503,9 @@ FindStartPC(JSContext *cx, ScriptFrameIter &iter, int spindex, int skipStackHits
     if (!pcstack.init(cx, iter.script(), current))
         return false;
 
+    if (spindex < 0 && spindex + pcstack.depth() < 0)
+        spindex = JSDVG_SEARCH_STACK;
+
     if (spindex == JSDVG_SEARCH_STACK) {
         size_t index = iter.numFrameSlots();
         JS_ASSERT(index >= size_t(pcstack.depth()));
@@ -1531,7 +1534,7 @@ FindStartPC(JSContext *cx, ScriptFrameIter &iter, int spindex, int skipStackHits
 }
 
 static bool
-DecompileExpressionFromStack(JSContext *cx, int spindex, int skipStackHits, Value v, char **res)
+DecompileExpressionFromStack(JSContext *cx, int spindex, int skipStackHits, HandleValue v, char **res)
 {
     AssertCanGC();
     JS_ASSERT(spindex < 0 ||

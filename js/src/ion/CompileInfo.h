@@ -10,6 +10,8 @@
 
 #include "Registers.h"
 
+#include "jsscriptinlines.h"
+
 namespace js {
 namespace ion {
 

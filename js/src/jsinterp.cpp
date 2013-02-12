@@ -240,36 +240,26 @@ NoSuchMethod(JSContext *cx, unsigned argc, Value *vp)
 #endif /* JS_HAS_NO_SUCH_METHOD */
 
 bool
-js::ReportIsNotFunction(JSContext *cx, const Value &v, MaybeConstruct construct)
+js::ReportIsNotFunction(JSContext *cx, const Value &v, int numToSkip, MaybeConstruct construct)
 {
     unsigned error = construct ? JSMSG_NOT_CONSTRUCTOR : JSMSG_NOT_FUNCTION;
+    int spIndex = numToSkip >= 0 ? -(numToSkip + 1) : JSDVG_SEARCH_STACK;
 
     RootedValue val(cx, v);
-    js_ReportValueError3(cx, error, JSDVG_SEARCH_STACK, val, NullPtr(), NULL, NULL);
-    return false;
-}
-
-bool
-js::ReportIsNotFunction(JSContext *cx, const Value *vp, MaybeConstruct construct)
-{
-    ptrdiff_t spIndex = cx->stack.spIndexOf(vp);
-    unsigned error = construct ? JSMSG_NOT_CONSTRUCTOR : JSMSG_NOT_FUNCTION;
-
-    RootedValue val(cx, *vp);
     js_ReportValueError3(cx, error, spIndex, val, NullPtr(), NULL, NULL);
     return false;
 }
 
 JSObject *
-js::ValueToCallable(JSContext *cx, const Value *vp, MaybeConstruct construct)
+js::ValueToCallable(JSContext *cx, const Value &v, int numToSkip, MaybeConstruct construct)
 {
-    if (vp->isObject()) {
-        JSObject *callable = &vp->toObject();
+    if (v.isObject()) {
+        JSObject *callable = &v.toObject();
         if (callable->isCallable())
             return callable;
     }
 
-    ReportIsNotFunction(cx, vp, construct);
+    ReportIsNotFunction(cx, v, numToSkip, construct);
     return NULL;
 }
 
@@ -354,7 +344,7 @@ js::InvokeKernel(JSContext *cx, CallArgs args, MaybeConstruct construct)
     InitialFrameFlags initial = (InitialFrameFlags) construct;
 
     if (args.calleev().isPrimitive())
-        return ReportIsNotFunction(cx, args.calleev().address(), construct);
+        return ReportIsNotFunction(cx, args.calleev().get(), args.length() + 1, construct);
 
     JSObject &callee = args.callee();
     Class *clasp = callee.getClass();
@@ -367,7 +357,7 @@ js::InvokeKernel(JSContext *cx, CallArgs args, MaybeConstruct construct)
 #endif
         JS_ASSERT_IF(construct, !clasp->construct);
         if (!clasp->call)
-            return ReportIsNotFunction(cx, args.calleev().address(), construct);
+            return ReportIsNotFunction(cx, args.calleev().get(), args.length() + 1, construct);
         return CallJSNative(cx, clasp->call, args);
     }
 
@@ -437,7 +427,7 @@ js::InvokeConstructorKernel(JSContext *cx, CallArgs args)
     args.setThis(MagicValue(JS_IS_CONSTRUCTING));
 
     if (!args.calleev().isObject())
-        return ReportIsNotFunction(cx, args.calleev().address(), CONSTRUCT);
+        return ReportIsNotFunction(cx, args.calleev().get(), args.length() + 1, CONSTRUCT);
 
     JSObject &callee = args.callee();
     if (callee.isFunction()) {
@@ -451,7 +441,7 @@ js::InvokeConstructorKernel(JSContext *cx, CallArgs args)
         }
 
         if (!fun->isInterpretedConstructor())
-            return ReportIsNotFunction(cx, args.calleev().address(), CONSTRUCT);
+            return ReportIsNotFunction(cx, args.calleev().get(), args.length() + 1, CONSTRUCT);
 
         if (!InvokeKernel(cx, args, CONSTRUCT))
             return false;
@@ -462,7 +452,7 @@ js::InvokeConstructorKernel(JSContext *cx, CallArgs args)
 
     Class *clasp = callee.getClass();
     if (!clasp->construct)
-        return ReportIsNotFunction(cx, args.calleev().address(), CONSTRUCT);
+        return ReportIsNotFunction(cx, args.calleev().get(), args.length() + 1, CONSTRUCT);
 
     return CallJSNativeConstructor(cx, clasp->construct, args);
 }
@@ -596,17 +586,6 @@ js::LooselyEqual(JSContext *cx, const Value &lval, const Value &rval, bool *resu
         if (lval.isObject()) {
             JSObject *l = &lval.toObject();
             JSObject *r = &rval.toObject();
-
-            if (JSEqualityOp eq = l->getClass()->ext.equality) {
-                JSBool res;
-                RootedObject lobj(cx, l);
-                RootedValue r(cx, rval);
-                if (!eq(cx, lobj, r, &res))
-                    return false;
-                *result = !!res;
-                return true;
-            }
-
             *result = l == r;
             return true;
         }
@@ -731,7 +710,7 @@ js::TypeOfValue(JSContext *cx, const Value &vref)
         return JSTYPE_VOID;
     if (v.isObject()) {
         RootedObject obj(cx, &v.toObject());
-        return JSObject::typeOf(cx, obj);
+        return baseops::TypeOf(cx, obj);
     }
     JS_ASSERT(v.isBoolean());
     return JSTYPE_BOOLEAN;

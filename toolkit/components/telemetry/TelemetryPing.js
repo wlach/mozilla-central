@@ -118,7 +118,7 @@ function getSimpleMeasurements() {
   var appTimestamps = {};
   try {
     let o = {};
-    Cu.import("resource:///modules/TelemetryTimestamps.jsm", o);
+    Cu.import("resource://gre/modules/TelemetryTimestamps.jsm", o);
     appTimestamps = o.TelemetryTimestamps.get();
   } catch (ex) {}
   try {
@@ -368,7 +368,7 @@ TelemetryPing.prototype = {
                   "device", "manufacturer", "hardware",
                   "hasMMX", "hasSSE", "hasSSE2", "hasSSE3",
                   "hasSSSE3", "hasSSE4A", "hasSSE4_1", "hasSSE4_2",
-                  "hasEDSP", "hasARMv6", "hasARMv7", "hasNEON"];
+                  "hasEDSP", "hasARMv6", "hasARMv7", "hasNEON", "isWow64"];
     for each (let field in fields) {
       let value;
       try {

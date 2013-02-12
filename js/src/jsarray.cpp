@@ -580,11 +580,9 @@ Class js::ArrayClass = {
     NULL,           /* hasInstance */
     NULL,           /* trace       */
     {
-        NULL,       /* equality    */
         NULL,       /* outerObject */
         NULL,       /* innerObject */
         NULL,       /* iteratorObject  */
-        NULL,       /* unused      */
         false,      /* isWrappedNative */
     }
 };
@@ -2184,7 +2182,7 @@ array_map(JSContext *cx, unsigned argc, Value *vp)
         js_ReportMissingArg(cx, args.calleev(), 0);
         return false;
     }
-    RootedObject callable(cx, ValueToCallable(cx, &args[0]));
+    RootedObject callable(cx, ValueToCallable(cx, args[0], args.length() - 1));
     if (!callable)
         return false;
 
@@ -2263,7 +2261,7 @@ array_filter(JSContext *cx, unsigned argc, Value *vp)
         js_ReportMissingArg(cx, args.calleev(), 0);
         return false;
     }
-    RootedObject callable(cx, ValueToCallable(cx, &args[0]));
+    RootedObject callable(cx, ValueToCallable(cx, args[0], args.length() - 1));
     if (!callable)
         return false;
 

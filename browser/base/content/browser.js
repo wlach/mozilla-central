@@ -1256,19 +1256,33 @@ var gBrowserInit = {
 
     // Set a sane starting width/height for all resolutions on new profiles.
     if (!document.documentElement.hasAttribute("width")) {
-      let defaultWidth = 994;
+      let defaultWidth;
       let defaultHeight;
+
+      // Very small: maximize the window
+      // Portrait  : use about full width and 3/4 height, to view entire pages
+      //             at once (without being obnoxiously tall)
+      // Widescreen: use about half width, to suggest side-by-side page view
+      // Otherwise : use 3/4 height and width
       if (screen.availHeight <= 600) {
         document.documentElement.setAttribute("sizemode", "maximized");
         defaultWidth = 610;
         defaultHeight = 450;
       }
       else {
-        // Create a narrower window for large or wide-aspect displays, to suggest
-        // side-by-side page view.
-        if (screen.availWidth >= 1600)
+        if (screen.availWidth <= screen.availHeight) {
+          defaultWidth = screen.availWidth * .9;
+          defaultHeight = screen.availHeight * .75;
+        }
+        else if (screen.availWidth >= 2048) {
           defaultWidth = (screen.availWidth / 2) - 20;
-        defaultHeight = screen.availHeight - 10;
+          defaultHeight = screen.availHeight - 10;
+        }
+        else {
+          defaultWidth = screen.availWidth * .75;
+          defaultHeight = screen.availHeight * .75;
+        }
+
 #ifdef MOZ_WIDGET_GTK2
         // On X, we're not currently able to account for the size of the window
         // border.  Use 28px as a guess (titlebar + bottom window border)
@@ -1297,7 +1311,6 @@ var gBrowserInit = {
 
     // Misc. inits.
     CombinedStopReload.init();
-    allTabs.readPref();
     TabsOnTop.init();
     BookmarksMenuButton.init();
     gPrivateBrowsingUI.init();
@@ -1318,7 +1331,7 @@ var gBrowserInit = {
 
   _delayedStartup: function(uriToLoad, mustLoadSidebar) {
     let tmp = {};
-    Cu.import("resource:///modules/TelemetryTimestamps.jsm", tmp);
+    Cu.import("resource://gre/modules/TelemetryTimestamps.jsm", tmp);
     let TelemetryTimestamps = tmp.TelemetryTimestamps;
     TelemetryTimestamps.add("delayedStartupStarted");
 
@@ -1459,7 +1472,6 @@ var gBrowserInit = {
 
     ctrlTab.readPref();
     gPrefService.addObserver(ctrlTab.prefName, ctrlTab, false);
-    gPrefService.addObserver(allTabs.prefName, allTabs, false);
 
     // Initialize the download manager some time after the app starts so that
     // auto-resume downloads begin (such as after crashing or quitting with
@@ -1650,7 +1662,6 @@ var gBrowserInit = {
 
     // First clean up services initialized in gBrowserInit.onLoad (or those whose
     // uninit methods don't depend on the services having been initialized).
-    allTabs.uninit();
 
     CombinedStopReload.uninit();
 
@@ -1690,7 +1701,6 @@ var gBrowserInit = {
         Win7Features.onCloseWindow();
 
       gPrefService.removeObserver(ctrlTab.prefName, ctrlTab);
-      gPrefService.removeObserver(allTabs.prefName, allTabs);
       ctrlTab.uninit();
       TabView.uninit();
       gBrowserThumbnails.uninit();
@@ -3465,12 +3475,12 @@ const BrowserSearch = {
    *        Boolean indicating whether or not the search should load in a new
    *        tab.
    *
-   * @param responseType [optional]
-   *        The MIME type that we'd like to receive in response
-   *        to this submission.  If null or the the response type is not supported
-   *        for the search engine, will fallback to "text/html".
+   * @param purpose [optional]
+   *        A string meant to indicate the context of the search request. This
+   *        allows the search service to provide a different nsISearchSubmission
+   *        depending on e.g. where the search is triggered in the UI.
    */
-  loadSearch: function BrowserSearch_search(searchText, useNewTab, responseType) {
+  loadSearch: function BrowserSearch_search(searchText, useNewTab, purpose) {
     var engine;
 
     // If the search bar is visible, use the current engine, otherwise, fall
@@ -3480,12 +3490,7 @@ const BrowserSearch = {
     else
       engine = Services.search.defaultEngine;
 
-    var submission = engine.getSubmission(searchText, responseType);
-
-    // If a response type was specified and getSubmission returned null,
-    // fallback to the default response type.
-    if (!submission && responseType)
-      submission = engine.getSubmission(searchText);
+    var submission = engine.getSubmission(searchText, null, purpose); // HTML response
 
     // getSubmission can return null if the engine doesn't have a URL
     // with a text/html response type.  This is unlikely (since
@@ -3799,7 +3804,6 @@ function BrowserToolboxCustomizeChange(aType) {
     default:
       gHomeButton.updatePersonalToolbarStyle();
       BookmarksMenuButton.customizeChange();
-      allTabs.readPref();
   }
 }
 

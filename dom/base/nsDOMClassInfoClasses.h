@@ -245,9 +245,6 @@ DOMCI_CLASS(CanvasPattern)
 DOMCI_CLASS(TextMetrics)
 DOMCI_CLASS(MozCanvasPrintState)
 
-// SmartCard Events
-DOMCI_CLASS(SmartCardEvent)
-
 // WindowUtils
 DOMCI_CLASS(WindowUtils)
 
@@ -427,8 +424,4 @@ DOMCI_CLASS(MozTimeManager)
 
 #ifdef MOZ_WEBRTC
 DOMCI_CLASS(DataChannel)
-#endif
-
-#ifdef MOZ_AUDIO_CHANNEL_MANAGER
-DOMCI_CLASS(AudioChannelManager)
 #endif
