@@ -49,7 +49,6 @@ class AsmJSActivation
 {
     AsmJSActivation *prev_;
     JSContext *cx_;
-    void *errorRejoinPC_;
     void *errorRejoinSP_;
     SPSProfiler *profiler_;
     RootedFunction fun_;

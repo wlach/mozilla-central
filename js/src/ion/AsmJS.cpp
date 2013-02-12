@@ -5483,7 +5483,6 @@ DynamicallyLinkModule(JSContext *cx, StackFrame *fp, HandleObject moduleObj, Mut
 AsmJSActivation::AsmJSActivation(JSContext *cx, UnrootedFunction fun)
   : prev_(cx->runtime->asmJSActivation),
     cx_(cx),
-    errorRejoinPC_(NULL),
     errorRejoinSP_(NULL),
     profiler_(NULL),
     fun_(cx, fun)
