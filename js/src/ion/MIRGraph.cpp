@@ -24,7 +24,8 @@ MIRGenerator::MIRGenerator(JSCompartment *compartment,
     graph_(graph),
     error_(false),
     cancelBuild_(0),
-    maxAsmStackArgBytes_(0)
+    maxAsmStackArgBytes_(0),
+    performsAsmCall_(false)
 { }
 
 bool

@@ -2417,7 +2417,7 @@ LIRGenerator::visitAsmPassStackArg(MAsmPassStackArg *ins)
 bool
 LIRGenerator::visitAsmCall(MAsmCall *ins)
 {
-    lirGraph_.setPerformsAsmCall();
+    gen->setPerformsAsmCall();
 
     LAllocation *args = gen->allocate<LAllocation>(ins->numOperands());
     if (!args)

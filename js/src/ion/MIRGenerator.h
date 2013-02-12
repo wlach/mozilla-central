@@ -90,6 +90,14 @@ class MIRGenerator
         JS_ASSERT(compilingAsmJS());
         maxAsmStackArgBytes_ = n;
     }
+    void setPerformsAsmCall() {
+        JS_ASSERT(compilingAsmJS());
+        performsAsmCall_ = true;
+    }
+    bool performsAsmCall() const {
+        JS_ASSERT(compilingAsmJS());
+        return performsAsmCall_;
+    }
 
   public:
     JSCompartment *compartment;
@@ -102,7 +110,9 @@ class MIRGenerator
     MIRGraph *graph_;
     bool error_;
     size_t cancelBuild_;
+
     uint32_t maxAsmStackArgBytes_;
+    bool performsAsmCall_;
 };
 
 } // namespace ion

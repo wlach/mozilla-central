@@ -1259,8 +1259,6 @@ class LIRGraph
     uint32_t localSlotCount_;
     // Number of stack slots needed for argument construction for calls.
     uint32_t argumentSlotCount_;
-    // Whether this (asm.js) function makes any calls
-    bool performsAsmCall_;
 
     // Snapshot taken before any LIR has been lowered.
     LSnapshot *entrySnapshot_;
@@ -1314,12 +1312,6 @@ class LIRGraph
     }
     uint32_t argumentSlotCount() const {
         return argumentSlotCount_;
-    }
-    void setPerformsAsmCall() {
-        performsAsmCall_ = true;
-    }
-    bool performsAsmCall() const {
-        return performsAsmCall_;
     }
     uint32_t totalSlotCount() const {
         return localSlotCount() + (argumentSlotCount() * sizeof(Value) / STACK_SLOT_SIZE);
