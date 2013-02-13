@@ -571,15 +571,6 @@ class Use
         JS_NOT_REACHED("unexpected use type");
         return MIRType_None;
     }
-    static Use FromReturnCoercion(RetType retType) {
-        switch (retType.which()) {
-          case RetType::Void: return NoCoercion;
-          case RetType::Signed: return ToInt32;
-          case RetType::Double: return ToNumber;
-        }
-        JS_NOT_REACHED("unexpected return type");
-        return NoCoercion;
-    }
     bool operator==(Use rhs) const { return which_ == rhs.which_; }
     bool operator!=(Use rhs) const { return which_ != rhs.which_; }
 };
@@ -2621,8 +2612,16 @@ CheckArguments(ModuleCompiler &m, ParseNode *fn, MIRTypeVector *argTypes, ParseN
 }
 
 static bool
-CheckReturnCoercion(ModuleCompiler &m, ParseNode *coercionNode, RetType *returnType)
+CheckReturnType(ModuleCompiler &m, ParseNode *fn, RetType *returnType)
 {
+    ParseNode *stmt = FunctionLastStatementOrNull(fn);
+    if (!stmt || !stmt->isKind(PNK_RETURN) || !UnaryKid(stmt)) {
+        *returnType = RetType::Void;
+        return true;
+    }
+
+    ParseNode *coercionNode = UnaryKid(stmt);
+
     if (IsNumericLiteral(coercionNode)) {
         switch (ExtractNumericLiteral(coercionNode).which()) {
           case NumLit::BigUnsigned:
@@ -2640,23 +2639,8 @@ CheckReturnCoercion(ModuleCompiler &m, ParseNode *coercionNode, RetType *returnT
         AsmJSCoercion coercion;
         if (!CheckTypeAnnotation(m, coercionNode, &coercion))
             return false;
-        *returnType = coercion;
+        *returnType = RetType(coercion);
     }
-
-    return true;
-}
-
-static bool
-CheckReturnType(ModuleCompiler &m, ParseNode *fn, RetType *returnType)
-{
-    ParseNode *stmt = FunctionLastStatementOrNull(fn);
-    if (!stmt || !stmt->isKind(PNK_RETURN) || !UnaryKid(stmt)) {
-        *returnType = RetType::Void;
-        return true;
-    }
-
-    if (!CheckReturnCoercion(m, UnaryKid(stmt), returnType))
-        return false;
 
     JS_ASSERT(returnType->toType().isExtern());
     return true;
@@ -4106,30 +4090,23 @@ static bool
 CheckReturn(FunctionCompiler &f, ParseNode *returnStmt)
 {
     JS_ASSERT(returnStmt->isKind(PNK_RETURN));
-    ParseNode *coercion = UnaryKid(returnStmt);
+    ParseNode *expr = UnaryKid(returnStmt);
 
-    if (!!coercion != (f.func().returnType().which() != RetType::Void))
-        return f.fail("All returns must return a value (of the same type) or all must "
-                      "return void", coercion);
+    if (!expr) {
+        if (f.func().returnType().which() != RetType::Void)
+            return f.fail("All return statements must return void", expr);
 
-    if (!coercion) {
         f.returnVoid();
         return true;
     }
 
-    RetType returnType;
-    if (!CheckReturnCoercion(f.m(), coercion, &returnType))
-        return false;
-
-    if (returnType != f.func().returnType())
-        return f.fail("All returns must return the same type", coercion);
-
     MDefinition *def;
     Type type;
-    if (!CheckExpr(f, coercion, Use::FromReturnCoercion(returnType), &def, &type))
+    if (!CheckExpr(f, expr, Use::NoCoercion, &def, &type))
         return false;
 
-    JS_ASSERT(type <= returnType);
+    if (!(type <= f.func().returnType()))
+        return f.fail("All returns must return the same type", expr);
 
     f.returnExpr(def);
     return true;

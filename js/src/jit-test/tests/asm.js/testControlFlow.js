@@ -1,5 +1,10 @@
 load(libdir + "asm.js");
 
+assertAsmTypeFail(USE_ASM + "function f(i,j) { i=i|0;j=+j; if (i) return j; return j } return f");
+assertEq(asmLink(asmCompile(USE_ASM + "function f(i,j) { i=i|0;j=+j; if (i) return j; return +~~i } return f"))(1,1.4), 1.4);
+assertAsmTypeFail(USE_ASM + "function f(i,j) { i=i|0;j=j|0; if (i) return j^0; return i^0 } return f");
+assertEq(asmLink(asmCompile(USE_ASM + "function f(i,j) { i=i|0;j=j|0; if (i) return j^0; return i|0 } return f"))(1,8), 8);
+
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { while (0) {} return 0} return f"))(), 0);
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { for (;0;) {} return 0} return f"))(), 0);
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { do {} while(0); return 0} return f"))(), 0);
