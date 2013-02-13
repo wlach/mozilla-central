@@ -70,9 +70,13 @@ CodeGeneratorShared::CodeGeneratorShared(MIRGenerator *gen, LIRGraph *graph, Mac
             if (unsigned rem = alignmentAtCall % StackAlignment)
                 frameDepth_ += StackAlignment - rem;
         }
-    }
 
-    frameClass_ = FrameSizeClass::FromDepth(frameDepth_);
+        // FrameSizeClass is only used for bailing, which cannot happen in
+        // asm.js code.
+        frameClass_ = FrameSizeClass::None();
+    } else {
+        frameClass_ = FrameSizeClass::FromDepth(frameDepth_);
+    }
 }
 
 bool
