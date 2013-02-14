@@ -69,7 +69,11 @@ class AsmJSModule
 
         friend class AsmJSModule;
         Global(Which which) : which_(which) {}
-        void trace(JSTracer *trc);
+
+        void trace(JSTracer *trc) {
+            if (name_)
+                MarkString(trc, &name_, "asm.js global name");
+        }
 
       public:
         Which which() const {
@@ -198,7 +202,11 @@ class AsmJSModule
             u.codeOffset_ = 0;
         }
 
-        void trace(JSTracer *trc);
+        void trace(JSTracer *trc) {
+            MarkObject(trc, &fun_, "asm export name");
+            if (maybeFieldName_)
+                MarkString(trc, &maybeFieldName_, "asm export field");
+        }
 
       public:
         ExportedFunction(MoveRef<ExportedFunction> rhs)
@@ -273,7 +281,12 @@ class AsmJSModule
         bytesNeeded_(0)
     {}
 
-    void trace(JSTracer *trc);
+    void trace(JSTracer *trc) {
+        for (unsigned i = 0; i < globals_.length(); i++)
+            globals_[i].trace(trc);
+        for (unsigned i = 0; i < exports_.length(); i++)
+            exports_[i].trace(trc);
+    }
 
     bool addGlobalVarInitConstant(const Value &v, uint32_t *globalIndex) {
         Global g(Global::Variable);
