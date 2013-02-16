@@ -104,10 +104,10 @@ struct IonOptions
     uint32_t usesBeforeCompileNoJaeger;
 
     // How many invocations or loop iterations are needed before calls
-    // are inlined.
+    // are inlined, as a fraction of usesBeforeCompile.
     //
-    // Default: 10,240
-    uint32_t usesBeforeInlining;
+    // Default: .125
+    double usesBeforeInliningFactor;
 
     // How many actual arguments are accepted on the C stack.
     //
@@ -138,15 +138,6 @@ struct IonOptions
     // Default: 100
     uint32_t smallFunctionMaxBytecodeLength;
 
-    // The inlining limit for small functions.
-    //
-    // This value has been arrived at empirically via benchmarking.
-    // We may want to revisit this tuning after other optimizations have
-    // gone in.
-    //
-    // Default: usesBeforeInlining / 4
-    uint32_t smallFunctionUsesBeforeInlining;
-
     // The maximum number of functions to polymorphically inline at a call site.
     //
     // Default: 4
@@ -154,7 +145,7 @@ struct IonOptions
 
     // The maximum total bytecode size of an inline call site.
     //
-    // Default: 800
+    // Default: 1000
     uint32_t inlineMaxTotalBytecodeLength;
 
     // Minimal ratio between the use counts of the caller and the callee to
@@ -189,10 +180,6 @@ struct IonOptions
         eagerCompilation = true;
         usesBeforeCompile = usesBeforeCompileNoJaeger = 0;
 
-        // Eagerly inline calls to improve test coverage.
-        usesBeforeInlining = 0;
-        smallFunctionUsesBeforeInlining = 0;
-
         parallelCompilation = false;
     }
 
@@ -211,20 +198,23 @@ struct IonOptions
         parallelCompilation(false),
         usesBeforeCompile(10240),
         usesBeforeCompileNoJaeger(40),
-        usesBeforeInlining(usesBeforeCompile),
+        usesBeforeInliningFactor(.125),
         maxStackArgs(4096),
         maxInlineDepth(3),
         smallFunctionMaxInlineDepth(10),
         smallFunctionMaxBytecodeLength(100),
-        smallFunctionUsesBeforeInlining(usesBeforeInlining / 4),
         polyInlineMax(4),
-        inlineMaxTotalBytecodeLength(800),
+        inlineMaxTotalBytecodeLength(1000),
         inlineUseCountRatio(128),
         eagerCompilation(false),
         slowCallLimit(512),
         slowCallIncUseCount(5),
         usesBeforeCompileParallel(1)
     {
+    }
+
+    uint32_t usesBeforeInlining() {
+        return usesBeforeCompile * usesBeforeInliningFactor;
     }
 };
 

@@ -184,16 +184,16 @@ public:
 
       case REMOTESTREAMADD:
         {
-          nsDOMMediaStream* stream = nullptr;
+          DOMMediaStream* stream = nullptr;
 
           if (!mRemoteStream) {
-            CSFLogErrorS(logTag, __FUNCTION__ << " GetRemoteStream returned NULL");
+            CSFLogError(logTag, "%s: GetRemoteStream returned NULL", __FUNCTION__);
           } else {
             stream = mRemoteStream->GetMediaStream();
           }
 
           if (!stream) {
-            CSFLogErrorS(logTag, __FUNCTION__ << " GetMediaStream returned NULL");
+            CSFLogError(logTag, "%s: GetMediaStream returned NULL", __FUNCTION__);
           } else {
             // We provide a type field because it is in the IDL
             // and we want code that looks at it not to crash.
@@ -253,7 +253,7 @@ PeerConnectionImpl::~PeerConnectionImpl()
   if (PeerConnectionCtx::isActive()) {
     PeerConnectionCtx::GetInstance()->mPeerConnections.erase(mHandle);
   } else {
-    CSFLogErrorS(logTag, "PeerConnectionCtx is already gone. Ignoring...");
+    CSFLogError(logTag, "PeerConnectionCtx is already gone. Ignoring...");
   }
 
   CloseInt(false);
@@ -280,11 +280,13 @@ PeerConnectionImpl::~PeerConnectionImpl()
 
 // One level of indirection so we can use WrapRunnable in CreateMediaStream.
 nsresult
-PeerConnectionImpl::MakeMediaStream(uint32_t aHint, nsIDOMMediaStream** aRetval)
+PeerConnectionImpl::MakeMediaStream(nsIDOMWindow* aWindow,
+                                    uint32_t aHint, nsIDOMMediaStream** aRetval)
 {
   MOZ_ASSERT(aRetval);
 
-  nsRefPtr<nsDOMMediaStream> stream = nsDOMMediaStream::CreateSourceStream(aHint);
+  nsRefPtr<DOMMediaStream> stream =
+    DOMMediaStream::CreateSourceStream(aWindow, aHint);
   NS_ADDREF(*aRetval = stream);
 
   CSFLogDebugS(logTag, "Created media stream " << static_cast<void*>(stream)
@@ -306,12 +308,12 @@ PeerConnectionImpl::CreateRemoteSourceStreamInfo(nsRefPtr<RemoteSourceStreamInfo
   // needs to actually propagate a hint for local streams.
   // TODO(ekr@rtfm.com): Clean up when we have explicit track lists.
   // See bug 834835.
-  nsresult res = MakeMediaStream(0, &stream);
+  nsresult res = MakeMediaStream(mWindow, 0, &stream);
   if (NS_FAILED(res)) {
     return res;
   }
 
-  nsDOMMediaStream* comstream = static_cast<nsDOMMediaStream*>(stream);
+  DOMMediaStream* comstream = static_cast<DOMMediaStream*>(stream);
   static_cast<mozilla::SourceMediaStream*>(comstream->GetStream())->SetPullEnabled(true);
 
   nsRefPtr<RemoteSourceStreamInfo> remote;
@@ -488,7 +490,7 @@ PeerConnectionImpl::Initialize(IPeerConnectionObserver* aObserver,
 
   mCall = pcctx->createCall();
   if(!mCall.get()) {
-    CSFLogErrorS(logTag, __FUNCTION__ << ": Couldn't Create Call Object");
+    CSFLogError(logTag, "%s: Couldn't Create Call Object", __FUNCTION__);
     return NS_ERROR_FAILURE;
   }
 
@@ -506,7 +508,7 @@ PeerConnectionImpl::Initialize(IPeerConnectionObserver* aObserver,
     res = mMedia->Init(aConfiguration->getServers());
   }
   if (NS_FAILED(res)) {
-    CSFLogErrorS(logTag, __FUNCTION__ << ": Couldn't initialize media object");
+    CSFLogError(logTag, "%s: Couldn't initialize media object", __FUNCTION__);
     return res;
   }
 
@@ -535,7 +537,7 @@ PeerConnectionImpl::Initialize(IPeerConnectionObserver* aObserver,
   mIdentity = DtlsIdentity::Generate();
 
   if (!mIdentity) {
-    CSFLogErrorS(logTag, __FUNCTION__ << ": Generate returned NULL");
+    CSFLogError(logTag, "%s: Generate returned NULL", __FUNCTION__);
     return NS_ERROR_FAILURE;
   }
 
@@ -564,7 +566,7 @@ PeerConnectionImpl::Initialize(IPeerConnectionObserver* aObserver,
 
 #ifndef MOZILLA_INTERNAL_API
   // Busy-wait until we are ready, for C++ unit tests. Remove when tests are fixed.
-  CSFLogDebugS(logTag, __FUNCTION__ << ": Sleeping until kStarted");
+  CSFLogDebug(logTag, "%s: Sleeping until kStarted", __FUNCTION__);
   while(PeerConnectionCtx::GetInstance()->sipcc_state() != kStarted) {
     PR_Sleep(100);
   }
@@ -589,10 +591,10 @@ PeerConnectionImpl::CreateFakeMediaStream(uint32_t aHint, nsIDOMMediaStream** aR
 
   nsresult res;
   if (!mThread || NS_IsMainThread()) {
-    res = MakeMediaStream(aHint, aRetval);
+    res = MakeMediaStream(mWindow, aHint, aRetval);
   } else {
     mThread->Dispatch(WrapRunnableNMRet(
-        &PeerConnectionImpl::MakeMediaStream, aHint, aRetval, &res
+        &PeerConnectionImpl::MakeMediaStream, mWindow, aHint, aRetval, &res
     ), NS_DISPATCH_SYNC);
   }
 
@@ -601,11 +603,11 @@ PeerConnectionImpl::CreateFakeMediaStream(uint32_t aHint, nsIDOMMediaStream** aR
   }
 
   if (!mute) {
-    if (aHint & nsDOMMediaStream::HINT_CONTENTS_AUDIO) {
-      new Fake_AudioGenerator(static_cast<nsDOMMediaStream*>(*aRetval));
+    if (aHint & DOMMediaStream::HINT_CONTENTS_AUDIO) {
+      new Fake_AudioGenerator(static_cast<DOMMediaStream*>(*aRetval));
     } else {
 #ifdef MOZILLA_INTERNAL_API
-    new Fake_VideoGenerator(static_cast<nsDOMMediaStream*>(*aRetval));
+    new Fake_VideoGenerator(static_cast<DOMMediaStream*>(*aRetval));
 #endif
     }
   }
@@ -680,7 +682,7 @@ PeerConnectionImpl::CreateDataChannel(const nsACString& aLabel,
   );
   NS_ENSURE_TRUE(dataChannel,NS_ERROR_FAILURE);
 
-  CSFLogDebugS(logTag, __FUNCTION__ << ": making DOMDataChannel");
+  CSFLogDebug(logTag, "%s: making DOMDataChannel", __FUNCTION__);
 
   // TODO -- need something like "mCall->addStream(stream_id, 0, DATA);" so
   // the SDP can be generated correctly
@@ -696,7 +698,7 @@ PeerConnectionImpl::NotifyConnection()
 {
   PC_AUTO_ENTER_API_CALL_NO_CHECK();
 
-  CSFLogDebugS(logTag, __FUNCTION__);
+  CSFLogDebug(logTag, __FUNCTION__);
 
 #ifdef MOZILLA_INTERNAL_API
   nsCOMPtr<IPeerConnectionObserver> pco = do_QueryReferent(mPCObserver);
@@ -715,7 +717,7 @@ PeerConnectionImpl::NotifyClosedConnection()
 {
   PC_AUTO_ENTER_API_CALL_NO_CHECK();
 
-  CSFLogDebugS(logTag, __FUNCTION__);
+  CSFLogDebug(logTag, __FUNCTION__);
 
 #ifdef MOZILLA_INTERNAL_API
   nsCOMPtr<IPeerConnectionObserver> pco = do_QueryReferent(mPCObserver);
@@ -961,15 +963,15 @@ PeerConnectionImpl::AddStream(nsIDOMMediaStream* aMediaStream) {
   if (NS_FAILED(res))
     return res;
 
-  nsDOMMediaStream* stream = static_cast<nsDOMMediaStream*>(aMediaStream);
+  DOMMediaStream* stream = static_cast<DOMMediaStream*>(aMediaStream);
   uint32_t hints = stream->GetHintContents();
 
   // TODO(ekr@rtfm.com): these integers should be the track IDs
-  if (hints & nsDOMMediaStream::HINT_CONTENTS_AUDIO) {
+  if (hints & DOMMediaStream::HINT_CONTENTS_AUDIO) {
     mCall->addStream(stream_id, 0, AUDIO);
   }
 
-  if (hints & nsDOMMediaStream::HINT_CONTENTS_VIDEO) {
+  if (hints & DOMMediaStream::HINT_CONTENTS_VIDEO) {
     mCall->addStream(stream_id, 1, VIDEO);
   }
 
@@ -986,14 +988,14 @@ PeerConnectionImpl::RemoveStream(nsIDOMMediaStream* aMediaStream) {
   if (NS_FAILED(res))
     return res;
 
-  nsDOMMediaStream* stream = static_cast<nsDOMMediaStream*>(aMediaStream);
+  DOMMediaStream* stream = static_cast<DOMMediaStream*>(aMediaStream);
   uint32_t hints = stream->GetHintContents();
 
-  if (hints & nsDOMMediaStream::HINT_CONTENTS_AUDIO) {
+  if (hints & DOMMediaStream::HINT_CONTENTS_AUDIO) {
     mCall->removeStream(stream_id, 0, AUDIO);
   }
 
-  if (hints & nsDOMMediaStream::HINT_CONTENTS_VIDEO) {
+  if (hints & DOMMediaStream::HINT_CONTENTS_VIDEO) {
     mCall->removeStream(stream_id, 1, VIDEO);
   }
 
@@ -1110,7 +1112,7 @@ PeerConnectionImpl::CheckApiState(bool assert_ice_ready) const
 NS_IMETHODIMP
 PeerConnectionImpl::Close(bool aIsSynchronous)
 {
-  CSFLogDebugS(logTag, __FUNCTION__);
+  CSFLogDebug(logTag, __FUNCTION__);
   PC_AUTO_ENTER_API_CALL_NO_CHECK();
 
   return CloseInt(aIsSynchronous);
@@ -1204,7 +1206,7 @@ PeerConnectionImpl::onCallEvent(ccapi_call_event_e aCallEvent,
       break;
 
     case CONNECTED:
-      CSFLogDebugS(logTag, "Setting PeerConnnection state to kActive");
+      CSFLogDebug(logTag, "Setting PeerConnnection state to kActive");
       ChangeReadyState(kActive);
       break;
     default:
@@ -1287,7 +1289,7 @@ PeerConnectionImpl::IceGatheringCompleted_m()
 {
   PC_AUTO_ENTER_API_CALL(false);
 
-  CSFLogDebugS(logTag, __FUNCTION__);
+  CSFLogDebug(logTag, __FUNCTION__);
 
   mIceState = kIceWaiting;
 
@@ -1323,7 +1325,7 @@ PeerConnectionImpl::IceCompleted_m()
 {
   PC_AUTO_ENTER_API_CALL(false);
 
-  CSFLogDebugS(logTag, __FUNCTION__);
+  CSFLogDebug(logTag, __FUNCTION__);
 
   mIceState = kIceConnected;
 

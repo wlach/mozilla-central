@@ -44,6 +44,7 @@ EXPORTS_mozilla/dom = \
 		HTMLHRElement.h \
 		HTMLImageElement.h \
 		HTMLLabelElement.h \
+		HTMLLegendElement.h \
 		HTMLLIElement.h \
 		HTMLLinkElement.h \
 		HTMLMapElement.h \
@@ -101,7 +102,7 @@ CPPSRCS		= \
 		nsHTMLInputElement.cpp \
 		HTMLLIElement.cpp \
 		HTMLLabelElement.cpp \
-		nsHTMLLegendElement.cpp \
+		HTMLLegendElement.cpp \
 		HTMLLinkElement.cpp \
 		HTMLMapElement.cpp \
 		nsHTMLMenuElement.cpp \
@@ -142,12 +143,13 @@ CPPSRCS		= \
 ifdef MOZ_MEDIA
 EXPORTS_mozilla/dom += \
 		HTMLSourceElement.h \
+		MediaError.h \
 		$(NULL)
 
 CPPSRCS		+= \
 		nsHTMLAudioElement.cpp \
 		nsHTMLMediaElement.cpp \
-		nsMediaError.cpp \
+		MediaError.cpp \
 		nsMediaFragmentURIParser.cpp \
 		HTMLSourceElement.cpp \
 		nsTimeRanges.cpp \

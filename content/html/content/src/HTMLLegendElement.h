@@ -2,20 +2,25 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-#ifndef nsHTMLLegendElement_h___
-#define nsHTMLLegendElement_h___
+
+#ifndef mozilla_dom_HTMLLegendElement_h
+#define mozilla_dom_HTMLLegendElement_h
 
 #include "nsIDOMHTMLLegendElement.h"
 #include "nsGenericHTMLElement.h"
+#include "nsHTMLFormElement.h"
 
-class nsHTMLLegendElement : public nsGenericHTMLElement,
-                            public nsIDOMHTMLLegendElement
+namespace mozilla {
+namespace dom {
+
+class HTMLLegendElement : public nsGenericHTMLElement,
+                          public nsIDOMHTMLLegendElement
 {
 public:
-  nsHTMLLegendElement(already_AddRefed<nsINodeInfo> aNodeInfo);
-  virtual ~nsHTMLLegendElement();
+  HTMLLegendElement(already_AddRefed<nsINodeInfo> aNodeInfo);
+  virtual ~HTMLLegendElement();
 
-  NS_IMPL_FROMCONTENT_HTML_WITH_TAG(nsHTMLLegendElement, legend)
+  NS_IMPL_FROMCONTENT_HTML_WITH_TAG(HTMLLegendElement, legend)
 
   // nsISupports
   NS_DECL_ISUPPORTS_INHERITED
@@ -32,7 +37,7 @@ public:
   // nsIDOMHTMLElement
   NS_FORWARD_NSIDOMHTMLELEMENT_TO_GENERIC
 
-  virtual void Focus(mozilla::ErrorResult& aError) MOZ_OVERRIDE;
+  virtual void Focus(ErrorResult& aError) MOZ_OVERRIDE;
 
   virtual void PerformAccesskey(bool aKeyCausesActivation,
                                 bool aIsTrustedEvent);
@@ -60,9 +65,9 @@ public:
   virtual nsresult UnsetAttr(int32_t aNameSpaceID, nsIAtom* aAttribute,
                              bool aNotify);
 
-  virtual nsresult Clone(nsINodeInfo *aNodeInfo, nsINode **aResult) const;
+  virtual nsresult Clone(nsINodeInfo* aNodeInfo, nsINode** aResult) const;
 
-  mozilla::dom::Element *GetFormElement()
+  Element* GetFormElement()
   {
     nsCOMPtr<nsIFormControl> fieldsetControl = do_QueryInterface(GetFieldSet());
 
@@ -72,7 +77,29 @@ public:
   virtual nsXPCClassInfo* GetClassInfo();
 
   virtual nsIDOMNode* AsDOMNode() { return this; }
+
+  /**
+   * WebIDL Interface
+   */
+
+  already_AddRefed<nsHTMLFormElement> GetForm();
+
+  // The XPCOM GetAlign is OK for us
+  void SetAlign(const nsAString& aAlign, ErrorResult& aError)
+  {
+    SetHTMLAttr(nsGkAtoms::align, aAlign, aError);
+  }
+
+  nsINode* GetParentObject() {
+    Element* form = GetFormElement();
+    return form ? static_cast<nsINode*>(form)
+                : nsGenericHTMLElement::GetParentObject();
+  }
+
 protected:
+  virtual JSObject* WrapNode(JSContext* aCx, JSObject* aScope,
+                             bool* aTriedToWrap) MOZ_OVERRIDE;
+
   /**
    * Get the fieldset content element that contains this legend.
    * Returns null if there is no fieldset containing this legend.
@@ -80,4 +107,7 @@ protected:
   nsIContent* GetFieldSet();
 };
 
-#endif /* nsHTMLLegendElement_h___ */
+} // namespace dom
+} // namespace mozilla
+
+#endif /* mozilla_dom_HTMLLegendElement_h */
