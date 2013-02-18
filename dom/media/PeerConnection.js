@@ -262,9 +262,9 @@ PeerConnection.prototype = {
       throw new Error("RTCPeerConnection constructor already called");
     }
     if (!rtcConfig ||
-        Services.prefs.getBoolPref("media.peerconnection.ignoreCustomRtcConfig")) {
-      rtcConfig =
-        JSON.parse(Services.prefs.getCharPref("media.peerconnection.defaultRtcConfig"));
+        !Services.prefs.getBoolPref("media.peerconnection.use_document_iceservers")) {
+      rtcConfig = {iceServers:
+        JSON.parse(Services.prefs.getCharPref("media.peerconnection.default_iceservers"))};
     }
     this._mustValidateRTCConfiguration(rtcConfig,
         "RTCPeerConnection constructor passed invalid RTCConfiguration");
