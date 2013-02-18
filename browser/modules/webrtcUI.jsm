@@ -70,12 +70,53 @@ function handleRequest(aSubject, aTopic, aData) {
 
   browser.ownerDocument.defaultView.navigator.mozGetUserMediaDevices(
     function (devices) {
-      prompt(browser, callID, params.audio, params.video, devices);
+      if (Services.prefs.getBoolPref("media.navigator.permission.disabled") &&
+          Services.prefs.prefHasUserValue("media.navigator.defaultdevice")) {
+        selectDefaultDevicesFromPrefs(browser, callID, params.audio, params.video, devices);
+      }
+      else
+        prompt(browser, callID, params.audio, params.video, devices);
     },
     function (error) {
       Cu.reportError(error);
     }
   );
+}
+
+function selectDefaultDevicesFromPrefs(aBrowser, aCallID, aAudioRequested, aVideoRequested, aDevices)
+{
+  var defaultDevices = JSON.parse(Services.prefs.getCharPref("media.navigator.defaultdevice"));
+  let audioDevice;
+  let videoDevice;
+  dump(JSON.stringify(defaultDevices) + "\n");
+  for (let device of aDevices) {
+    device = device.QueryInterface(Ci.nsIMediaDevice);
+    switch (device.type) {
+      case "audio":
+        if (aAudioRequested && defaultDevices["audio"] == device.id)
+          audioDevice = device;
+        break;
+      case "video":
+        if (aVideoRequested && defaultDevices["video"] == device.id)
+          videoDevice = device;
+        break;
+      }
+  }
+
+  // If either device not found, re-prompt
+  if ((aAudioRequested && !audioDevice) ||
+      (aVideoRequested && !videoDevice)) {
+    prompt(aBrowser, aCallID, aAudioRequested, aVideoRequested, aDevices);
+    return;
+  }
+
+  let allowedDevices = Cc["@mozilla.org/supports-array;1"]
+                         .createInstance(Ci.nsISupportsArray);
+  if (aAudioRequested)
+    allowedDevices.AppendElement(audioDevice);
+  if (aVideoRequested)
+    allowedDevices.AppendElement(videoDevice);
+  Services.obs.notifyObservers(allowedDevices, "getUserMedia:response:allow", aCallID);
 }
 
 function prompt(aBrowser, aCallID, aAudioRequested, aVideoRequested, aDevices) {
@@ -139,13 +180,20 @@ function prompt(aBrowser, aCallID, aAudioRequested, aVideoRequested, aDevices) {
     callback: function () {
       let allowedDevices = Cc["@mozilla.org/supports-array;1"]
                              .createInstance(Ci.nsISupportsArray);
+      let deviceDetails = {};
       if (videoDevices.length) {
         let videoDeviceIndex = chromeDoc.getElementById("webRTC-selectCamera-menulist").value;
         allowedDevices.AppendElement(videoDevices[videoDeviceIndex]);
+        deviceDetails["video"] = videoDevices[videoDeviceIndex].id;
       }
       if (audioDevices.length) {
         let audioDeviceIndex = chromeDoc.getElementById("webRTC-selectMicrophone-menulist").value;
         allowedDevices.AppendElement(audioDevices[audioDeviceIndex]);
+        deviceDetails["audio"] = audioDevices[audioDeviceIndex].id;
+      }
+      if (Services.prefs.getBoolPref("media.navigator.permission.disabled")) {
+        Services.prefs.setCharPref("media.navigator.defaultdevice",
+	                           JSON.stringify(deviceDetails));
       }
       Services.obs.notifyObservers(allowedDevices, "getUserMedia:response:allow", aCallID);
 

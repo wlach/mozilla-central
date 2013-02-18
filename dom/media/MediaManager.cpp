@@ -949,9 +949,13 @@ MediaManager::GetUserMedia(bool aPrivileged, nsPIDOMWindow* aWindow,
   listeners->AppendElement(listener);
 
   // Developer preference for turning off permission check.
+#ifdef ANDROID
+  // XXX Special change for desktop on Alder - don't disable permissions by default
+  // allow request to go up to UI so that UI can set default device as necessary.
   if (Preferences::GetBool("media.navigator.permission.disabled", false)) {
     aPrivileged = true;
   }
+#endif
 
   /**
    * Pass runnables along to GetUserMediaRunnable so it can add the
