@@ -182,6 +182,8 @@ pref("media.gstreamer.enabled", true);
 pref("media.navigator.enabled", true);
 pref("media.peerconnection.enabled", false);
 pref("media.navigator.permission.disabled", false);
+pref("media.peerconnection.default_iceservers", "[{\"url\": \"stun:23.21.150.121\"}]");
+pref("media.peerconnection.use_document_iceservers", true);
 // These values (aec, agc, and noice) are from media/webrtc/trunk/webrtc/common_types.h
 // kXxxUnchanged = 0, kXxxDefault = 1, and higher values are specific to each 
 // setting (for Xxx = Ec, Agc, or Ns).  Defaults are all set to kXxxDefault here.
@@ -1683,7 +1685,11 @@ pref("layout.css.supports-rule.enabled", true);
 #endif
 
 // Is support for CSS Flexbox enabled?
+#ifdef RELEASE_BUILD
+pref("layout.css.flexbox.enabled", false);
+#else
 pref("layout.css.flexbox.enabled", true);
+#endif
 
 // Are sets of prefixed properties supported?
 pref("layout.css.prefixes.border-image", true);
@@ -2392,9 +2398,6 @@ pref("print.print_extra_margin", 90); // twips (90 twips is an eigth of an inch)
 
 // Whether to extend the native dialog with information on printing frames.
 pref("print.extend_native_print_dialog", true);
-
-// Locate Java by scanning the Sun JRE installation directory with a minimum version
-pref("plugin.scan.SunJRE", "1.6");
 
 // Locate plugins by scanning the Adobe Acrobat installation directory with a minimum version
 pref("plugin.scan.Acrobat", "5.0");

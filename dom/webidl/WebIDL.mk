@@ -71,6 +71,7 @@ webidl_files = \
   HTMLElement.webidl \
   HTMLFieldSetElement.webidl \
   HTMLFontElement.webidl \
+  HTMLFrameElement.webidl \
   HTMLFrameSetElement.webidl \
   HTMLHeadElement.webidl \
   HTMLHeadingElement.webidl \
@@ -82,11 +83,14 @@ webidl_files = \
   HTMLLIElement.webidl \
   HTMLLinkElement.webidl \
   HTMLMapElement.webidl \
+  HTMLMenuElement.webidl \
+  HTMLMenuItemElement.webidl \
   HTMLMetaElement.webidl \
   HTMLMeterElement.webidl \
   HTMLModElement.webidl \
   HTMLOListElement.webidl \
   HTMLOptGroupElement.webidl \
+  HTMLOptionElement.webidl \
   HTMLOptionsCollection.webidl \
   HTMLOutputElement.webidl \
   HTMLParagraphElement.webidl \
@@ -124,7 +128,7 @@ webidl_files = \
   ProcessingInstruction.webidl \
   Rect.webidl \
   RGBColor.webidl \
-  RTCIceServer.webidl \
+  RTCConfiguration.webidl \
   Screen.webidl \
   SVGAElement.webidl \
   SVGAltGlyphElement.webidl \
@@ -149,6 +153,7 @@ webidl_files = \
   SVGDescElement.webidl \
   SVGElement.webidl \
   SVGEllipseElement.webidl \
+  SVGFilterElement.webidl \
   SVGFEFuncAElement.webidl \
   SVGFEFuncBElement.webidl \
   SVGFEFuncGElement.webidl \
