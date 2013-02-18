@@ -10,6 +10,8 @@
 
 namespace js {
 
+class SPSProfiler;
+class AsmJSModule;
 namespace frontend { struct TokenStream; struct ParseNode; }
 
 // Called after parsing a function 'fn' which contains the "use asm" directive.
@@ -32,6 +34,47 @@ CompileAsmJS(JSContext *cx, frontend::TokenStream &ts, frontend::ParseNode *fn, 
 // (Implemented in AsmJSLink.cpp.)
 extern bool
 LinkAsmJS(JSContext *cx, StackFrame *fp, MutableHandleValue rval);
+
+// The JSRuntime maintains a stack of AsmJSModule activations. An "activation"
+// of module A is an initial call from outside A into a function inside A,
+// followed by a sequence of calls inside A, and terminated by a call that
+// leaves A. The AsmJSActivation stack serves three purposes:
+//  - record the correct cx to pass to VM calls from asm.js;
+//  - record enough information to pop all the frames of an activation if an
+//    exception is thrown;
+//  - record the information necessary for asm.js signal handlers to safely
+//    recover from (expected) out-of-bounds access, the operation callback,
+//    stack overflow, division by zero, etc.
+class AsmJSActivation
+{
+    AsmJSActivation *prev_;
+    JSContext *cx_;
+    void *errorRejoinSP_;
+    const AsmJSModule &module_;
+    unsigned entryIndex_;
+    uint8_t *heap_;
+    SPSProfiler *profiler_;
+
+  public:
+    AsmJSActivation(JSContext *cx, const AsmJSModule &module, unsigned entryIndex, uint8_t *heap);
+    ~AsmJSActivation();
+
+    const AsmJSModule &module() const { return module_; }
+    uint8_t *heap() const { return heap_; }
+
+    // Read by JIT code:
+    static unsigned offsetOfContext() { return offsetof(AsmJSActivation, cx_); }
+
+    // Initialized by JIT code:
+    static unsigned offsetOfErrorRejoinSP() { return offsetof(AsmJSActivation, errorRejoinSP_); }
+};
+
+// On x64, the internal ArrayBuffer data array is inflated to 4GiB (only the
+// byteLength portion of which is accessible) so that out-of-bounds accesses
+// (made using a uint32 index) are guaranteed to raise a SIGSEGV.
+#ifdef JS_CPU_X64
+static const size_t FourGiB = 4 * 1024ULL * 1024ULL * 1024ULL;
+#endif
 
 } // namespace js
 

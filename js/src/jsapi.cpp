@@ -717,6 +717,7 @@ js::PerThreadData::PerThreadData(JSRuntime *runtime)
     ionJSContext(NULL),
     ionStackLimit(0),
     ionActivation(NULL),
+    asmJSActivation(NULL),
     suppressGC(0)
 {}
 
@@ -874,7 +875,6 @@ JSRuntime::JSRuntime(JSUseHelperThreads useHelperThreads)
     noGCOrAllocationCheck(0),
 #endif
     jitHardening(false),
-    asmJSActivation(NULL),
     asmJSUnsafe(false),
     ionPcScriptCache(NULL),
     threadPool(this),
@@ -968,7 +968,7 @@ JSRuntime::init(uint32_t maxbytes)
 
 JSRuntime::~JSRuntime()
 {
-    JS_ASSERT(!asmJSActivation);
+    JS_ASSERT(!mainThread.asmJSActivation);
 
 #ifdef JS_THREADSAFE
     clearOwnerThread();

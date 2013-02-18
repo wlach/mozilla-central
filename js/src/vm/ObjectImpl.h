@@ -918,7 +918,8 @@ class ObjectElements
 {
   public:
     enum Flags {
-        CONVERT_DOUBLE_ELEMENTS = 0x1
+        CONVERT_DOUBLE_ELEMENTS = 0x1,
+        ASMJS_ARRAY_BUFFER = 0x2
     };
 
   private:
@@ -961,6 +962,14 @@ class ObjectElements
     void setShouldConvertDoubleElements() {
         flags |= CONVERT_DOUBLE_ELEMENTS;
     }
+#ifdef JS_CPU_X64
+    bool isAsmJSArrayBuffer() const {
+        return flags & ASMJS_ARRAY_BUFFER;
+    }
+    void setIsAsmJSArrayBuffer() {
+        flags |= ASMJS_ARRAY_BUFFER;
+    }
+#endif
 
   public:
     ObjectElements(uint32_t capacity, uint32_t length)

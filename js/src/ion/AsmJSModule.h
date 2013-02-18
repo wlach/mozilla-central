@@ -9,6 +9,8 @@
 #define jsion_asmjsmodule_h__
 
 #include "gc/Marking.h"
+#include "ion/IonMacroAssembler.h"
+#include "ion/RegisterSets.h"
 
 namespace js {
 
@@ -259,11 +261,13 @@ class AsmJSModule
     typedef Vector<uint8_t*, 0, SystemAllocPolicy> FuncPtrTableElemVector;
     typedef Vector<Global, 0, SystemAllocPolicy> GlobalVector;
     typedef Vector<Exit, 0, SystemAllocPolicy> ExitVector;
+    typedef Vector<ion::AsmJSHeapAccess, 0, SystemAllocPolicy> HeapAccessVector;
 
     GlobalVector                          globals_;
     ExitVector                            exits_;
     ExportedFunctionVector                exports_;
     FuncPtrTableElemVector                funcPtrTableElems_;
+    HeapAccessVector                      heapAccesses_;
     uint32_t                              numGlobalVars_;
     uint32_t                              numFFIs_;
     bool                                  hasArrayView_;
@@ -336,6 +340,18 @@ class AsmJSModule
         return exits_.append(Exit(ffiIndex));
     }
 
+    bool addHeapAccesses(const Vector<ion::AsmJSHeapAccess> &accesses) {
+        if (!heapAccesses_.reserve(heapAccesses_.length() + accesses.length()))
+            return false;
+        for (size_t i = 0; i < accesses.length(); i++)
+            heapAccesses_.infallibleAppend(accesses[i]);
+        return true;
+    }
+    void convertHeapAccessesToActaualOffset(ion::MacroAssembler &masm) {
+        for (unsigned i = 0; i < heapAccesses_.length(); i++)
+            heapAccesses_[i].setOffset(masm.actualOffset(heapAccesses_[i].offset()));
+    }
+
     bool addExportedFunction(RawFunction fun, PropertyName *maybeFieldName,
                              MoveRef<ArgCoercionVector> argCoercions, ReturnType returnType)
     {
@@ -351,7 +367,6 @@ class AsmJSModule
     ExportedFunction &exportedFunction(unsigned i) {
         return exports_[i];
     }
-
     bool hasArrayView() const {
         return hasArrayView_;
     }
@@ -426,11 +441,25 @@ class AsmJSModule
         code_ = code;
         bytesNeeded_ = bytesNeeded;
     }
+
+    bool containsPC(const void *pc) const {
+        return code_ <= pc && pc < (code_ + bytesNeeded_);
+    }
+    uint32_t offsetOfPC(const void *pc) const {
+        JS_ASSERT(containsPC(pc));
+        return reinterpret_cast<const uint8_t*>(pc) - code_;
+    }
+    unsigned numHeapAccesses() const {
+        return heapAccesses_.length();
+    }
+    const ion::AsmJSHeapAccess &heapAccess(unsigned i) const {
+        return heapAccesses_[i];
+    }
 };
 
 // The AsmJSModule C++ object is held by a JSObject that takes care of calling
 // 'trace' and the destructor on finalization.
-extern AsmJSModule &
+extern const AsmJSModule &
 AsmJSModuleObjectToModule(JSObject *obj);
 
 }  // namespace js

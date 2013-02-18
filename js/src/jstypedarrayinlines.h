@@ -64,6 +64,16 @@ ArrayBufferObject::hasData() const
     return getClass() == &ArrayBufferClass;
 }
 
+inline bool
+ArrayBufferObject::isAsmJSArrayBuffer() const
+{
+#ifdef JS_CPU_X64
+    return getElementsHeader()->isAsmJSArrayBuffer();
+#else
+    return false;
+#endif
+}
+
 static inline int32_t
 ClampIntForUint8Array(int32_t x)
 {

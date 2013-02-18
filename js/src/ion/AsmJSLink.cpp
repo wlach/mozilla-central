@@ -12,6 +12,7 @@
 
 #include "AsmJS.h"
 #include "AsmJSModule.h"
+#include "AsmJSSignalHandlers.h"
 
 using namespace js;
 using namespace mozilla;
@@ -23,7 +24,7 @@ static const unsigned ASM_LINKED_MODULE_GLOBAL_DATA_SLOT = 1;
 static const unsigned ASM_LINKED_MODULE_HEAP_SLOT = 2;
 static const unsigned ASM_LINKED_MODULE_NUM_RESERVED_SLOTS = 3;
 
-static AsmJSModule &
+static const AsmJSModule &
 AsmLinkedModuleToModule(JSObject *obj)
 {
     JS_ASSERT(obj->getClass() == &AsmLinkedModuleClass);
@@ -42,8 +43,11 @@ static uint8_t *
 AsmLinkedModuleToHeapOrNull(JSObject *obj)
 {
     JS_ASSERT(obj->getClass() == &AsmLinkedModuleClass);
-    if (JSObject *buf = obj->getReservedSlot(ASM_LINKED_MODULE_HEAP_SLOT).toObjectOrNull())
-        return buf->asArrayBuffer().dataPointer();
+    if (JSObject *bufObj = obj->getReservedSlot(ASM_LINKED_MODULE_HEAP_SLOT).toObjectOrNull()) {
+        ArrayBufferObject &buf = bufObj->asArrayBuffer();
+        JS_ASSERT(buf.isAsmJSArrayBuffer());
+        return buf.dataPointer();
+    }
     return NULL;
 }
 
@@ -260,7 +264,11 @@ DynamicallyLinkModule(JSContext *cx, StackFrame *fp, HandleObject moduleObj,
     if (module.hasArrayView()) {
         if (!IsTypedArrayBuffer(bufferVal))
             return LinkFail(cx, "bad ArrayBuffer argument");
+
         heap = &bufferVal.toObject().asArrayBuffer();
+
+        if (!ArrayBufferObject::prepareForAsmJS(cx, heap))
+            return LinkFail(cx, "Unable to prepare ArrayBuffer for asm.js use");
     }
 
     ScopedJSDeletePtr<uint8_t> globalDataGuard;
@@ -321,29 +329,35 @@ DynamicallyLinkModule(JSContext *cx, StackFrame *fp, HandleObject moduleObj,
     return true;
 }
 
-AsmJSActivation::AsmJSActivation(JSContext *cx, UnrootedFunction fun)
-  : prev_(cx->runtime->asmJSActivation),
+AsmJSActivation::AsmJSActivation(JSContext *cx, const AsmJSModule &module, unsigned entryIndex,
+                                 uint8_t *heap)
+  : prev_(cx->runtime->mainThread.asmJSActivation),
     cx_(cx),
     errorRejoinSP_(NULL),
-    profiler_(NULL),
-    fun_(cx, fun)
+    module_(module),
+    entryIndex_(entryIndex),
+    heap_(heap),
+    profiler_(NULL)
 {
-    cx->runtime->asmJSActivation = this;
+    cx->runtime->mainThread.asmJSActivation = this;
     cx->runtime->resetIonStackLimit();
 
     if (cx->runtime->spsProfiler.enabled()) {
         profiler_ = &cx->runtime->spsProfiler;
-        profiler_->enter(cx_, fun_->nonLazyScript(), fun_);
+        JSFunction *fun = module_.exportedFunction(entryIndex_).unclonedFunObj();
+        profiler_->enter(cx_, fun->nonLazyScript(), fun);
     }
 }
 
 AsmJSActivation::~AsmJSActivation()
 {
-    JS_ASSERT(cx_->runtime->asmJSActivation == this);
-    cx_->runtime->asmJSActivation = prev_;
+    JS_ASSERT(cx_->runtime->mainThread.asmJSActivation == this);
+    cx_->runtime->mainThread.asmJSActivation = prev_;
 
-    if (profiler_)
-        profiler_->exit(cx_, fun_->nonLazyScript(), fun_);
+    if (profiler_) {
+        JSFunction *fun = module_.exportedFunction(entryIndex_).unclonedFunObj();
+        profiler_->exit(cx_, fun->nonLazyScript(), fun);
+    }
 }
 
 static const unsigned ASM_LINKED_MODULE_SLOT = 0;
@@ -362,9 +376,9 @@ CallAsmJS(JSContext *cx, unsigned argc, Value *vp)
     unsigned exportIndex = callee->getExtendedSlot(ASM_EXPORT_INDEX_SLOT).toInt32();
 
     // A linked module links a heap (ArrayBuffer) and globalData to a module
-    AsmJSModule &module = AsmLinkedModuleToModule(linkedModule);
-    uint8_t *heap =       AsmLinkedModuleToHeapOrNull(linkedModule);
-    uint8_t *globalData = AsmLinkedModuleToGlobalData(linkedModule);
+    const AsmJSModule &module = AsmLinkedModuleToModule(linkedModule);
+    uint8_t *heap =             AsmLinkedModuleToHeapOrNull(linkedModule);
+    uint8_t *globalData =       AsmLinkedModuleToGlobalData(linkedModule);
 
     // An exported function points to the code as well as the exported
     // function's signature, which implies the dynamic coercions performed on
@@ -398,7 +412,7 @@ CallAsmJS(JSContext *cx, unsigned argc, Value *vp)
         }
     }
 
-    AsmJSActivation activation(cx, func.unclonedFunObj());
+    AsmJSActivation activation(cx, module, exportIndex, heap);
 
     if (!func.code()(heap, globalData, coercedArgs.begin()))
         return false;
@@ -438,7 +452,7 @@ bool
 js::LinkAsmJS(JSContext *cx, StackFrame *fp, MutableHandleValue rval)
 {
     RootedObject moduleObj(cx, fp->fun()->nonLazyScript()->asmJS);
-    AsmJSModule &module = AsmJSModuleObjectToModule(moduleObj);
+    const AsmJSModule &module = AsmJSModuleObjectToModule(moduleObj);
 
     RootedObject linkedModule(cx);
     if (!DynamicallyLinkModule(cx, fp, moduleObj, &linkedModule))

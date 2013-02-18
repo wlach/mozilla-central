@@ -39,6 +39,14 @@
 
 #include "vm/GlobalObject-inl.h"
 
+/* Includes to get to low-level memory-mapping functionality. */
+#ifdef XP_WIN
+# include "jswin.h"
+#else
+# include <unistd.h>
+# include <sys/mman.h>
+#endif
+
 using namespace js;
 using namespace js::gc;
 using namespace js::types;
@@ -274,7 +282,7 @@ GetViewList(ArrayBufferObject *obj)
 }
 
 void
-ArrayBufferObject::changeContents(ObjectElements *newHeader)
+ArrayBufferObject::changeContents(JSContext *maybecx, ObjectElements *newHeader)
 {
    // Grab out data before invalidating it.
    uint32_t byteLengthCopy = byteLength();
@@ -286,6 +294,10 @@ ArrayBufferObject::changeContents(ObjectElements *newHeader)
    for (JSObject *view = viewListHead; view; view = NextView(view)) {
        uintptr_t newDataPtr = uintptr_t(view->getPrivate()) - oldDataPointer + newDataPointer;
        view->setPrivate(reinterpret_cast<uint8_t*>(newDataPtr));
+
+       // Notify compiled jit code that the base pointer has moved.
+       if (maybecx)
+           MarkObjectStateChange(maybecx, view);
    }
 
    // Change to the new header (now, so we can use GetViewList).
@@ -306,9 +318,95 @@ ArrayBufferObject::uninlineData(JSContext *maybecx)
    if (!newHeader)
        return false;
 
-   changeContents(newHeader);
+   changeContents(maybecx, newHeader);
    return true;
 }
+
+#ifdef JS_CPU_X64
+//
+// To avoid dynamically checking bounds on each load/store, asm.js code relies
+// on the SIGSEGV handler in AsmJSSignalHandlers.cpp. However, this only works
+// if we can guarantee that *any* out-of-bounds access generates a fault. This
+// isn't generally true since an out-of-bounds access could land on other
+// Mozilla data. To overcome this on x64, we reserve an entire 4GB space,
+// making only the range [0, byteLength) accessible, and use a 32-bit unsigned
+// index into this space. (x86 and ARM require different tricks.)
+//
+// Since protection can only occur on page boundaries and since byteLength is
+// not forced to be a multiple of the page size, we must offset the base of the
+// data so that the end of the data lines up with a page boundary. Another
+// complication is that we need to put an ObjectElements struct immediately
+// before the data array (as required by the general JSObject data structure).
+// Instead of trying to pack ObjectElements in to the padding, we simply
+// reserve two extra pages: one before the data array to potentially hold the
+// ObjectElements if there isn't enough padding, one after the data array so
+// that base (with padding) + 4GB is in the reserved range. This looks like:
+//
+//   |<------------------------------ 4GB + 2 pages --------------------------->|
+//          |<--- sizeof --->|<------------------- 4GB ----------------->|
+//
+//   | slop | ObjectElements | data array | inaccessible reserved memory | slop |
+//                           ^            ^                              ^
+//                           |            \                             /
+//                     obj->elements       required to be page boundaries
+//
+JS_STATIC_ASSERT(sizeof(ObjectElements) < PageSize);
+static const size_t AsmJSBufferReservedLength = FourGiB + 2 * PageSize;
+
+bool
+ArrayBufferObject::prepareForAsmJS(JSContext *cx, Handle<ArrayBufferObject*> buffer)
+{
+    if (buffer->isAsmJSArrayBuffer())
+        return true;
+
+    void *p = mmap(NULL, AsmJSBufferReservedLength, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
+    if (p == MAP_FAILED)
+        return false;
+
+    JS_ASSERT(uintptr_t(p) % PageSize == 0);
+    uint8_t *begin = reinterpret_cast<uint8_t*>(p);
+    uint32_t padding = ComputeByteAlignment(buffer->byteLength(), PageSize);
+    uint8_t *data = begin + PageSize + padding;
+    ObjectElements *newHeader = reinterpret_cast<ObjectElements*>(data - sizeof(ObjectElements));
+
+    size_t validLength = PageSize + padding + buffer->byteLength();
+    JS_ASSERT(validLength % PageSize == 0);
+    if (mprotect(begin, validLength, PROT_READ | PROT_WRITE))
+        return false;
+
+    memcpy(data, buffer->dataPointer(), buffer->byteLength());
+
+    ObjectElements *oldHeader = buffer->hasDynamicElements() ? buffer->getElementsHeader() : NULL;
+    buffer->changeContents(cx, newHeader);
+    js_free(oldHeader);
+
+    newHeader->setIsAsmJSArrayBuffer();
+    JS_ASSERT(data == buffer->dataPointer());
+    return true;
+}
+
+void
+ArrayBufferObject::neuterAsmJSArrayBuffer(ArrayBufferObject &buffer)
+{
+    JS_ASSERT(buffer.isAsmJSArrayBuffer());
+    mprotect(buffer.dataPointer(), buffer.byteLength(), PROT_NONE);
+}
+
+void
+ArrayBufferObject::releaseAsmJSArrayBuffer(RawObject obj)
+{
+    ArrayBufferObject &buffer = obj->asArrayBuffer();
+    JS_ASSERT(buffer.isAsmJSArrayBuffer());
+
+    // See prepareForAsmJS.
+    uint8_t *data = buffer.dataPointer();
+    uint32_t padding = ComputeByteAlignment(buffer.byteLength(), PageSize);
+    uint8_t *begin = data - padding - PageSize;
+    JS_ASSERT(uintptr_t(begin) % PageSize == 0);
+
+    munmap(begin, AsmJSBufferReservedLength);
+}
+#endif
 
 #ifdef JSGC_GENERATIONAL
 class WeakObjectSlotRef : public js::gc::BufferableRef
@@ -472,7 +570,7 @@ ArrayBufferObject::stealContents(JSContext *cx, JSObject *obj, void **contents,
     ArrayBufferObject &buffer = obj->asArrayBuffer();
     JSObject *views = *GetViewList(&buffer);
     js::ObjectElements *header = js::ObjectElements::fromElements((js::HeapSlot*)buffer.dataPointer());
-    if (buffer.hasDynamicElements()) {
+    if (buffer.hasDynamicElements() && !buffer.isAsmJSArrayBuffer()) {
         *GetViewList(&buffer) = NULL;
         *contents = header;
         *data = buffer.dataPointer();
@@ -491,6 +589,11 @@ ArrayBufferObject::stealContents(JSContext *cx, JSObject *obj, void **contents,
         ArrayBufferObject::setElementsHeader(newheader, length);
         *contents = newheader;
         *data = reinterpret_cast<uint8_t *>(newheader + 1);
+
+#ifdef JS_CPU_X64
+        if (buffer.isAsmJSArrayBuffer())
+            ArrayBufferObject::neuterAsmJSArrayBuffer(buffer);
+#endif
     }
 
     // Neuter the donor ArrayBuffer and all views of it

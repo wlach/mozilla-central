@@ -17,6 +17,7 @@
 #include "IonAllocPolicy.h"
 #include "IonCompartment.h"
 #include "CompileInfo.h"
+#include "RegisterSets.h"
 
 namespace js {
 namespace ion {
@@ -98,6 +99,19 @@ class MIRGenerator
         JS_ASSERT(compilingAsmJS());
         return performsAsmCall_;
     }
+    bool noteAsmLoad(uint32_t offsetBefore, uint32_t offsetAfter, AnyRegister dest) {
+        uint32_t opLength = offsetAfter - offsetBefore;
+        JS_ASSERT(opLength <= UINT8_MAX);
+        return asmHeapAccesses_.append(AsmJSHeapAccess(offsetBefore, opLength, dest));
+    }
+    bool noteAsmStore(uint32_t offsetBefore, uint32_t offsetAfter) {
+        uint32_t opLength = offsetAfter - offsetBefore;
+        JS_ASSERT(opLength <= UINT8_MAX);
+        return asmHeapAccesses_.append(AsmJSHeapAccess(offsetBefore, opLength));
+    }
+    const Vector<AsmJSHeapAccess> &asmHeapAccesses() const {
+        return asmHeapAccesses_;
+    }
 
   public:
     JSCompartment *compartment;
@@ -113,6 +127,7 @@ class MIRGenerator
 
     uint32_t maxAsmStackArgBytes_;
     bool performsAsmCall_;
+    Vector<AsmJSHeapAccess> asmHeapAccesses_;
 };
 
 } // namespace ion

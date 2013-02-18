@@ -326,6 +326,7 @@ CPPSRCS +=	MIR.cpp \
 		EffectiveAddressAnalysis.cpp \
 		AsmJS.cpp \
 		AsmJSLink.cpp \
+ 		AsmJSSignalHandlers.cpp \
 		$(NULL)
 endif #ENABLE_ION
 ifeq (86, $(findstring 86,$(TARGET_CPU)))

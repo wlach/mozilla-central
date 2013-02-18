@@ -10,6 +10,7 @@
 #include "frontend/ParseNode.h"
 #include "ion/AsmJS.h"
 #include "ion/AsmJSModule.h"
+#include "ion/AsmJSSignalHandlers.h"
 #include "ion/CodeGenerator.h"
 #include "ion/MIR.h"
 #include "ion/MIRGraph.h"
@@ -1234,6 +1235,9 @@ class ModuleCompiler
         g.u.constant_ = constant;
         return globals_.putNew(varName, g);
     }
+    bool addHeapAccesses(const Vector<AsmJSHeapAccess> &accesses) {
+        return module_->addHeapAccesses(accesses);
+    }
     bool addExportedFunction(const Func *func, PropertyName *maybeFieldName) {
         JS_ASSERT(currentPass_ == 1);
         AsmJSModule::ArgCoercionVector argCoercions;
@@ -1329,6 +1333,10 @@ class ModuleCompiler
             JS_ASSERT(elemIndex == table.baseIndex() + table.numElems());
         }
         JS_ASSERT(elemIndex == module_->numFuncPtrTableElems());
+
+        // The AsmJSHeapAccess offsets need to be updated to reflect the
+        // "actualOffset" (an ARM distinction).
+        module_->convertHeapAccessesToActaualOffset(masm_);
 
         *module = module_.forget();
         return true;
@@ -2208,23 +2216,29 @@ static Class AsmJSModuleClass = {
     AsmJSModuleObject_trace
 };
 
-AsmJSModule &
-js::AsmJSModuleObjectToModule(JSObject *obj)
+static inline AsmJSModule &
+AsmJSModuleObjectToMutableModule(JSObject *obj)
 {
     JS_ASSERT(obj->getClass() == &AsmJSModuleClass);
     return *(AsmJSModule *)obj->getReservedSlot(ASM_CODE_RESERVED_SLOT).toPrivate();
 }
 
+const AsmJSModule &
+js::AsmJSModuleObjectToModule(JSObject *obj)
+{
+    return AsmJSModuleObjectToMutableModule(obj);
+}
+
 static void
 AsmJSModuleObject_finalize(FreeOp *fop, RawObject obj)
 {
-    fop->delete_(&AsmJSModuleObjectToModule(obj));
+    fop->delete_(&AsmJSModuleObjectToMutableModule(obj));
 }
 
 static void
 AsmJSModuleObject_trace(JSTracer *trc, JSRawObject obj)
 {
-    AsmJSModuleObjectToModule(obj).trace(trc);
+    AsmJSModuleObjectToMutableModule(obj).trace(trc);
 }
 
 static JSObject *
@@ -4254,6 +4268,9 @@ CheckFunctionBody(ModuleCompiler &m, ModuleCompiler::Func &func)
     if (!codegen)
         return false;
 
+    if (!m.addHeapAccesses(f.mirGen().asmHeapAccesses()))
+        return false;
+
     // Unlike regular IonMonkey which links and generates a new IonCode for
     // every function, we accumulate all the functions in the module in a
     // single MacroAssembler and link at end. Linking asm.js doesn't require a
@@ -4296,7 +4313,7 @@ static void
 LoadAsmJSActivationIntoRegister(MacroAssembler &masm, Register reg)
 {
     masm.movePtr(ImmWord(GetIonContext()->compartment->rt), reg);
-    masm.loadPtr(Address(reg, offsetof(JSRuntime, asmJSActivation)), reg);
+    masm.loadPtr(Address(reg, offsetof(JSRuntime, mainThread.asmJSActivation)), reg);
 }
 
 static void
@@ -4666,6 +4683,9 @@ Warn(JSContext *cx, int code, const char *str = NULL)
 bool
 js::CompileAsmJS(JSContext *cx, TokenStream &ts, ParseNode *fn, HandleScript script)
 {
+    if (!EnsureAsmJSSignalHandlersInstalled())
+        return Warn(cx, JSMSG_USE_ASM_TYPE_FAIL, "Platform missing signal handler support");
+
     if (cx->compartment->debugMode())
         return Warn(cx, JSMSG_USE_ASM_TYPE_FAIL, "Disabled by debugger");
 

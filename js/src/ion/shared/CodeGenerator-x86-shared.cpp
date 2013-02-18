@@ -224,6 +224,9 @@ CodeGeneratorX86Shared::visitAsmLoad(LAsmLoad *ins)
 {
     const MAsmLoad *mir = ins->mir();
     Operand addr = PointerOperand(ins, mir);
+
+    uint32_t offsetBefore = masm.size();
+
     switch (mir->viewType()) {
       case ArrayBufferView::TYPE_INT8:    masm.movxbl(addr, ToRegister(ins->output())); break;
       case ArrayBufferView::TYPE_UINT8:   masm.movzbl(addr, ToRegister(ins->output())); break;
@@ -238,7 +241,9 @@ CodeGeneratorX86Shared::visitAsmLoad(LAsmLoad *ins)
         break;
       default: JS_NOT_REACHED("unexpected array type");
     }
-    return true;
+
+    uint32_t offsetAfter = masm.size();
+    return gen->noteAsmLoad(offsetBefore, offsetAfter, ToAnyRegister(ins->output()));
 }
 
 bool
@@ -246,6 +251,9 @@ CodeGeneratorX86Shared::visitAsmStore(LAsmStore *ins)
 {
     const MAsmStore *mir = ins->mir();
     Operand addr = PointerOperand(ins, mir);
+
+    uint32_t offsetBefore = masm.size();
+
     if (ins->value()->isConstant()) {
         switch (mir->viewType()) {
           case ArrayBufferView::TYPE_INT8:    masm.movb(Imm32(ToInt32(ins->value())), addr); break;
@@ -266,13 +274,22 @@ CodeGeneratorX86Shared::visitAsmStore(LAsmStore *ins)
           case ArrayBufferView::TYPE_UINT32:  masm.movl(ToRegister(ins->value()), addr); break;
           case ArrayBufferView::TYPE_FLOAT64: masm.movsd(ToFloatRegister(ins->value()), addr); break;
           case ArrayBufferView::TYPE_FLOAT32:
+            // Although we are storing to a float32, the input register holds a
+            // float64 which must be explicitly converted (we cannot simply alias the low
+            // float32 of the xmm register).
             masm.convertDoubleToFloat(ToFloatRegister(ins->value()), ScratchFloatReg);
+
+            // The offsetBefore must point directly at the load operation since
+            // that is what will fault.
+            offsetBefore = masm.size();
             masm.movss(ScratchFloatReg, addr);
             break;
           default: JS_NOT_REACHED("unexpected array type");
         }
     }
-    return true;
+
+    uint32_t offsetAfter = masm.size();
+    return gen->noteAsmStore(offsetBefore, offsetAfter);
 }
 
 bool

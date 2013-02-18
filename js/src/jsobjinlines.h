@@ -1011,8 +1011,17 @@ JSObject::finish(js::FreeOp *fop)
 {
     if (hasDynamicSlots())
         fop->free_(slots);
-    if (hasDynamicElements())
-        fop->free_(getElementsHeader());
+    if (hasDynamicElements()) {
+        js::ObjectElements *elements = getElementsHeader();
+#ifdef JS_CPU_X64
+        if (JS_UNLIKELY(elements->isAsmJSArrayBuffer()))
+            js::ArrayBufferObject::releaseAsmJSArrayBuffer(this);
+        else
+            fop->free_(elements);
+#else
+        fop->free_(elements);
+#endif
+    }
 }
 
 /* static */ inline bool
