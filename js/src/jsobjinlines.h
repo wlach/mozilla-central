@@ -420,14 +420,14 @@ inline bool
 JSObject::shouldConvertDoubleElements()
 {
     JS_ASSERT(isNative());
-    return getElementsHeader()->convertDoubleElements;
+    return getElementsHeader()->shouldConvertDoubleElements();
 }
 
 inline void
 JSObject::setShouldConvertDoubleElements()
 {
     JS_ASSERT(isArray() && !hasEmptyElements());
-    getElementsHeader()->convertDoubleElements = 1;
+    getElementsHeader()->setShouldConvertDoubleElements();
 }
 
 inline bool
