@@ -410,7 +410,6 @@ class JSScript : public js::gc::Cell
     uint32_t        maxLoopCount; /* Maximum loop count that has been encountered. */
     uint32_t        loopCount;    /* Number of times a LOOPHEAD has been encountered.
                                      after a LOOPENTRY. Modified only by interpreter. */
-    uint32_t        PADDING32;
 
 #ifdef DEBUG
     // Unique identifier within the compartment for this script, used for

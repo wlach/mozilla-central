@@ -648,6 +648,34 @@ class AnyRegisterIterator
     }
 };
 
+class ABIArg
+{
+  public:
+    enum Kind { GPR, FPU, Stack };
+
+  private:
+    Kind kind_;
+    union {
+        Registers::Code gpr_;
+        FloatRegisters::Code fpu_;
+        uint32_t offset_;
+    } u;
+
+  public:
+    ABIArg() : kind_(Kind(-1)) { u.offset_ = -1; }
+    ABIArg(Register gpr) : kind_(GPR) { u.gpr_ = gpr.code(); }
+    ABIArg(FloatRegister fpu) : kind_(FPU) { u.fpu_ = fpu.code(); }
+    ABIArg(uint32_t offset) : kind_(Stack) { u.offset_ = offset; }
+
+    Kind kind() const { return kind_; }
+    Register gpr() const { JS_ASSERT(kind() == GPR); return Register::FromCode(u.gpr_); }
+    FloatRegister fpu() const { JS_ASSERT(kind() == FPU); return FloatRegister::FromCode(u.fpu_); }
+    uint32_t offsetFromArg0() const { JS_ASSERT(kind() == Stack); return u.offset_; }
+
+    bool argInRegister() const { return kind() != Stack; }
+    AnyRegister reg() const { return kind_ == GPR ? AnyRegister(gpr()) : AnyRegister(fpu()); }
+};
+
 class AsmJSHeapAccess
 {
     uint32_t offset_;

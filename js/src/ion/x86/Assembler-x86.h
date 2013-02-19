@@ -61,6 +61,20 @@ static const Register CallTempNonArgRegs[] = { edi, eax, ebx, ecx, esi, edx };
 static const uint32_t NumCallTempNonArgRegs =
     mozilla::ArrayLength(CallTempNonArgRegs);
 
+class ABIArgGenerator
+{
+    unsigned intRegIndex_;
+    unsigned floatRegIndex_;
+    uint32_t stackOffset_;
+    ABIArg current_;
+
+  public:
+    ABIArgGenerator();
+    ABIArg next(MIRType argType);
+    ABIArg &current() { return current_; }
+    uint32_t stackBytesConsumedSoFar() const { return stackOffset_; }
+};
+
 static const Register OsrFrameReg = edx;
 static const Register PreBarrierReg = edx;
 
@@ -68,6 +82,8 @@ static const Register PreBarrierReg = edx;
 // jitted code.
 static const uint32_t StackAlignment = 16;
 static const bool StackKeptAligned = false;
+static const uint32_t NativeFrameSize = sizeof(void*);
+static const uint32_t AlignmentAtPrologue = sizeof(void*);
 
 struct ImmTag : public Imm32
 {
@@ -310,7 +326,7 @@ class Assembler : public AssemblerX86Shared
         movl(src, dest);
     }
     void lea(const Operand &src, const Register &dest) {
-        return leal(src, dst);
+        return leal(src, dest);
     }
 
     void cmpl(const Register src, ImmWord ptr) {
