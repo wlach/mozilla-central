@@ -1733,7 +1733,7 @@ class FunctionCompiler
 
         ABIArg arg = args->abi_.next(type.toMIRType());
         if (arg.kind() == ABIArg::Stack) {
-            MAsmPassStackArg *mir = MAsmPassStackArg::New(arg.offsetFromArg0(), argDef);
+            MAsmPassStackArg *mir = MAsmPassStackArg::New(arg.offsetFromArgBase(), argDef);
             curBlock_->add(mir);
             if (!args->stackArgs_.append(mir))
                 return false;
@@ -4385,16 +4385,15 @@ GenerateEntry(ModuleCompiler &m, const AsmJSModule::ExportedFunction &exportedFu
     // Determine how many stack slots we need to hold arguments that don't fit
     // in registers.
     unsigned numStackArgs = 0;
-    for (ABIArgIter iter(func.argMIRTypes()); !iter.done(); iter++) {
+    ABIArgIter iter(func.argMIRTypes());
+    for (; !iter.done(); iter++) {
         if (iter->kind() == ABIArg::Stack)
             numStackArgs++;
     }
 
-    // Before calling, we must ensure sp % 16 == 0. Since (sp % 16) = 8 on
-    // entry, we need to push 8 (mod 16) bytes.
-    JS_ASSERT(AlignmentAtPrologue == 8);
-    JS_ASSERT(masm.framePushed() % 16 == 8);
-    unsigned stackDec = (numStackArgs + numStackArgs % 2) * sizeof(uint64_t);
+    // Before pushing the arguments, we are aligned for a call. Ensure that we
+    // stay aligned.
+    unsigned stackDec = AlignBytes(iter.stackBytesConsumedSoFar(), StackAlignment);
     masm.reserveStack(stackDec);
     JS_ASSERT(masm.framePushed() % 16 == 8);
 
@@ -4411,7 +4410,7 @@ GenerateEntry(ModuleCompiler &m, const AsmJSModule::ExportedFunction &exportedFu
             break;
           case ABIArg::Stack:
             masm.movq(Operand(argv, argOffset), ScratchReg);
-            masm.movq(ScratchReg, Operand(StackPointer, iter->offsetFromArg0()));
+            masm.movq(ScratchReg, Operand(StackPointer, iter->offsetFromArgBase()));
             break;
         }
     }
@@ -4498,13 +4497,6 @@ InvokeFromAsmJS_ToNumber(JSContext *cx, AsmJSModule::ExitDatum *exitDatum, int32
     return true;
 }
 
-static unsigned
-PaddingForAlignedCall(unsigned frameSize)
-{
-    const unsigned remainder = (AlignmentAtPrologue + frameSize) % StackAlignment;
-    return remainder ? StackAlignment - remainder : 0;
-}
-
 // See "asm.js FFI calls" comment above.
 static void
 GenerateFFIExit(ModuleCompiler &m, const ModuleCompiler::ExitDescriptor &exit, unsigned exitIndex,
@@ -4517,8 +4509,7 @@ GenerateFFIExit(ModuleCompiler &m, const ModuleCompiler::ExitDescriptor &exit, u
 
     const unsigned arrayLength = Max<size_t>(1, exit.argTypes().length());
     const unsigned arraySize = arrayLength * sizeof(Value);
-    const unsigned padding = PaddingForAlignedCall(arraySize);
-    const unsigned reserveSize = arraySize + padding;
+    const unsigned reserveSize = AlignBytes(AlignmentAtPrologue + arraySize, StackAlignment);
     const unsigned callerArgsOffset = reserveSize + NativeFrameSize;
 
     masm.setFramePushed(0);
@@ -4538,12 +4529,12 @@ GenerateFFIExit(ModuleCompiler &m, const ModuleCompiler::ExitDescriptor &exit, u
             break;
           case ABIArg::Stack:
             if (i.mirType() == MIRType_Int32) {
-                Address src(StackPointer, callerArgsOffset + i->offsetFromArg0());
+                Address src(StackPointer, callerArgsOffset + i->offsetFromArgBase());
                 masm.load32(src, ScratchReg);
                 masm.storeValue(JSVAL_TYPE_INT32, ScratchReg, dstAddr);
             } else {
                 JS_ASSERT(i.mirType() == MIRType_Double);
-                Address src(StackPointer, callerArgsOffset + i->offsetFromArg0());
+                Address src(StackPointer, callerArgsOffset + i->offsetFromArgBase());
                 masm.loadDouble(src, ScratchFloatReg);
                 masm.canonicalizeDouble(ScratchFloatReg);
                 masm.storeDouble(ScratchFloatReg, dstAddr);
@@ -4634,7 +4625,7 @@ GenerateOperationCallbackExit(ModuleCompiler &m, Label *throwLabel)
     masm.storePtr(IntArgReg0, Address(StackPointer, masm.framePushed() - sizeof(void*)));
 
     // Align the stack for the call.
-    const unsigned padding = PaddingForAlignedCall(masm.framePushed());
+    const unsigned padding = ComputeByteAlignment(masm.framePushed(), StackAlignment);
     masm.reserveStack(padding);
 
     // argument 0: cx

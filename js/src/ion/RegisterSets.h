@@ -670,7 +670,7 @@ class ABIArg
     Kind kind() const { return kind_; }
     Register gpr() const { JS_ASSERT(kind() == GPR); return Register::FromCode(u.gpr_); }
     FloatRegister fpu() const { JS_ASSERT(kind() == FPU); return FloatRegister::FromCode(u.fpu_); }
-    uint32_t offsetFromArg0() const { JS_ASSERT(kind() == Stack); return u.offset_; }
+    uint32_t offsetFromArgBase() const { JS_ASSERT(kind() == Stack); return u.offset_; }
 
     bool argInRegister() const { return kind() != Stack; }
     AnyRegister reg() const { return kind_ == GPR ? AnyRegister(gpr()) : AnyRegister(fpu()); }

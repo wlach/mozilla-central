@@ -758,6 +758,7 @@ class ABIArgIter
 
     unsigned index() const { JS_ASSERT(!done()); return i_; }
     MIRType mirType() const { JS_ASSERT(!done()); return types_[i_]; }
+    uint32_t stackBytesConsumedSoFar() const { return gen_.stackBytesConsumedSoFar(); }
 };
 
 } // namespace ion

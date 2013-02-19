@@ -2380,7 +2380,7 @@ LIRGenerator::visitAsmParameter(MAsmParameter *ins)
     ABIArg abi = ins->abi();
     if (abi.argInRegister())
         return defineFixed(new LAsmParameter, ins, LAllocation(abi.reg()));
-    return defineFixed(new LAsmParameter, ins, LArgument(abi.offsetFromArg0()));
+    return defineFixed(new LAsmParameter, ins, LArgument(abi.offsetFromArgBase()));
 }
 
 bool
