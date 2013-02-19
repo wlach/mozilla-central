@@ -4544,19 +4544,16 @@ GenerateExit(ModuleCompiler &m, MacroAssembler &masm, const ModuleCompiler::Exit
     switch (exit.use().which()) {
       case Use::NoCoercion:
         masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, &InvokeFromAsmJS_Ignore)));
-        masm.testl(ReturnReg, ReturnReg);
-        masm.j(Assembler::Zero, popAllFramesLabel);
+        masm.branchTest32(Assembler::Zero, ReturnReg, ReturnReg, popAllFramesLabel);
         break;
       case Use::ToInt32:
         masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, &InvokeFromAsmJS_ToInt32)));
-        masm.testl(ReturnReg, ReturnReg);
-        masm.j(Assembler::Zero, popAllFramesLabel);
+        masm.branchTest32(Assembler::Zero, ReturnReg, ReturnReg, popAllFramesLabel);
         masm.unboxInt32(Address(argv, 0), ReturnReg);
         break;
       case Use::ToNumber:
         masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, &InvokeFromAsmJS_ToNumber)));
-        masm.testl(ReturnReg, ReturnReg);
-        masm.j(Assembler::Zero, popAllFramesLabel);
+        masm.branchTest32(Assembler::Zero, ReturnReg, ReturnReg, popAllFramesLabel);
         masm.loadDouble(Address(argv, 0), ReturnFloatReg);
         break;
       case Use::AddOrSub:
