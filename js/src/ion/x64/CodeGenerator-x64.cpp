@@ -8,7 +8,6 @@
 #include "jsnum.h"
 
 #include "CodeGenerator-x64.h"
-#include "ion/CodeGenerator.h"
 #include "ion/MIR.h"
 #include "ion/MIRGraph.h"
 #include "ion/shared/CodeGenerator-shared-inl.h"
@@ -325,21 +324,6 @@ CodeGeneratorX64::visitInterruptCheck(LInterruptCheck *lir)
     masm.movq(ImmWord(interrupt), ScratchReg);
     masm.cmpl(Operand(ScratchReg, 0), Imm32(0));
     masm.j(Assembler::NonZero, ool->entry());
-    masm.bind(ool->rejoin());
-    return true;
-}
-
-bool
-CodeGeneratorX64::visitAsmCheckStackAndInterrupt(LAsmCheckStackAndInterrupt *lir)
-{
-    OutOfLineAsmCheckStackAndInterrupt *ool = new OutOfLineAsmCheckStackAndInterrupt(lir->mir());
-    if (!addOutOfLineCode(ool))
-        return false;
-
-    uintptr_t *limitAddr = &gen->compartment->rt->mainThread.ionStackLimit;
-    masm.movq(ImmWord(limitAddr), ScratchReg);
-    masm.cmpl(Operand(ScratchReg, 0), StackPointer);
-    masm.j(Assembler::AboveOrEqual, ool->entry());
     masm.bind(ool->rejoin());
     return true;
 }

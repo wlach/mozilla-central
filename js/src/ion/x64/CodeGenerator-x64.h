@@ -49,7 +49,6 @@ class CodeGeneratorX64 : public CodeGeneratorX86Shared
     bool visitImplicitThis(LImplicitThis *lir);
     bool visitRecompileCheck(LRecompileCheck *lir);
     bool visitInterruptCheck(LInterruptCheck *lir);
-    bool visitAsmCheckStackAndInterrupt(LAsmCheckStackAndInterrupt *lir);
     bool visitCompareB(LCompareB *lir);
     bool visitCompareBAndBranch(LCompareBAndBranch *lir);
     bool visitCompareV(LCompareV *lir);

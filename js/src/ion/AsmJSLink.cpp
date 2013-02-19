@@ -340,7 +340,6 @@ AsmJSActivation::AsmJSActivation(JSContext *cx, const AsmJSModule &module, unsig
     profiler_(NULL)
 {
     cx->runtime->mainThread.asmJSActivation = this;
-    cx->runtime->resetIonStackLimit();
 
     if (cx->runtime->spsProfiler.enabled()) {
         profiler_ = &cx->runtime->spsProfiler;

@@ -146,7 +146,6 @@ namespace ion {
     _(InstanceOf)                                                           \
     _(CallInstanceOf)                                                       \
     _(InterruptCheck)                                                       \
-    _(AsmCheckStackAndInterrupt)                                            \
     _(FunctionBoundary)                                                     \
     _(AsmNeg)                                                               \
     _(AsmUDiv)                                                              \
@@ -158,6 +157,7 @@ namespace ion {
     _(AsmVoidReturn)                                                        \
     _(AsmPassStackArg)                                                      \
     _(AsmCall)                                                              \
+    _(AsmCheckOverRecursed)                                                 \
     _(GetDOMProperty)                                                       \
     _(SetDOMProperty)                                                       \
     _(ParCheckOverRecursed)                                                 \

@@ -214,6 +214,7 @@ class LIRGenerator : public LIRGeneratorSpecific
     bool visitAsmVoidReturn(MAsmVoidReturn *ins);
     bool visitAsmPassStackArg(MAsmPassStackArg *ins);
     bool visitAsmCall(MAsmCall *ins);
+    bool visitAsmCheckOverRecursed(MAsmCheckOverRecursed *ins);
     bool visitSetDOMProperty(MSetDOMProperty *ins);
     bool visitGetDOMProperty(MGetDOMProperty *ins);
 };

@@ -3479,28 +3479,6 @@ class MInterruptCheck : public MNullaryInstruction
     }
 };
 
-// The asm version of MInterrupt/MCheckOverRecursed doesn't bail; instead, if
-// the stack-pointer check fails, the code calls failLabel.
-class MAsmCheckStackAndInterrupt : public MNullaryInstruction
-{
-    Label *failLabel_;
-
-    MAsmCheckStackAndInterrupt(Label *failLabel)
-      : failLabel_(failLabel)
-    {
-        setGuard();
-    }
-
-  public:
-    INSTRUCTION_HEADER(AsmCheckStackAndInterrupt);
-    static MAsmCheckStackAndInterrupt *New(Label *failLabel) {
-        return new MAsmCheckStackAndInterrupt(failLabel);
-    }
-    Label *failLabel() const {
-        return failLabel_;
-    }
-};
-
 // If not defined, set a global variable to |undefined|.
 class MDefVar : public MUnaryInstruction
 {
@@ -7054,6 +7032,18 @@ class MAsmCall : public MInstruction
     size_t spIncrement() const {
         return spIncrement_;
     }
+};
+
+// The asm.js version doesn't use the bail mechanism: instead it throws and
+// exception by jumping to the given label.
+class MAsmCheckOverRecursed : public MNullaryInstruction
+{
+    Label *onError_;
+    MAsmCheckOverRecursed(Label *onError) : onError_(onError) {}
+  public:
+    INSTRUCTION_HEADER(AsmCheckOverRecursed);
+    static MAsmCheckOverRecursed *New(Label *onError) { return new MAsmCheckOverRecursed(onError); }
+    Label *onError() const { return onError_; }
 };
 
 #undef INSTRUCTION_HEADER

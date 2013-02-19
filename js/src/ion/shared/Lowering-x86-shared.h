@@ -26,7 +26,6 @@ class LIRGeneratorX86Shared : public LIRGeneratorShared
 
     bool visitRecompileCheck(MRecompileCheck *ins);
     bool visitInterruptCheck(MInterruptCheck *ins);
-    bool visitAsmCheckStackAndInterrupt(MAsmCheckStackAndInterrupt *ins);
     bool visitGuardShape(MGuardShape *ins);
     bool visitPowHalf(MPowHalf *ins);
     bool visitAsmNeg(MAsmNeg *ins);

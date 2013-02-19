@@ -263,7 +263,6 @@ class ParallelArrayVisitor : public MInstructionVisitor
     SAFE_OP(PolyInlineDispatch)
     UNSAFE_OP(EffectiveAddress)
     UNSAFE_OP(AsmUnsignedToDouble)
-    UNSAFE_OP(AsmCheckStackAndInterrupt)
     UNSAFE_OP(AsmNeg)
     UNSAFE_OP(AsmUDiv)
     UNSAFE_OP(AsmUMod)
@@ -274,6 +273,7 @@ class ParallelArrayVisitor : public MInstructionVisitor
     UNSAFE_OP(AsmPassStackArg)
     UNSAFE_OP(AsmParameter)
     UNSAFE_OP(AsmCall)
+    UNSAFE_OP(AsmCheckOverRecursed)
 
     // It looks like this could easily be made safe:
     UNSAFE_OP(ConvertElementsToDoubles)

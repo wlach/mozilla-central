@@ -1012,7 +1012,7 @@ class ModuleCompiler
     ExitMap                        exits_;
     MathNameMap                    standardLibraryMathNames_;
 
-    Label                          checkStackAndInterrupt_;
+    Label                          stackOverflowLabel_;
 
     const char *                   errorString_;
     ParseNode *                    errorNode_;
@@ -1057,8 +1057,8 @@ class ModuleCompiler
             tokenStream_.reportAsmError(errorNode_, JSMSG_USE_ASM_TYPE_FAIL, errorString_);
 
         // Avoid spurious Label assertions on compilation failure.
-        if (!checkStackAndInterrupt_.bound())
-            checkStackAndInterrupt_.bind(0);
+        if (!stackOverflowLabel_.bound())
+            stackOverflowLabel_.bind(0);
     }
 
     bool init() {
@@ -1112,7 +1112,7 @@ class ModuleCompiler
     LifoAlloc &lifo() { return lifo_; }
     TempAllocator &alloc() { return alloc_; }
     MacroAssembler &masm() { return masm_; }
-    Label *checkStackAndInterrupt() { return &checkStackAndInterrupt_; }
+    Label &stackOverflowLabel() { return stackOverflowLabel_; }
     bool hasError() const { return errorString_ != NULL; }
     const AsmJSModule &module() const { return *module_.get(); }
 
@@ -1428,7 +1428,7 @@ class FunctionCompiler
         }
 
         if (!m_.cx()->runtime->asmJSUnsafe)
-            curBlock_->add(MAsmCheckStackAndInterrupt::New(m_.checkStackAndInterrupt()));
+            curBlock_->add(MAsmCheckOverRecursed::New(&m_.stackOverflowLabel()));
 
         for (LocalMap::Range r = locals_.all(); !r.empty(); r.popFront()) {
             const Local &local = r.front().value;
@@ -1911,8 +1911,6 @@ class FunctionCompiler
         (*loopEntry)->setLoopDepth(loopStack_.length());
         curBlock_->end(MGoto::New(*loopEntry));
         curBlock_ = *loopEntry;
-        if (!m_.cx()->runtime->asmJSUnsafe)
-            curBlock_->add(MAsmCheckStackAndInterrupt::New(m_.checkStackAndInterrupt()));
         return true;
     }
 
@@ -4443,7 +4441,7 @@ InvokeFromAsmJS_Ignore(JSContext *cx, AsmJSModule::ExitDatum *exitDatum, int32_t
     if (!Invoke(cx, UndefinedValue(), fval, argc, argv, rval.address()))
         return false;
 
-    return JS_CHECK_OPERATION_LIMIT(cx);  // (TEMPORARY)
+    return true;
 }
 
 static int32_t
@@ -4459,7 +4457,7 @@ InvokeFromAsmJS_ToInt32(JSContext *cx, AsmJSModule::ExitDatum *exitDatum, int32_
         return false;
     argv[0] = Int32Value(i32);
 
-    return JS_CHECK_OPERATION_LIMIT(cx);  // (TEMPORARY)
+    return true;
 }
 
 static int32_t
@@ -4475,7 +4473,7 @@ InvokeFromAsmJS_ToNumber(JSContext *cx, AsmJSModule::ExitDatum *exitDatum, int32
         return false;
     argv[0] = DoubleValue(dbl);
 
-    return JS_CHECK_OPERATION_LIMIT(cx);  // (TEMPORARY)
+    return true;
 }
 
 static unsigned
@@ -4572,25 +4570,13 @@ GenerateExits(ModuleCompiler &m)
 
     Label popAllFramesLabel;
 
-    // See CodeGenerator::visitOutOfLineAsmCheckStackAndInterrupt.
-    if (m.checkStackAndInterrupt()->used()) {
-        masm.align(CodeAlignment);
-        masm.bind(m.checkStackAndInterrupt());
+    if (m.stackOverflowLabel().used()) {
+        void (*pf)(JSContext*) = js_ReportOverRecursed;
 
-        masm.setFramePushed(0);
-        masm.PushRegsInMask(VolatileRegs);
-        const unsigned padding = PaddingForAlignedCall(masm.framePushed());
-        masm.reserveStack(padding);
-
-        bool (*pf)(JSContext*) = CheckOverRecursed;
+        masm.bind(&m.stackOverflowLabel());
         LoadJSContextIntoRegister(masm, IntArgReg0);
         masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, pf)));
-        masm.testl(ReturnReg, ReturnReg);
-        masm.j(Assembler::Zero, &popAllFramesLabel);
-
-        masm.freeStack(padding);
-        masm.PopRegsInMask(VolatileRegs);
-        masm.ret();
+        masm.jmp(&popAllFramesLabel);
     }
 
     // Generate FFI call exit stubs.
@@ -4611,6 +4597,7 @@ GenerateExits(ModuleCompiler &m)
         LoadAsmJSActivationIntoRegister(masm, ScratchReg);
         masm.movq(Operand(ScratchReg, AsmJSActivation::offsetOfErrorRejoinSP()), StackPointer);
         masm.PopRegsInMask(NonVolatileRegs);
+        masm.mov(Imm32(0), ReturnReg);
         masm.ret();
     }
 

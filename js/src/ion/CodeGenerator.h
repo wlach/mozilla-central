@@ -34,7 +34,6 @@ class OutOfLineStoreElementHole;
 class OutOfLineTypeOfV;
 class OutOfLineLoadTypedArray;
 class OutOfLineParNewGCThing;
-class OutOfLineAsmCheckStackAndInterrupt;
 
 class CodeGenerator : public CodeGeneratorSpecific
 {
@@ -217,6 +216,7 @@ class CodeGenerator : public CodeGeneratorSpecific
 
     bool visitCheckOverRecursed(LCheckOverRecursed *lir);
     bool visitCheckOverRecursedFailure(CheckOverRecursedFailure *ool);
+    bool visitAsmCheckOverRecursed(LAsmCheckOverRecursed *lir);
 
     bool visitParCheckOverRecursed(LParCheckOverRecursed *lir);
     bool visitParCheckOverRecursedFailure(ParCheckOverRecursedFailure *ool);
@@ -234,7 +234,6 @@ class CodeGenerator : public CodeGeneratorSpecific
     bool visitOutOfLineBindNameCache(OutOfLineCache *ool);
     bool visitOutOfLineGetNameCache(OutOfLineCache *ool);
     bool visitOutOfLineCallsiteCloneCache(OutOfLineCache *ool);
-    bool visitOutOfLineAsmCheckStackAndInterrupt(OutOfLineAsmCheckStackAndInterrupt *ool);
 
     bool visitOutOfLineParNewGCThing(OutOfLineParNewGCThing *ool);
 
@@ -307,25 +306,6 @@ class CodeGenerator : public CodeGeneratorSpecific
 
     // Bailout if an element about to be written to is a hole.
     bool emitStoreHoleCheck(Register elements, const LAllocation *index, LSnapshot *snapshot);
-};
-
-// Out-of-line path to report over-recursed error and fail.
-class OutOfLineAsmCheckStackAndInterrupt : public OutOfLineCodeBase<CodeGenerator>
-{
-    MAsmCheckStackAndInterrupt *mir_;
-
-  public:
-    OutOfLineAsmCheckStackAndInterrupt(MAsmCheckStackAndInterrupt *mir)
-      : mir_(mir)
-    { }
-
-    bool accept(CodeGenerator *codegen) {
-        return codegen->visitOutOfLineAsmCheckStackAndInterrupt(this);
-    }
-
-    MAsmCheckStackAndInterrupt *mir() const {
-        return mir_;
-    }
 };
 
 } // namespace ion

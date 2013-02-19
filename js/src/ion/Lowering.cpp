@@ -2438,6 +2438,12 @@ LIRGenerator::visitAsmCall(MAsmCall *ins)
 }
 
 bool
+LIRGenerator::visitAsmCheckOverRecursed(MAsmCheckOverRecursed *ins)
+{
+    return add(new LAsmCheckOverRecursed(temp()), ins);
+}
+
+bool
 LIRGenerator::visitSetDOMProperty(MSetDOMProperty *ins)
 {
     MDefinition *val = ins->value();

@@ -5733,24 +5733,13 @@ CodeGenerator::visitAsmVoidReturn(LAsmVoidReturn *lir)
 }
 
 bool
-CodeGenerator::visitOutOfLineAsmCheckStackAndInterrupt(OutOfLineAsmCheckStackAndInterrupt *ool)
+CodeGenerator::visitAsmCheckOverRecursed(LAsmCheckOverRecursed *lir)
 {
-    // The frameDepth_ computation for asm.js code in CodeGeneratorShared's
-    // constructor ensures that sp is already properly aligned for a call.
-    JS_ASSERT(masm.framePushed() == uint32_t(frameDepth_));
+    Register limitReg = ToRegister(lir->limitTemp());
 
-    // We need to call into CheckOverRecursed and jump back to ool->rejoin if
-    // CheckOverRecursed returns 'true'. Since CheckOverRecursed can do
-    // anything, that requires saving/restoring all volatile registers. Instead
-    // of doing this in the out-of-line path (many hundred bytes for each
-    // prologue and loop header), we generate this once at the end of the
-    // asm.js module. Unlike the normal calling convention, mir->failLabel()
-    // will take care of saving our volatile registers. If CheckOverRecursed
-    // returns 'false', all asm.js functions will be popped so the exception
-    // can propagate outward, so if we return, it means that execution should
-    // continue.
-    masm.call(ool->mir()->failLabel());
-    masm.jump(ool->rejoin());
+    uintptr_t *limitAddr = &gen->compartment->rt->mainThread.nativeStackLimit;
+    masm.loadPtr(AbsoluteAddress(limitAddr), limitReg);
+    masm.branchPtr(Assembler::BelowOrEqual, StackPointer, limitReg, lir->mir()->onError());
     return true;
 }
 

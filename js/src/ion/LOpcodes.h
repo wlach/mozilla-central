@@ -198,7 +198,6 @@
     _(InstanceOfV)                  \
     _(CallInstanceOf)               \
     _(InterruptCheck)               \
-    _(AsmCheckStackAndInterrupt)    \
     _(ParCheckInterrupt)            \
     _(FunctionBoundary)             \
     _(AsmLoad)                      \
@@ -208,6 +207,7 @@
     _(AsmVoidReturn)                \
     _(AsmPassStackArg)              \
     _(AsmCall)                      \
+    _(AsmCheckOverRecursed)         \
     _(GetDOMProperty)               \
     _(SetDOMProperty)               \
     _(CallDOMNative)
