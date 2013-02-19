@@ -318,12 +318,15 @@ AsmJSMemoryFaultHandler(int signum, siginfo_t *info, void *context)
     // be re-executed which will crash in the normal way. The advantage to
     // doing this is that we remove ourselves from the crash stack which
     // simplifies crash reports. Note: the order of these tests matter.
-    if (prevSigAction.sa_flags & SA_SIGINFO)
+    if (prevSigAction.sa_flags & SA_SIGINFO) {
         prevSigAction.sa_sigaction(signum, info, context);
-    else if (prevSigAction.sa_handler == SIG_DFL || prevSigAction.sa_handler == SIG_IGN)
+        exit(signum);  // backstop
+    } else if (prevSigAction.sa_handler == SIG_DFL || prevSigAction.sa_handler == SIG_IGN) {
         sigaction(SignalCode, &prevSigAction, NULL);
-    else
+    } else {
         prevSigAction.sa_handler(signum);
+        exit(signum);  // backstop
+    }
 }
 
 bool
