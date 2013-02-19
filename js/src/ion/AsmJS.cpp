@@ -1013,6 +1013,7 @@ class ModuleCompiler
     MathNameMap                    standardLibraryMathNames_;
 
     Label                          stackOverflowLabel_;
+    Label                          operationCallbackLabel_;
 
     const char *                   errorString_;
     ParseNode *                    errorNode_;
@@ -1059,6 +1060,8 @@ class ModuleCompiler
         // Avoid spurious Label assertions on compilation failure.
         if (!stackOverflowLabel_.bound())
             stackOverflowLabel_.bind(0);
+        if (!operationCallbackLabel_.bound())
+            operationCallbackLabel_.bind(0);
     }
 
     bool init() {
@@ -1113,6 +1116,7 @@ class ModuleCompiler
     TempAllocator &alloc() { return alloc_; }
     MacroAssembler &masm() { return masm_; }
     Label &stackOverflowLabel() { return stackOverflowLabel_; }
+    Label &operationCallbackLabel() { return operationCallbackLabel_; }
     bool hasError() const { return errorString_ != NULL; }
     const AsmJSModule &module() const { return *module_.get(); }
 
@@ -1273,19 +1277,28 @@ class ModuleCompiler
             return false;
         return exits_.add(p, Move(exitDescriptor), *exitIndex);
     }
-    void setExitOffset(unsigned exitIndex) {
+
+
+    void setSecondPassComplete() {
         JS_ASSERT(currentPass_ == 2);
+        masm_.align(gc::PageSize);
+        module_->setFunctionBytes(masm_.size());
+        currentPass_ = 3;
+    }
+
+    void setExitOffset(unsigned exitIndex) {
+        JS_ASSERT(currentPass_ == 3);
         module_->exit(exitIndex).initCodeOffset(masm_.size());
     }
     void setEntryOffset(unsigned exportIndex) {
-        JS_ASSERT(currentPass_ == 2);
+        JS_ASSERT(currentPass_ == 3);
         module_->exportedFunction(exportIndex).initCodeOffset(masm_.size());
     }
 
     bool finish(ScopedJSDeletePtr<AsmJSModule> *module) {
         // After finishing, the only valid operation on an ModuleCompiler is
         // destruction.
-        JS_ASSERT(currentPass_ == 2);
+        JS_ASSERT(currentPass_ == 3);
         currentPass_ = -1;
 
         // Perform any final patching on the buffer before the final copy.
@@ -1293,12 +1306,20 @@ class ModuleCompiler
         if (masm_.oom())
             return false;
 
+        // Include extra space for the AlignBytes call below.
+        size_t allocBytes = masm_.bytesNeeded() + gc::PageSize;
+
         // Allocate the executable memory.
         JSC::ExecutableAllocator *execAlloc = cx_->compartment->ionCompartment()->execAlloc();
         JSC::ExecutablePool *pool;
-        uint8_t *code = (uint8_t*)execAlloc->alloc(masm_.bytesNeeded(), &pool, JSC::ASMJS_CODE);
-        if (!code)
+        uint8_t *bytes = (uint8_t*)execAlloc->alloc(allocBytes, &pool, JSC::ASMJS_CODE);
+        if (!bytes)
             return false;
+
+        // Ensure that the beginning of function code is PageSize-aligned.
+        // This is required so that TriggerOperationCallbackForAsmJSCode can
+        // mprotect all (and only) the function code.
+        uint8_t *code = (uint8_t*)AlignBytes((uintptr_t)bytes, gc::PageSize);
 
         // The ExecutablePool owns the memory and must be released with the AsmJSModule.
         module_->takeOwnershipOfCodePool(pool, code, masm_.bytesNeeded());
@@ -1320,6 +1341,7 @@ class ModuleCompiler
         // Exit points
         for (unsigned i = 0; i < module_->numExits(); i++)
             module_->exit(i).patch(code);
+        module_->setOperationCallbackExit(code + masm_.actualOffset(operationCallbackLabel_.offset()));
 
         // Function-pointer table entries
         unsigned elemIndex = 0;
@@ -4276,8 +4298,6 @@ CheckFunctionBody(ModuleCompiler &m, ModuleCompiler::Func &func)
     return true;
 }
 
-// TODO: consider 16-byte alignment like GCC; note: execAlloc only
-// aligns to 8-byte boundaries.
 static const unsigned CodeAlignment = 8;
 
 static bool
@@ -4302,8 +4322,8 @@ CheckFunctionBodies(ModuleCompiler &m)
     return true;
 }
 
-static RegisterSet VolatileRegs = RegisterSet(GeneralRegisterSet(Registers::VolatileMask),
-                                              FloatRegisterSet(FloatRegisters::VolatileMask));
+static RegisterSet AllRegs = RegisterSet(GeneralRegisterSet(Registers::AllMask),
+                                         FloatRegisterSet(FloatRegisters::AllMask));
 static RegisterSet NonVolatileRegs = RegisterSet(GeneralRegisterSet(Registers::NonVolatileMask),
                                                  FloatRegisterSet(FloatRegisters::NonVolatileMask));
 
@@ -4311,7 +4331,9 @@ static void
 LoadAsmJSActivationIntoRegister(MacroAssembler &masm, Register reg)
 {
     masm.movePtr(ImmWord(GetIonContext()->compartment->rt), reg);
-    masm.loadPtr(Address(reg, offsetof(JSRuntime, mainThread.asmJSActivation)), reg);
+    size_t offset = offsetof(JSRuntime, mainThread) +
+                    PerThreadData::offsetOfAsmJSActivationStackReadOnly();
+    masm.loadPtr(Address(reg, offset), reg);
 }
 
 static void
@@ -4483,10 +4505,13 @@ PaddingForAlignedCall(unsigned frameSize)
     return remainder ? StackAlignment - remainder : 0;
 }
 
-static bool
-GenerateExit(ModuleCompiler &m, MacroAssembler &masm, const ModuleCompiler::ExitDescriptor &exit,
-             unsigned exitIndex, Label *popAllFramesLabel)
+// See "asm.js FFI calls" comment above.
+static void
+GenerateFFIExit(ModuleCompiler &m, const ModuleCompiler::ExitDescriptor &exit, unsigned exitIndex,
+                Label *throwLabel)
 {
+    MacroAssembler &masm = m.masm();
+
     masm.align(CodeAlignment);
     m.setExitOffset(exitIndex);
 
@@ -4542,16 +4567,16 @@ GenerateExit(ModuleCompiler &m, MacroAssembler &masm, const ModuleCompiler::Exit
     switch (exit.use().which()) {
       case Use::NoCoercion:
         masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, &InvokeFromAsmJS_Ignore)));
-        masm.branchTest32(Assembler::Zero, ReturnReg, ReturnReg, popAllFramesLabel);
+        masm.branchTest32(Assembler::Zero, ReturnReg, ReturnReg, throwLabel);
         break;
       case Use::ToInt32:
         masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, &InvokeFromAsmJS_ToInt32)));
-        masm.branchTest32(Assembler::Zero, ReturnReg, ReturnReg, popAllFramesLabel);
+        masm.branchTest32(Assembler::Zero, ReturnReg, ReturnReg, throwLabel);
         masm.unboxInt32(Address(argv, 0), ReturnReg);
         break;
       case Use::ToNumber:
         masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, &InvokeFromAsmJS_ToNumber)));
-        masm.branchTest32(Assembler::Zero, ReturnReg, ReturnReg, popAllFramesLabel);
+        masm.branchTest32(Assembler::Zero, ReturnReg, ReturnReg, throwLabel);
         masm.loadDouble(Address(argv, 0), ReturnFloatReg);
         break;
       case Use::AddOrSub:
@@ -4560,47 +4585,115 @@ GenerateExit(ModuleCompiler &m, MacroAssembler &masm, const ModuleCompiler::Exit
 
     masm.freeStack(reserveSize);
     masm.ret();
-    return true;
+}
+
+// The stack-overflow exit is called when the stack limit has definitely been
+// exceeded. In this case, we can clobber everything since we are about to pop
+// all the frames.
+static void
+GenerateStackOverflowExit(ModuleCompiler &m, Label *throwLabel)
+{
+    MacroAssembler &masm = m.masm();
+
+    masm.align(CodeAlignment);
+    masm.bind(&m.stackOverflowLabel());
+
+    void (*pf)(JSContext*) = js_ReportOverRecursed;
+    LoadJSContextIntoRegister(masm, IntArgReg0);
+    masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, pf)));
+
+    masm.jmp(throwLabel);
+}
+
+// The operation-callback exit is called from arbitrarily-interrupted asm.js
+// code. That means we must first save *all* registers and restore *all*
+// registers when we resume. The address to resume to (assuming that
+// js_HandleExecutionInterrupt doesn't indicate that the execution should be
+// aborted) is stored in AsmJSActivation::resumePC_. Unfortunately, loading
+// this requires a scratch register which we don't have after restoring all
+// registers. To hack around this, push the resumePC on the stack so that it
+// can be popped directly into PC.
+static void
+GenerateOperationCallbackExit(ModuleCompiler &m, Label *throwLabel)
+{
+    MacroAssembler &masm = m.masm();
+
+    masm.align(CodeAlignment);
+    masm.bind(&m.operationCallbackLabel());
+
+    // Reserve space for resumePC below the saved registers.
+    masm.setFramePushed(0);
+    masm.reserveStack(sizeof(void*));
+
+    // Save all registers.
+    masm.PushRegsInMask(AllRegs);
+
+    // Store resumePC into the space reserved space.
+    LoadAsmJSActivationIntoRegister(masm, IntArgReg0);
+    masm.loadPtr(Address(IntArgReg0, AsmJSActivation::offsetOfResumePC()), IntArgReg0);
+    masm.storePtr(IntArgReg0, Address(StackPointer, masm.framePushed() - sizeof(void*)));
+
+    // Align the stack for the call.
+    const unsigned padding = PaddingForAlignedCall(masm.framePushed());
+    masm.reserveStack(padding);
+
+    // argument 0: cx
+    LoadJSContextIntoRegister(masm, IntArgReg0);
+
+    // Call js_HandleExecutionInterrupt.
+    JSBool (*pf)(JSContext*) = js_HandleExecutionInterrupt;
+    masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, pf)));
+    masm.branchTest32(Assembler::Zero, ReturnReg, ReturnReg, throwLabel);
+
+    // Undo the aligning push.
+    masm.freeStack(padding);
+
+    // Restore all registers.
+    masm.PopRegsInMask(AllRegs);
+
+    // All the remains on the stack is resumePC which simultaneously pop and
+    // jump to via masm.ret.
+    JS_ASSERT(masm.framePushed() == sizeof(void*));
+    masm.ret();
+}
+
+// If an exception is thrown, simply pop all frames (since asm.js does not
+// contain try/catch). To do this:
+//  1. Restore 'sp' to it's value right after the PushRegsInMask in GenerateEntry.
+//  2. PopRegsInMask to restore the caller's non-volatile registers.
+//  3. Return (to CallAsmJS).
+static void
+GenerateThrowExit(ModuleCompiler &m, Label *throwLabel)
+{
+    MacroAssembler &masm = m.masm();
+
+    masm.setFramePushed(NonVolatileRegs.gprs().size() * STACK_SLOT_SIZE +
+                        NonVolatileRegs.fpus().size() * sizeof(double));
+    masm.bind(throwLabel);
+    LoadAsmJSActivationIntoRegister(masm, ScratchReg);
+    masm.movq(Operand(ScratchReg, AsmJSActivation::offsetOfErrorRejoinSP()), StackPointer);
+    masm.PopRegsInMask(NonVolatileRegs);
+    masm.mov(Imm32(0), ReturnReg);
+    masm.ret();
 }
 
 static bool
 GenerateExits(ModuleCompiler &m)
 {
-    MacroAssembler &masm = m.masm();
+    Label throwLabel;
 
-    Label popAllFramesLabel;
-
-    if (m.stackOverflowLabel().used()) {
-        void (*pf)(JSContext*) = js_ReportOverRecursed;
-
-        masm.bind(&m.stackOverflowLabel());
-        LoadJSContextIntoRegister(masm, IntArgReg0);
-        masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, pf)));
-        masm.jmp(&popAllFramesLabel);
-    }
-
-    // Generate FFI call exit stubs.
     for (ModuleCompiler::ExitMap::Range r = m.allExits(); !r.empty(); r.popFront()) {
-        if (!GenerateExit(m, masm, r.front().key, r.front().value, &popAllFramesLabel))
+        GenerateFFIExit(m, r.front().key, r.front().value, &throwLabel);
+        if (m.masm().oom())
             return false;
     }
 
-    // If an exception is thrown, simply pop all frames (since asm.js does not
-    // contain try/catch). To do this:
-    //  1. Restore 'sp' to it's value right after the PushRegsInMask in GenerateEntry.
-    //  2. PopRegsInMask to restore the caller's non-volatile registers.
-    //  3. Return (to CallAsmJS).
-    if (popAllFramesLabel.used()) {
-        masm.setFramePushed(NonVolatileRegs.gprs().size() * STACK_SLOT_SIZE +
-                            NonVolatileRegs.fpus().size() * sizeof(double));
-        masm.bind(&popAllFramesLabel);
-        LoadAsmJSActivationIntoRegister(masm, ScratchReg);
-        masm.movq(Operand(ScratchReg, AsmJSActivation::offsetOfErrorRejoinSP()), StackPointer);
-        masm.PopRegsInMask(NonVolatileRegs);
-        masm.mov(Imm32(0), ReturnReg);
-        masm.ret();
-    }
+    if (m.stackOverflowLabel().used())
+        GenerateStackOverflowExit(m, &throwLabel);
 
+    GenerateOperationCallbackExit(m, &throwLabel);
+
+    GenerateThrowExit(m, &throwLabel);
     return true;
 }
 
@@ -4647,6 +4740,8 @@ CheckModule(JSContext *cx, TokenStream &ts, ParseNode *fn, ScopedJSDeletePtr<Asm
 
     if (!CheckFunctionBodies(m))
         return false;
+
+    m.setSecondPassComplete();
 
     if (!GenerateEntries(m))
         return false;

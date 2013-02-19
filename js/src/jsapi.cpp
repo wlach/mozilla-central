@@ -706,7 +706,7 @@ JS_FRIEND_API(bool) JS::NeedRelaxedRootChecks() { return false; }
 
 static const JSSecurityCallbacks NullSecurityCallbacks = { };
 
-js::PerThreadData::PerThreadData(JSRuntime *runtime)
+PerThreadData::PerThreadData(JSRuntime *runtime)
   : PerThreadDataFriendFields(),
     runtime_(runtime),
 #ifdef DEBUG
@@ -717,9 +717,29 @@ js::PerThreadData::PerThreadData(JSRuntime *runtime)
     ionJSContext(NULL),
     ionStackLimit(0),
     ionActivation(NULL),
-    asmJSActivation(NULL),
+    asmJSActivationStack_(NULL),
+#ifdef JS_THREADSAFE
+    asmJSActivationStackLock_(NULL),
+    asmJSActivationStackLockCount_(0),
+#endif
     suppressGC(0)
 {}
+
+PerThreadData::~PerThreadData()
+{
+    JS_ASSERT(!asmJSActivationStack_);
+}
+
+bool
+PerThreadData::init()
+{
+#ifdef JS_THREADSAFE
+    asmJSActivationStackLock_ = PR_NewLock();
+    if (!asmJSActivationStackLock_)
+        return false;
+#endif
+    return true;
+}
 
 JSRuntime::JSRuntime(JSUseHelperThreads useHelperThreads)
   : mainThread(this),
@@ -903,6 +923,9 @@ JSRuntime::init(uint32_t maxbytes)
     ownerThread_ = PR_GetCurrentThread();
 #endif
 
+    if (!mainThread.init())
+        return false;
+
     js::TlsPerThreadData.set(&mainThread);
 
 #ifdef JS_METHODJIT_SPEW
@@ -968,8 +991,6 @@ JSRuntime::init(uint32_t maxbytes)
 
 JSRuntime::~JSRuntime()
 {
-    JS_ASSERT(!mainThread.asmJSActivation);
-
 #ifdef JS_THREADSAFE
     clearOwnerThread();
 #endif

@@ -2,6 +2,7 @@
 
 load(libdir + "asm.js");
 
-timeout(.1);
-asmLink(asmCompile(USE_ASM + "function g() { while(1) {} } return g"))();
+var g = asmLink(asmCompile(USE_ASM + "function g() { while(1) {} } return g"));
+timeout(1);
+g();
 assertEq(true, false);

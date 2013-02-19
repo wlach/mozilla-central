@@ -47,13 +47,14 @@ LinkAsmJS(JSContext *cx, StackFrame *fp, MutableHandleValue rval);
 //    stack overflow, division by zero, etc.
 class AsmJSActivation
 {
-    AsmJSActivation *prev_;
     JSContext *cx_;
-    void *errorRejoinSP_;
     const AsmJSModule &module_;
     unsigned entryIndex_;
     uint8_t *heap_;
+    AsmJSActivation *prev_;
+    void *errorRejoinSP_;
     SPSProfiler *profiler_;
+    void *resumePC_;
 
   public:
     AsmJSActivation(JSContext *cx, const AsmJSModule &module, unsigned entryIndex, uint8_t *heap);
@@ -64,9 +65,13 @@ class AsmJSActivation
 
     // Read by JIT code:
     static unsigned offsetOfContext() { return offsetof(AsmJSActivation, cx_); }
+    static unsigned offsetOfResumePC() { return offsetof(AsmJSActivation, resumePC_); }
 
     // Initialized by JIT code:
     static unsigned offsetOfErrorRejoinSP() { return offsetof(AsmJSActivation, errorRejoinSP_); }
+
+    // Set from SIGSEGV handler:
+    void setResumePC(void *pc) { resumePC_ = pc; }
 };
 
 // On x64, the internal ArrayBuffer data array is inflated to 4GiB (only the

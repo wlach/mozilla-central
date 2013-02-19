@@ -483,10 +483,61 @@ class PerThreadData : public js::PerThreadDataFriendFields
     js::ion::IonActivation  *ionActivation;
 
     /*
-     * This points to the most recent asm.js module activation running on the
-     * thread. (see AsmJSActivation comment)
+     * asm.js maintains a stack of AsmJSModule activations (see AsmJS.h). This
+     * stack is used by JSRuntime::triggerOperationCallback to stop long-
+     * running asm.js without requiring dynamic polling operations in the
+     * generated code. Since triggerOperationCallback may run on a separate
+     * thread than the JSRuntime's owner thread all reads/writes must be
+     * synchronized (by asmJSActivationStackLock_).
      */
-    js::AsmJSActivation *asmJSActivation;
+  private:
+    friend class js::AsmJSActivation;
+
+    /* See AsmJSActivation comment. */
+    js::AsmJSActivation *asmJSActivationStack_;
+
+#ifdef JS_THREADSAFE
+    /* Synchronizes pushing/popping with triggerOperationCallback. */
+    PRLock *asmJSActivationStackLock_;
+#endif
+    /* Track whether the asmJSActivationStackLock_ is held. */
+    mozilla::DebugOnly<unsigned> asmJSActivationStackLockCount_;
+
+  public:
+    static unsigned offsetOfAsmJSActivationStackReadOnly() {
+        return offsetof(PerThreadData, asmJSActivationStack_);
+    }
+
+    class AsmJSActivationStackLock {
+        PerThreadData &data_;
+      public:
+#ifdef JS_THREADSAFE
+        AsmJSActivationStackLock(PerThreadData &data) : data_(data) {
+            PR_Lock(data_.asmJSActivationStackLock_);
+            data_.asmJSActivationStackLockCount_++;
+        }
+        ~AsmJSActivationStackLock() {
+            PR_Unlock(data_.asmJSActivationStackLock_);
+            data_.asmJSActivationStackLockCount_--;
+        }
+#else
+        AsmJSActivationStackLock(PerThreadData &data) : data_(data) {
+            data_.asmJSActivationStackLockCount_++;
+        }
+        ~AsmJSActivationStackLock() {
+            data_.asmJSActivationStackLockCount_--;
+        }
+#endif
+    };
+
+    js::AsmJSActivation *asmJSActivationStackFromAnyThread() const {
+        JS_ASSERT(asmJSActivationStackLockCount_ > 0);
+        return asmJSActivationStack_;
+    }
+    js::AsmJSActivation *asmJSActivationStackFromOwnerThread() const {
+        // Called from signal handler; don't do any fancy assertions.
+        return asmJSActivationStack_;
+    }
 
     /*
      * When this flag is non-zero, any attempt to GC will be skipped. It is used
@@ -499,6 +550,8 @@ class PerThreadData : public js::PerThreadDataFriendFields
     int32_t             suppressGC;
 
     PerThreadData(JSRuntime *runtime);
+    ~PerThreadData();
+    bool init();
 
     bool associatedWith(const JSRuntime *rt) { return runtime_ == rt; }
 };

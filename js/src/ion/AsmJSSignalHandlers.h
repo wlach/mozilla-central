@@ -17,6 +17,9 @@ class ArrayBufferObject;
 bool
 EnsureAsmJSSignalHandlersInstalled();
 
+void
+TriggerOperationCallbackForAsmJSCode(JSRuntime *rt);
+
 }  // namespace js
 
 #endif  // jsion_asmjssignalhandlers_h__

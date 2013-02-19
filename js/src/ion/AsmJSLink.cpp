@@ -331,32 +331,37 @@ DynamicallyLinkModule(JSContext *cx, StackFrame *fp, HandleObject moduleObj,
 
 AsmJSActivation::AsmJSActivation(JSContext *cx, const AsmJSModule &module, unsigned entryIndex,
                                  uint8_t *heap)
-  : prev_(cx->runtime->mainThread.asmJSActivation),
-    cx_(cx),
-    errorRejoinSP_(NULL),
+  : cx_(cx),
     module_(module),
     entryIndex_(entryIndex),
     heap_(heap),
-    profiler_(NULL)
+    errorRejoinSP_(NULL),
+    profiler_(NULL),
+    resumePC_(NULL)
 {
-    cx->runtime->mainThread.asmJSActivation = this;
-
     if (cx->runtime->spsProfiler.enabled()) {
         profiler_ = &cx->runtime->spsProfiler;
         JSFunction *fun = module_.exportedFunction(entryIndex_).unclonedFunObj();
         profiler_->enter(cx_, fun->nonLazyScript(), fun);
     }
+
+    prev_ = cx_->runtime->mainThread.asmJSActivationStack_;
+
+    PerThreadData::AsmJSActivationStackLock lock(cx_->runtime->mainThread);
+    cx_->runtime->mainThread.asmJSActivationStack_ = this;
 }
 
 AsmJSActivation::~AsmJSActivation()
 {
-    JS_ASSERT(cx_->runtime->mainThread.asmJSActivation == this);
-    cx_->runtime->mainThread.asmJSActivation = prev_;
-
     if (profiler_) {
         JSFunction *fun = module_.exportedFunction(entryIndex_).unclonedFunObj();
         profiler_->exit(cx_, fun->nonLazyScript(), fun);
     }
+
+    JS_ASSERT(cx_->runtime->mainThread.asmJSActivationStack_ == this);
+
+    PerThreadData::AsmJSActivationStackLock lock(cx_->runtime->mainThread);
+    cx_->runtime->mainThread.asmJSActivationStack_ = prev_;
 }
 
 static const unsigned ASM_LINKED_MODULE_SLOT = 0;

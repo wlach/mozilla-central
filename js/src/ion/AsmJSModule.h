@@ -274,6 +274,8 @@ class AsmJSModule
 
     ScopedReleasePtr<JSC::ExecutablePool> codePool_;
     uint8_t *                             code_;
+    uint8_t *                             operationCallbackExit_;
+    size_t                                functionBytes_;
     size_t                                bytesNeeded_;
 
   public:
@@ -282,6 +284,8 @@ class AsmJSModule
         numFFIs_(0),
         hasArrayView_(false),
         code_(NULL),
+        operationCallbackExit_(NULL),
+        functionBytes_(0),
         bytesNeeded_(0)
     {}
 
@@ -338,18 +342,6 @@ class AsmJSModule
     bool addExit(unsigned ffiIndex, unsigned *exitIndex) {
         *exitIndex = unsigned(exits_.length());
         return exits_.append(Exit(ffiIndex));
-    }
-
-    bool addHeapAccesses(const Vector<ion::AsmJSHeapAccess> &accesses) {
-        if (!heapAccesses_.reserve(heapAccesses_.length() + accesses.length()))
-            return false;
-        for (size_t i = 0; i < accesses.length(); i++)
-            heapAccesses_.infallibleAppend(accesses[i]);
-        return true;
-    }
-    void convertHeapAccessesToActaualOffset(ion::MacroAssembler &masm) {
-        for (unsigned i = 0; i < heapAccesses_.length(); i++)
-            heapAccesses_[i].setOffset(masm.actualOffset(heapAccesses_[i].offset()));
     }
 
     bool addExportedFunction(RawFunction fun, PropertyName *maybeFieldName,
@@ -436,24 +428,51 @@ class AsmJSModule
         return *(ExitDatum *)(globalData + exitIndexToGlobalDataOffset(exitIndex));
     }
 
-    void takeOwnershipOfCodePool(JSC::ExecutablePool *pool, uint8_t *code, size_t bytesNeeded) {
-        codePool_ = pool;
-        code_ = code;
-        bytesNeeded_ = bytesNeeded;
+    void setFunctionBytes(size_t functionBytes) {
+        JS_ASSERT(functionBytes % gc::PageSize == 0);
+        functionBytes_ = functionBytes;
+    }
+    size_t functionBytes() const {
+        JS_ASSERT(functionBytes_);
+        JS_ASSERT(functionBytes_ % gc::PageSize == 0);
+        return functionBytes_;
     }
 
-    bool containsPC(const void *pc) const {
-        return code_ <= pc && pc < (code_ + bytesNeeded_);
+    bool addHeapAccesses(const Vector<ion::AsmJSHeapAccess> &accesses) {
+        if (!heapAccesses_.reserve(heapAccesses_.length() + accesses.length()))
+            return false;
+        for (size_t i = 0; i < accesses.length(); i++)
+            heapAccesses_.infallibleAppend(accesses[i]);
+        return true;
     }
-    uint32_t offsetOfPC(const void *pc) const {
-        JS_ASSERT(containsPC(pc));
-        return reinterpret_cast<const uint8_t*>(pc) - code_;
+    void convertHeapAccessesToActaualOffset(ion::MacroAssembler &masm) {
+        for (unsigned i = 0; i < heapAccesses_.length(); i++)
+            heapAccesses_[i].setOffset(masm.actualOffset(heapAccesses_[i].offset()));
     }
     unsigned numHeapAccesses() const {
         return heapAccesses_.length();
     }
     const ion::AsmJSHeapAccess &heapAccess(unsigned i) const {
         return heapAccesses_[i];
+    }
+
+    void takeOwnershipOfCodePool(JSC::ExecutablePool *pool, uint8_t *code, size_t bytesNeeded) {
+        JS_ASSERT(uintptr_t(code) % gc::PageSize == 0);
+        codePool_ = pool;
+        code_ = code;
+        bytesNeeded_ = bytesNeeded;
+    }
+    uint8_t *functionCode() const {
+        JS_ASSERT(code_);
+        JS_ASSERT(uintptr_t(code_) % gc::PageSize == 0);
+        return code_;
+    }
+
+    void setOperationCallbackExit(uint8_t *ptr) {
+        operationCallbackExit_ = ptr;
+    }
+    uint8_t *operationCallbackExit() const {
+        return operationCallbackExit_;
     }
 };
 

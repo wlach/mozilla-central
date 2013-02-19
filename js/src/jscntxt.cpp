@@ -56,6 +56,7 @@
 # include "methodjit/MethodJIT.h"
 #endif
 #include "gc/Marking.h"
+#include "ion/AsmJSSignalHandlers.h"
 #include "js/CharacterEncoding.h"
 #include "js/MemoryMetrics.h"
 #include "frontend/TokenStream.h"
@@ -185,6 +186,9 @@ JSRuntime::triggerOperationCallback()
      * immediately visible to other processors polling the flag.
      */
     JS_ATOMIC_SET(&interrupt, 1);
+
+    /* asm.js code uses a separate mechanism to halt running code. */
+    TriggerOperationCallbackForAsmJSCode(this);
 }
 
 void

@@ -389,7 +389,8 @@ void
 ArrayBufferObject::neuterAsmJSArrayBuffer(ArrayBufferObject &buffer)
 {
     JS_ASSERT(buffer.isAsmJSArrayBuffer());
-    mprotect(buffer.dataPointer(), buffer.byteLength(), PROT_NONE);
+    if (mprotect(buffer.dataPointer(), buffer.byteLength(), PROT_NONE))
+        MOZ_CRASH();
 }
 
 void

@@ -5,8 +5,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include <signal.h>
-
 #include "jscntxt.h"
 
 #include "jstypedarrayinlines.h"
@@ -15,6 +13,9 @@
 #include "ion/AsmJSModule.h"
 #include "ion/AsmJSSignalHandlers.h"
 #include "assembler/assembler/MacroAssembler.h"
+
+#include <signal.h>
+#include <sys/mman.h>
 
 using namespace js;
 using namespace js::ion;
@@ -208,18 +209,24 @@ SetRegisterToCoercedUndefined(mcontext_t &mcontext, AnyRegister reg)
 
 struct sigaction prevSigAction;
 
+static bool
+PCIsInModule(const AsmJSModule &module, uint8_t *pc)
+{
+    uint8_t *code = module.functionCode();
+    return pc >= code && pc < (code + module.functionBytes());
+}
+
 // Perform a binary search on the projected offsets of the known heap accesses
 // in the module.
 static const AsmJSHeapAccess *
-LookupHeapAccess(const AsmJSModule &module, void *pc)
+LookupHeapAccess(const AsmJSModule &module, uint8_t *pc)
 {
-    if (!module.containsPC(pc))
-        return NULL;
+    JS_ASSERT(PCIsInModule(module, pc));
+    size_t targetOffset = pc - module.functionCode();
 
     if (module.numHeapAccesses() == 0)
         return NULL;
 
-    uint32_t targetOffset = module.offsetOfPC(pc);
     size_t low = 0;
     size_t high = module.numHeapAccesses() - 1;
     while (high - low >= 2) {
@@ -252,21 +259,37 @@ HandleSignal(int signum, siginfo_t *info, void *context)
     if (!threadData)
         return false;
 
-    AsmJSActivation *activation = threadData->asmJSActivation;
+    AsmJSActivation *activation = threadData->asmJSActivationStackFromOwnerThread();
     if (!activation)
         return false;
 
+    mcontext_t &mcontext = reinterpret_cast<ucontext_t*>(context)->uc_mcontext;
+    uint8_t **ppc = ContextToPC(mcontext);
+    uint8_t *pc = *ppc;
+
+    const AsmJSModule &module = activation->module();
+    if (!PCIsInModule(module, pc))
+        return false;
+
+    void *faultingAddress = info->si_addr;
+
+    // If we faulted trying to read/execute the current PC, this must be an
+    // operation callback (see TriggerOperationCallbackForAsmJSCode).
+    if (faultingAddress == pc) {
+        activation->setResumePC(pc);
+        *ppc = module.operationCallbackExit();
+        mprotect(module.functionCode(), module.functionBytes(), PROT_READ | PROT_WRITE | PROT_EXEC);
+        return true;
+    }
+
 #ifdef JS_CPU_X64
-    void *addr = info->si_addr;
-    if (addr < activation->heap() || addr >= activation->heap() + FourGiB)
+    // This isn't necessary, but, since we can, include this extra layer of
+    // checking to make sure we aren't covering up a real bug.
+    if (faultingAddress < activation->heap() || faultingAddress >= activation->heap() + FourGiB)
         return false;
 #endif
 
-    mcontext_t &mcontext = reinterpret_cast<ucontext_t*>(context)->uc_mcontext;
-    uint8_t **ppc = ContextToPC(mcontext);
-
-    const AsmJSModule &module = activation->module();
-    const AsmJSHeapAccess *heapAccess = LookupHeapAccess(module, *ppc);
+    const AsmJSHeapAccess *heapAccess = LookupHeapAccess(module, pc);
     if (!heapAccess)
         return false;
 
@@ -283,7 +306,7 @@ HandleSignal(int signum, siginfo_t *info, void *context)
 }
 
 static void
-AsmJSOutOfBoundsHandler(int signum, siginfo_t *info, void *context)
+AsmJSMemoryFaultHandler(int signum, siginfo_t *info, void *context)
 {
     if (HandleSignal(signum, info, context))
         return;
@@ -311,7 +334,7 @@ js::EnsureAsmJSSignalHandlersInstalled()
         return true;
 
     struct sigaction sigAction;
-    sigAction.sa_sigaction = &AsmJSOutOfBoundsHandler;
+    sigAction.sa_sigaction = &AsmJSMemoryFaultHandler;
     sigemptyset(&sigAction.sa_mask);
     sigAction.sa_flags = SA_SIGINFO;
     if (sigaction(SignalCode, &sigAction, &prevSigAction))
@@ -319,4 +342,28 @@ js::EnsureAsmJSSignalHandlersInstalled()
 
     lock.setHandlersInstalled();
     return true;
+}
+
+// To interrupt execution of a JSRuntime, any thread may call
+// JS_TriggerOperationCallback (JSRuntime::triggerOperationCallback from inside
+// the engine). Normally, this sets some state that is polled at regular
+// intervals (function prologues, loop headers), even from jit-code. For tight
+// loops, this poses non-trivial overhead. For asm.js, we can do better: when
+// another thread triggers the operation callback, we simply mprotect all of
+// the innermost asm.js module activation's code. This will trigger a SIGSEGV,
+// taking us into AsmJSMemoryFaultHandler. From here, we can manually redirect
+// execution to a piece of jit code (module.operationCallbackExit) that saves
+// all register state and calls the operation callback.
+void
+js::TriggerOperationCallbackForAsmJSCode(JSRuntime *rt)
+{
+    PerThreadData::AsmJSActivationStackLock lock(rt->mainThread);
+
+    AsmJSActivation *activation = rt->mainThread.asmJSActivationStackFromAnyThread();
+    if (!activation)
+        return;
+
+    const AsmJSModule &module = activation->module();
+    if (mprotect(module.functionCode(), module.functionBytes(), PROT_NONE))
+        MOZ_CRASH();
 }
