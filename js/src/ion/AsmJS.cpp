@@ -4609,17 +4609,14 @@ GenerateStackOverflowExit(ModuleCompiler &m, Label *throwLabel)
     masm.bind(&m.stackOverflowLabel());
 
     // We know that StackPointer is word-aligned, but nothing past that. Thus,
-    // we must align StackPointer dynamically.
-    masm.push(StackPointer);
+    // we must align StackPointer dynamically. Don't worry about restoring
+    // StackPointer since throwLabel will clobber StackPointer immediately.
     masm.andPtr(Imm32(~(StackAlignment - 1)), StackPointer);
 
     void (*pf)(JSContext*) = js_ReportOverRecursed;
     LoadJSContextIntoRegister(masm, IntArgReg0);
 
     masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, pf)));
-
-    // Restore the saved StackPointer
-    masm.pop(StackPointer);
 
     masm.jmp(throwLabel);
 }
@@ -4641,6 +4638,7 @@ GenerateOperationCallbackExit(ModuleCompiler &m, Label *throwLabel)
     masm.bind(&m.operationCallbackLabel());
 
     // Reserve space for resumePC below the saved registers.
+    masm.setFramePushed(0);
     masm.reserveStack(sizeof(void*));
 
     // Save all registers.
@@ -4648,15 +4646,15 @@ GenerateOperationCallbackExit(ModuleCompiler &m, Label *throwLabel)
 
     // Store resumePC into the reserved space.
     LoadAsmJSActivationIntoRegister(masm, IntArgReg0);
-    masm.loadPtr(Address(IntArgReg0, AsmJSActivation::offsetOfResumePC()), IntArgReg0);
-    masm.storePtr(IntArgReg0, Address(StackPointer, masm.framePushed() - sizeof(void*)));
+    masm.loadPtr(Address(IntArgReg0, AsmJSActivation::offsetOfResumePC()), IntArgReg1);
+    masm.storePtr(IntArgReg1, Address(StackPointer, masm.framePushed() - sizeof(void*)));
 
     // argument 0: cx
-    LoadJSContextIntoRegister(masm, IntArgReg0);
+    masm.loadPtr(Address(IntArgReg0, AsmJSActivation::offsetOfContext()), IntArgReg0);
 
     // We know that StackPointer is word-aligned, but nothing past that. Thus,
     // we must align StackPointer dynamically.
-    masm.push(StackPointer);
+    masm.mov(StackPointer, SomeNonVolatileReg);
     masm.andPtr(Imm32(~(StackAlignment - 1)), StackPointer);
 
     // Call js_HandleExecutionInterrupt.
@@ -4665,14 +4663,13 @@ GenerateOperationCallbackExit(ModuleCompiler &m, Label *throwLabel)
     masm.branchTest32(Assembler::Zero, ReturnReg, ReturnReg, throwLabel);
 
     // Restore the saved StackPointer
-    masm.pop(StackPointer);
+    masm.mov(SomeNonVolatileReg, StackPointer);
 
     // Restore all registers.
     masm.PopRegsInMask(AllRegs);
 
-    // All the remains on the stack is resumePC which simultaneously pop and
-    // jump to via masm.ret.
-    JS_ASSERT(masm.framePushed() == sizeof(void*));
+    // All the remains on the stack is resumePC which masm.ret pops and then
+    // jumps to.
     masm.ret();
 }
 

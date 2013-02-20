@@ -114,6 +114,8 @@ static const Register IntArgReg5 = r9;
 static const uint32_t NumIntArgRegs = 6;
 static const Register IntArgRegs[NumIntArgRegs] = { rdi, rsi, rdx, rcx, r8, r9 };
 
+static const Register SomeNonVolatileReg = rbx;
+
 static const Register CallTempNonArgRegs[] = { rax, rbx };
 static const uint32_t NumCallTempNonArgRegs =
     mozilla::ArrayLength(CallTempNonArgRegs);
