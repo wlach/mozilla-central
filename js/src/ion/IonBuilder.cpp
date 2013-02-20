@@ -3194,10 +3194,45 @@ IonBuilder::makeInliningDecision(AutoObjectVector &targets)
         return false;
     }
 
+    JSOp op = JSOp(*pc);
     for (size_t i = 0; i < targets.length(); i++) {
-        if (!canInlineTarget(targets[i]->toFunction())) {
+        JSFunction *target = targets[i]->toFunction();
+
+        if (!canInlineTarget(target)) {
             IonSpew(IonSpew_Inlining, "Decided not to inline");
             return false;
+        }
+
+        // For fun.apply we need to make sure the types of the argument is a subset
+        // of the types used in the callee. Because adding a typeset in the callee,
+        // doesn't update the types in the "apply" function, resulting in missed types.
+        if (op == JSOP_FUNAPPLY) {
+            types::TypeSet *calleeType, *callerType;
+            size_t nargs = Min<size_t>(target->nargs, inlinedArguments_.length());
+            for (size_t i = 0; i < nargs; i++) {
+                calleeType = types::TypeScript::ArgTypes(targetScript, i);
+                // The arguments to this function aren't always available in this script.
+                // We need to get them from the caller at the position where
+                // the function gets called.
+                callerType = oracle->getCallArg(callerBuilder_->script_.get(),
+                                                inlinedArguments_.length(),
+                                                i+1, callerBuilder_->pc);
+
+                if (!callerType->isSubset(calleeType)) {
+                    IonSpew(IonSpew_Inlining, "Funapply inlining failed due to wrong types");
+                    return false;
+                }
+            }
+            // Arguments that weren't provided will be Undefined
+            for (size_t i = nargs; i < target->nargs; i++) {
+                calleeType = types::TypeScript::ArgTypes(targetScript, i);
+                if (calleeType->unknown() ||
+                    !calleeType->hasType(types::Type::UndefinedType()))
+                {
+                    IonSpew(IonSpew_Inlining, "Funapply inlining failed due to wrong types");
+                    return false;
+                }
+            }
         }
     }
 
@@ -5341,6 +5376,27 @@ IonBuilder::jsop_bindname(PropertyName *name)
     return resumeAfter(ins);
 }
 
+static JSValueType
+GetElemKnownType(bool needsHoleCheck, types::StackTypeSet *types)
+{
+    JSValueType knownType = types->getKnownTypeTag();
+
+    // Null and undefined have no payload so they can't be specialized.
+    // Since folding null/undefined while building SSA is not safe (see the
+    // comment in IsPhiObservable), we just add an untyped load instruction
+    // and rely on pushTypeBarrier and DCE to replace it with a null/undefined
+    // constant.
+    if (knownType == JSVAL_TYPE_UNDEFINED || knownType == JSVAL_TYPE_NULL)
+        knownType = JSVAL_TYPE_UNKNOWN;
+
+    // Different architectures may want typed element reads which require
+    // hole checks to be done as either value or typed reads.
+    if (needsHoleCheck && !LIRGenerator::allowTypedElementHoleCheck())
+        knownType = JSVAL_TYPE_UNKNOWN;
+
+    return knownType;
+}
+
 bool
 IonBuilder::jsop_getelem()
 {
@@ -5373,8 +5429,9 @@ IonBuilder::jsop_getelem()
     // getprop stubs.
     bool mustMonitorResult = false;
     bool cacheable = false;
+    bool intIndex = false;
 
-    oracle->elementReadGeneric(script, pc, &cacheable, &mustMonitorResult);
+    oracle->elementReadGeneric(script, pc, &cacheable, &mustMonitorResult, &intIndex);
 
     if (cacheable)
         ins = MGetElementCache::New(lhs, rhs, mustMonitorResult);
@@ -5389,6 +5446,14 @@ IonBuilder::jsop_getelem()
 
     types::StackTypeSet *barrier = oracle->propertyReadBarrier(script, pc);
     types::StackTypeSet *types = oracle->propertyRead(script, pc);
+
+    if (cacheable && intIndex && !barrier && !mustMonitorResult) {
+        bool needHoleCheck = !oracle->elementReadIsPacked(script, pc);
+        JSValueType knownType = GetElemKnownType(needHoleCheck, types);
+
+        if (knownType != JSVAL_TYPE_UNKNOWN && knownType != JSVAL_TYPE_DOUBLE)
+            ins->setResultType(MIRTypeFromValueType(knownType));
+    }
 
     if (mustMonitorResult)
         monitorResult(ins, barrier, types);
@@ -5414,22 +5479,8 @@ IonBuilder::jsop_getelem_dense()
     MDefinition *obj = current->pop();
 
     JSValueType knownType = JSVAL_TYPE_UNKNOWN;
-    if (!barrier) {
-        knownType = types->getKnownTypeTag();
-
-        // Null and undefined have no payload so they can't be specialized.
-        // Since folding null/undefined while building SSA is not safe (see the
-        // comment in IsPhiObservable), we just add an untyped load instruction
-        // and rely on pushTypeBarrier and DCE to replace it with a null/undefined
-        // constant.
-        if (knownType == JSVAL_TYPE_UNDEFINED || knownType == JSVAL_TYPE_NULL)
-            knownType = JSVAL_TYPE_UNKNOWN;
-
-        // Different architectures may want typed element reads which require
-        // hole checks to be done as either value or typed reads.
-        if (needsHoleCheck && !LIRGenerator::allowTypedElementHoleCheck())
-            knownType = JSVAL_TYPE_UNKNOWN;
-    }
+    if (!barrier)
+        knownType = GetElemKnownType(needsHoleCheck, types);
 
     // Ensure id is an integer.
     MInstruction *idInt32 = MToInt32::New(id);
@@ -5488,7 +5539,7 @@ IonBuilder::jsop_getelem_dense()
 MInstruction *
 IonBuilder::getTypedArrayLength(MDefinition *obj)
 {
-    if (obj->isConstant()) {
+    if (obj->isConstant() && obj->toConstant()->value().isObject()) {
         JSObject *array = &obj->toConstant()->value().toObject();
         int32_t length = (int32_t) TypedArray::length(array);
         obj->setFoldedUnchecked();
@@ -5500,7 +5551,7 @@ IonBuilder::getTypedArrayLength(MDefinition *obj)
 MInstruction *
 IonBuilder::getTypedArrayElements(MDefinition *obj)
 {
-    if (obj->isConstant()) {
+    if (obj->isConstant() && obj->toConstant()->value().isObject()) {
         JSObject *array = &obj->toConstant()->value().toObject();
         void *data = TypedArray::viewData(array);
 

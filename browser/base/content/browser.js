@@ -4017,8 +4017,6 @@ var XULBrowserWindow = {
   // Stored Status, Link and Loading values
   status: "",
   defaultStatus: "",
-  jsStatus: "",
-  jsDefaultStatus: "",
   overLink: "",
   startTime: 0,
   statusText: "",
@@ -4076,14 +4074,12 @@ var XULBrowserWindow = {
     delete this.statusText;
   },
 
-  setJSStatus: function (status) {
-    this.jsStatus = status;
-    this.updateStatusField();
+  setJSStatus: function () {
+    // unsupported
   },
 
-  setJSDefaultStatus: function (status) {
-    this.jsDefaultStatus = status;
-    this.updateStatusField();
+  setJSDefaultStatus: function () {
+    // unsupported
   },
 
   setDefaultStatus: function (status) {
@@ -4108,7 +4104,7 @@ var XULBrowserWindow = {
     var text, type, types = ["overLink"];
     if (this._busyUI)
       types.push("status");
-    types.push("jsStatus", "jsDefaultStatus", "defaultStatus");
+    types.push("defaultStatus");
     for (type of types) {
       text = this[type];
       if (text)
@@ -4343,18 +4339,6 @@ var XULBrowserWindow = {
         // Update starring UI
         PlacesStarButton.updateState();
         SocialShareButton.updateShareState();
-      }
-
-      // Filter out anchor navigation, history.push/pop/replaceState and
-      // tab switches.
-      if (aRequest) {
-        // Only need to call locationChange if the PopupNotifications object
-        // for this window has already been initialized (i.e. its getter no
-        // longer exists)
-        // XXX bug 839445: We never tell PopupNotifications about location
-        // changes in background tabs.
-        if (!__lookupGetter__("PopupNotifications"))
-          PopupNotifications.locationChange();
       }
 
       // Show or hide browser chrome based on the whitelist
@@ -4733,12 +4717,16 @@ var TabsProgressListener = {
 #endif
 
     // Collect telemetry data about tab load times.
-    if (aWebProgress.DOMWindow == aWebProgress.DOMWindow.top &&
-        aStateFlags & Ci.nsIWebProgressListener.STATE_IS_WINDOW) {
-      if (aStateFlags & Ci.nsIWebProgressListener.STATE_START)
-        TelemetryStopwatch.start("FX_PAGE_LOAD_MS", aBrowser);
-      else if (aStateFlags & Ci.nsIWebProgressListener.STATE_STOP)
-        TelemetryStopwatch.finish("FX_PAGE_LOAD_MS", aBrowser);
+    if (aWebProgress.DOMWindow == aWebProgress.DOMWindow.top) {
+      if (aStateFlags & Ci.nsIWebProgressListener.STATE_IS_WINDOW) {
+        if (aStateFlags & Ci.nsIWebProgressListener.STATE_START)
+          TelemetryStopwatch.start("FX_PAGE_LOAD_MS", aBrowser);
+        else if (aStateFlags & Ci.nsIWebProgressListener.STATE_STOP)
+          TelemetryStopwatch.finish("FX_PAGE_LOAD_MS", aBrowser);
+      } else if (aStateFlags & Ci.nsIWebProgressListener.STATE_STOP &&
+                 aStatus == Cr.NS_BINDING_ABORTED) {
+        TelemetryStopwatch.cancel("FX_PAGE_LOAD_MS", aBrowser);
+      }
     }
 
     // Attach a listener to watch for "click" events bubbling up from error
@@ -4775,11 +4763,17 @@ var TabsProgressListener = {
     if (aBrowser.contentWindow == aWebProgress.DOMWindow) {
       // Filter out any onLocationChanges triggered by anchor navigation
       // or history.push/pop/replaceState.
-      if (aRequest) {
+      if (!(aFlags & Ci.nsIWebProgressListener.LOCATION_CHANGE_SAME_DOCUMENT)) {
         // Initialize the click-to-play state.
         aBrowser._clickToPlayPluginsActivated = new Map();
         aBrowser._clickToPlayAllPluginsActivated = false;
         aBrowser._pluginScriptedState = gPluginHandler.PLUGIN_SCRIPTED_STATE_NONE;
+
+        // Only need to call locationChange if the PopupNotifications object
+        // for this window has already been initialized (i.e. its getter no
+        // longer exists)
+        if (!Object.getOwnPropertyDescriptor(window, "PopupNotifications").get)
+          PopupNotifications.locationChange(aBrowser);
       }
       FullZoom.onLocationChange(aLocationURI, false, aBrowser);
     }

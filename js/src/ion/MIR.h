@@ -5136,9 +5136,11 @@ class MPolyInlineDispatch : public MControlInstruction, public SingleObjectPolic
 
 
 class MGetElementCache
-  : public MBinaryInstruction,
-    public MixPolicy<ObjectPolicy<0>, BoxPolicy<1> >
+  : public MBinaryInstruction
 {
+    MixPolicy<ObjectPolicy<0>, BoxPolicy<1> > PolicyV;
+    MixPolicy<ObjectPolicy<0>, IntPolicy<1> > PolicyT;
+
     // See the comment in IonBuilder::jsop_getelem.
     bool monitoredResult_;
 
@@ -5165,7 +5167,9 @@ class MGetElementCache
         return monitoredResult_;
     }
     TypePolicy *typePolicy() {
-        return this;
+        if (type() == MIRType_Value)
+            return &PolicyV;
+        return &PolicyT;
     }
 };
 

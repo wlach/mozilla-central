@@ -122,7 +122,7 @@ class MacroAssembler : public MacroAssemblerSpecific
         return size();
     }
 
-    void reportMemory(bool success) {
+    void propagateOOM(bool success) {
         enoughMemory_ &= success;
     }
     bool oom() const {
