@@ -5689,6 +5689,15 @@ CodeGenerator::visitAsmCall(LAsmCall *ins)
     if (mir->spIncrement())
         masm.freeStack(mir->spIncrement());    
 
+    JS_ASSERT((AlignmentAtPrologue + masm.framePushed()) % StackAlignment == 0);
+#ifdef DEBUG
+    Label ok;
+    JS_ASSERT(IsPowerOfTwo(StackAlignment));
+    masm.branchTestPtr(Assembler::Zero, StackPointer, Imm32(StackAlignment - 1), &ok);
+    masm.breakpoint();
+    masm.bind(&ok);
+#endif
+
     MAsmCall::Callee callee = mir->callee();
     switch (callee.which()) {
       case MAsmCall::Callee::Internal:

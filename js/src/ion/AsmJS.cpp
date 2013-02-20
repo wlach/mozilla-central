@@ -1443,14 +1443,14 @@ class FunctionCompiler
         if (!newBlock(/* pred = */ NULL, &curBlock_))
             return false;
 
+        if (!m_.cx()->runtime->asmJSUnsafe)
+            curBlock_->add(MAsmCheckOverRecursed::New(&m_.stackOverflowLabel()));
+
         for (ABIArgIter i(func_.argMIRTypes()); !i.done(); i++) {
             MAsmParameter *ins = MAsmParameter::New(*i, i.mirType());
             curBlock_->add(ins);
             curBlock_->initSlot(compileInfo_.localSlot(i.index()), ins);
         }
-
-        if (!m_.cx()->runtime->asmJSUnsafe)
-            curBlock_->add(MAsmCheckOverRecursed::New(&m_.stackOverflowLabel()));
 
         for (LocalMap::Range r = locals_.all(); !r.empty(); r.popFront()) {
             const Local &local = r.front().value;
@@ -1687,6 +1687,7 @@ class FunctionCompiler
         ABIArgGenerator abi_;
         uint32_t prevMaxStackBytes_;
         uint32_t maxChildStackBytes_;
+        uint32_t spIncrement_;
         Vector<Type, 8> types_;
         MAsmCall::Args regArgs_;
         Vector<MAsmPassStackArg*> stackArgs_;
@@ -1698,6 +1699,7 @@ class FunctionCompiler
         Args(FunctionCompiler &f)
           : prevMaxStackBytes_(0),
             maxChildStackBytes_(0),
+            spIncrement_(0),
             types_(f.cx()),
             regArgs_(f.cx()),
             stackArgs_(f.cx()),
@@ -1751,11 +1753,13 @@ class FunctionCompiler
         uint32_t parentStackBytes = args->abi_.stackBytesConsumedSoFar();
         uint32_t newStackBytes;
         if (args->childClobbers_) {
+            args->spIncrement_ = AlignBytes(args->maxChildStackBytes_, StackAlignment);
             for (unsigned i = 0; i < args->stackArgs_.length(); i++)
-                args->stackArgs_[i]->incrementOffset(args->maxChildStackBytes_);
+                args->stackArgs_[i]->incrementOffset(args->spIncrement_);
             newStackBytes = Max(args->prevMaxStackBytes_,
-                                args->maxChildStackBytes_ + parentStackBytes);
+                                args->spIncrement_ + parentStackBytes);
         } else {
+            args->spIncrement_ = 0;
             newStackBytes = Max(args->prevMaxStackBytes_,
                                 Max(args->maxChildStackBytes_, parentStackBytes));
         }
@@ -1769,8 +1773,7 @@ class FunctionCompiler
             *def = NULL;
             return true;
         }
-        uint32_t spIncrement = args.childClobbers_ ? args.maxChildStackBytes_ : 0;
-        MAsmCall *ins = MAsmCall::New(callee, args.regArgs_, returnType, spIncrement);
+        MAsmCall *ins = MAsmCall::New(callee, args.regArgs_, returnType, args.spIncrement_);
         if (!ins)
             return false;
         curBlock_->add(ins);
@@ -4343,6 +4346,19 @@ LoadJSContextIntoRegister(MacroAssembler &masm, Register reg)
     masm.loadPtr(Address(reg, AsmJSActivation::offsetOfContext()), reg);
 }
 
+static void
+AssertStackAlignment(MacroAssembler &masm)
+{
+    JS_ASSERT((AlignmentAtPrologue + masm.framePushed()) % StackAlignment == 0);
+#ifdef DEBUG
+    Label ok;
+    JS_ASSERT(IsPowerOfTwo(StackAlignment));
+    masm.branchTestPtr(Assembler::Zero, StackPointer, Imm32(StackAlignment - 1), &ok);
+    masm.breakpoint();
+    masm.bind(&ok);
+#endif
+}
+
 #if defined(JS_CPU_X64)
 static bool
 GenerateEntry(ModuleCompiler &m, const AsmJSModule::ExportedFunction &exportedFunc)
@@ -4415,6 +4431,7 @@ GenerateEntry(ModuleCompiler &m, const AsmJSModule::ExportedFunction &exportedFu
         }
     }
 
+    AssertStackAlignment(masm);
     masm.call(func.codeLabel());
 
     // Recover argv.
@@ -4509,11 +4526,12 @@ GenerateFFIExit(ModuleCompiler &m, const ModuleCompiler::ExitDescriptor &exit, u
 
     const unsigned arrayLength = Max<size_t>(1, exit.argTypes().length());
     const unsigned arraySize = arrayLength * sizeof(Value);
-    const unsigned reserveSize = AlignBytes(AlignmentAtPrologue + arraySize, StackAlignment);
+    const unsigned reserveSize = AlignmentAtPrologue + AlignBytes(arraySize, StackAlignment);
     const unsigned callerArgsOffset = reserveSize + NativeFrameSize;
 
     masm.setFramePushed(0);
     masm.reserveStack(reserveSize);
+
     Register argv = StackPointer;
 
     for (ABIArgIter i(exit.argTypes()); !i.done(); i++) {
@@ -4555,6 +4573,7 @@ GenerateFFIExit(ModuleCompiler &m, const ModuleCompiler::ExitDescriptor &exit, u
     // argument 3: argv
     masm.mov(argv, IntArgReg3);
 
+    AssertStackAlignment(masm);
     switch (exit.use().which()) {
       case Use::NoCoercion:
         masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, &InvokeFromAsmJS_Ignore)));
@@ -4589,9 +4608,18 @@ GenerateStackOverflowExit(ModuleCompiler &m, Label *throwLabel)
     masm.align(CodeAlignment);
     masm.bind(&m.stackOverflowLabel());
 
+    // We know that StackPointer is word-aligned, but nothing past that. Thus,
+    // we must align StackPointer dynamically.
+    masm.push(StackPointer);
+    masm.andPtr(Imm32(~(StackAlignment - 1)), StackPointer);
+
     void (*pf)(JSContext*) = js_ReportOverRecursed;
     LoadJSContextIntoRegister(masm, IntArgReg0);
+
     masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, pf)));
+
+    // Restore the saved StackPointer
+    masm.pop(StackPointer);
 
     masm.jmp(throwLabel);
 }
@@ -4613,31 +4641,31 @@ GenerateOperationCallbackExit(ModuleCompiler &m, Label *throwLabel)
     masm.bind(&m.operationCallbackLabel());
 
     // Reserve space for resumePC below the saved registers.
-    masm.setFramePushed(0);
     masm.reserveStack(sizeof(void*));
 
     // Save all registers.
     masm.PushRegsInMask(AllRegs);
 
-    // Store resumePC into the space reserved space.
+    // Store resumePC into the reserved space.
     LoadAsmJSActivationIntoRegister(masm, IntArgReg0);
     masm.loadPtr(Address(IntArgReg0, AsmJSActivation::offsetOfResumePC()), IntArgReg0);
     masm.storePtr(IntArgReg0, Address(StackPointer, masm.framePushed() - sizeof(void*)));
 
-    // Align the stack for the call.
-    const unsigned padding = ComputeByteAlignment(masm.framePushed(), StackAlignment);
-    masm.reserveStack(padding);
-
     // argument 0: cx
     LoadJSContextIntoRegister(masm, IntArgReg0);
+
+    // We know that StackPointer is word-aligned, but nothing past that. Thus,
+    // we must align StackPointer dynamically.
+    masm.push(StackPointer);
+    masm.andPtr(Imm32(~(StackAlignment - 1)), StackPointer);
 
     // Call js_HandleExecutionInterrupt.
     JSBool (*pf)(JSContext*) = js_HandleExecutionInterrupt;
     masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, pf)));
     masm.branchTest32(Assembler::Zero, ReturnReg, ReturnReg, throwLabel);
 
-    // Undo the aligning push.
-    masm.freeStack(padding);
+    // Restore the saved StackPointer
+    masm.pop(StackPointer);
 
     // Restore all registers.
     masm.PopRegsInMask(AllRegs);
