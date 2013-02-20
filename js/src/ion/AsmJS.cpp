@@ -4400,12 +4400,9 @@ GenerateEntry(ModuleCompiler &m, const AsmJSModule::ExportedFunction &exportedFu
 
     // Determine how many stack slots we need to hold arguments that don't fit
     // in registers.
-    unsigned numStackArgs = 0;
     ABIArgIter iter(func.argMIRTypes());
-    for (; !iter.done(); iter++) {
-        if (iter->kind() == ABIArg::Stack)
-            numStackArgs++;
-    }
+    while (!iter.done())
+        iter++;
 
     // Before pushing the arguments, we are aligned for a call. Ensure that we
     // stay aligned.
@@ -4416,16 +4413,16 @@ GenerateEntry(ModuleCompiler &m, const AsmJSModule::ExportedFunction &exportedFu
     // Copy parameters out of argv into the registers/stack-slots specified by
     // the system ABI.
     for (ABIArgIter iter(func.argMIRTypes()); !iter.done(); iter++) {
-        unsigned argOffset = iter.index() * sizeof(uint64_t);
+        Operand srcAddr(argv, iter.index() * sizeof(uint64_t));
         switch (iter->kind()) {
           case ABIArg::GPR:
-            masm.movl(Operand(argv, argOffset), iter->gpr());
+            masm.movl(srcAddr, iter->gpr());
             break;
           case ABIArg::FPU:
-            masm.movsd(Operand(argv, argOffset), iter->fpu());
+            masm.movsd(srcAddr, iter->fpu());
             break;
           case ABIArg::Stack:
-            masm.movq(Operand(argv, argOffset), ScratchReg);
+            masm.movq(srcAddr, ScratchReg);
             masm.movq(ScratchReg, Operand(StackPointer, iter->offsetFromArgBase()));
             break;
         }
@@ -4526,17 +4523,16 @@ GenerateFFIExit(ModuleCompiler &m, const ModuleCompiler::ExitDescriptor &exit, u
 
     const unsigned arrayLength = Max<size_t>(1, exit.argTypes().length());
     const unsigned arraySize = arrayLength * sizeof(Value);
-    const unsigned reserveSize = AlignmentAtPrologue + AlignBytes(arraySize, StackAlignment);
+    const unsigned reserveSize = AlignmentAtPrologue +
+                                 AlignBytes(arraySize, StackAlignment) +
+                                 ShadowSpaceSize;
     const unsigned callerArgsOffset = reserveSize + NativeFrameSize;
 
     masm.setFramePushed(0);
     masm.reserveStack(reserveSize);
 
-    Register argv = StackPointer;
-
     for (ABIArgIter i(exit.argTypes()); !i.done(); i++) {
-        unsigned argOffset = i.index() * sizeof(Value);
-        Address dstAddr = Address(argv, argOffset);
+        Address dstAddr = Address(StackPointer, ShadowSpaceSize + i.index() * sizeof(Value));
         switch (i->kind()) {
           case ABIArg::GPR:
             masm.storeValue(JSVAL_TYPE_INT32, i->gpr(), dstAddr);
@@ -4571,7 +4567,8 @@ GenerateFFIExit(ModuleCompiler &m, const ModuleCompiler::ExitDescriptor &exit, u
     masm.mov(Imm32(exit.argTypes().length()), IntArgReg2);
 
     // argument 3: argv
-    masm.mov(argv, IntArgReg3);
+    Address argv(StackPointer, ShadowSpaceSize);
+    masm.lea(Operand(argv), IntArgReg3);
 
     AssertStackAlignment(masm);
     switch (exit.use().which()) {
@@ -4582,12 +4579,12 @@ GenerateFFIExit(ModuleCompiler &m, const ModuleCompiler::ExitDescriptor &exit, u
       case Use::ToInt32:
         masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, &InvokeFromAsmJS_ToInt32)));
         masm.branchTest32(Assembler::Zero, ReturnReg, ReturnReg, throwLabel);
-        masm.unboxInt32(Address(argv, 0), ReturnReg);
+        masm.unboxInt32(argv, ReturnReg);
         break;
       case Use::ToNumber:
         masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, &InvokeFromAsmJS_ToNumber)));
         masm.branchTest32(Assembler::Zero, ReturnReg, ReturnReg, throwLabel);
-        masm.loadDouble(Address(argv, 0), ReturnFloatReg);
+        masm.loadDouble(argv, ReturnFloatReg);
         break;
       case Use::AddOrSub:
         JS_NOT_REACHED("Should have been a type error");
@@ -4612,6 +4609,8 @@ GenerateStackOverflowExit(ModuleCompiler &m, Label *throwLabel)
     // we must align StackPointer dynamically. Don't worry about restoring
     // StackPointer since throwLabel will clobber StackPointer immediately.
     masm.andPtr(Imm32(~(StackAlignment - 1)), StackPointer);
+    if (ShadowSpaceSize)
+        masm.subPtr(Imm32(ShadowSpaceSize), StackPointer);
 
     void (*pf)(JSContext*) = js_ReportOverRecursed;
     LoadJSContextIntoRegister(masm, IntArgReg0);
@@ -4656,6 +4655,8 @@ GenerateOperationCallbackExit(ModuleCompiler &m, Label *throwLabel)
     // we must align StackPointer dynamically.
     masm.mov(StackPointer, SomeNonVolatileReg);
     masm.andPtr(Imm32(~(StackAlignment - 1)), StackPointer);
+    if (ShadowSpaceSize)
+        masm.subPtr(Imm32(ShadowSpaceSize), StackPointer);
 
     // Call js_HandleExecutionInterrupt.
     JSBool (*pf)(JSContext*) = js_HandleExecutionInterrupt;
