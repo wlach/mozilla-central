@@ -210,7 +210,7 @@ SetRegisterToCoercedUndefined(mcontext_t &mcontext, AnyRegister reg)
 struct sigaction prevSigAction;
 
 static bool
-PCIsInModule(const AsmJSModule &module, uint8_t *pc)
+PCIsInModule(const AsmJSModule &module, void *pc)
 {
     uint8_t *code = module.functionCode();
     return pc >= code && pc < (code + module.functionBytes());
@@ -273,9 +273,12 @@ HandleSignal(int signum, siginfo_t *info, void *context)
 
     void *faultingAddress = info->si_addr;
 
-    // If we faulted trying to read/execute the current PC, this must be an
-    // operation callback (see TriggerOperationCallbackForAsmJSCode).
-    if (faultingAddress == pc) {
+    // If we faulted trying to execute code in 'module', this must be an
+    // operation callback (see TriggerOperationCallbackForAsmJSCode). Redirect
+    // execution to a trampoline which will call js_HandleExecutionInterrupt.
+    // The trampoline will jump to activation->resumePC if execution isn't
+    // interrupted.
+    if (PCIsInModule(module, faultingAddress)) {
         activation->setResumePC(pc);
         *ppc = module.operationCallbackExit();
         mprotect(module.functionCode(), module.functionBytes(), PROT_READ | PROT_WRITE | PROT_EXEC);
@@ -354,9 +357,9 @@ js::EnsureAsmJSSignalHandlersInstalled()
 // loops, this poses non-trivial overhead. For asm.js, we can do better: when
 // another thread triggers the operation callback, we simply mprotect all of
 // the innermost asm.js module activation's code. This will trigger a SIGSEGV,
-// taking us into AsmJSMemoryFaultHandler. From here, we can manually redirect
-// execution to a piece of jit code (module.operationCallbackExit) that saves
-// all register state and calls the operation callback.
+// taking us into AsmJSMemoryFaultHandler. From there, we can manually redirect
+// execution to call js_HandleExecutionInterrupt. The memory is un-protected
+// from the signal handler after control flow is redirected.
 void
 js::TriggerOperationCallbackForAsmJSCode(JSRuntime *rt)
 {

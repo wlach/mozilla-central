@@ -4632,46 +4632,44 @@ static void
 GenerateOperationCallbackExit(ModuleCompiler &m, Label *throwLabel)
 {
     MacroAssembler &masm = m.masm();
-
     masm.align(CodeAlignment);
     masm.bind(&m.operationCallbackLabel());
 
-    // Reserve space for resumePC below the saved registers.
-    masm.setFramePushed(0);
-    masm.reserveStack(sizeof(void*));
-
-    // Save all registers.
-    masm.PushRegsInMask(AllRegs);
+    // Be very careful here not to perturb the machine state before saving it
+    // to the stack. In particular, add/sub instructions may set conditions in
+    // the flags register.
+    masm.push(Imm32(0));            // space for resumePC
+    masm.pushFlags();               // after this we are safe to use sub
+    masm.setFramePushed(0);         // set to zero so we can use masm.framePushed() below
+    masm.PushRegsInMask(AllRegs);   // save all GP/FP registers
 
     // Store resumePC into the reserved space.
     LoadAsmJSActivationIntoRegister(masm, IntArgReg0);
     masm.loadPtr(Address(IntArgReg0, AsmJSActivation::offsetOfResumePC()), IntArgReg1);
-    masm.storePtr(IntArgReg1, Address(StackPointer, masm.framePushed() - sizeof(void*)));
+    masm.storePtr(IntArgReg1, Address(StackPointer, masm.framePushed() + sizeof(void*)));
 
     // argument 0: cx
     masm.loadPtr(Address(IntArgReg0, AsmJSActivation::offsetOfContext()), IntArgReg0);
 
-    // We know that StackPointer is word-aligned, but nothing past that. Thus,
-    // we must align StackPointer dynamically.
+    // We know that StackPointer is word-aligned, but not necessarily
+    // stack-aligned (StackAlignment is greater than word size on x64).
     masm.mov(StackPointer, SomeNonVolatileReg);
     masm.andPtr(Imm32(~(StackAlignment - 1)), StackPointer);
     if (ShadowSpaceSize)
         masm.subPtr(Imm32(ShadowSpaceSize), StackPointer);
 
-    // Call js_HandleExecutionInterrupt.
     JSBool (*pf)(JSContext*) = js_HandleExecutionInterrupt;
     masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, pf)));
     masm.branchTest32(Assembler::Zero, ReturnReg, ReturnReg, throwLabel);
 
-    // Restore the saved StackPointer
+    // Restore the saved StackPointer.
     masm.mov(SomeNonVolatileReg, StackPointer);
 
-    // Restore all registers.
-    masm.PopRegsInMask(AllRegs);
-
-    // All the remains on the stack is resumePC which masm.ret pops and then
-    // jumps to.
-    masm.ret();
+    // Restore the machine state to before the interrupt.
+    masm.PopRegsInMask(AllRegs);  // restore all GP/FP registers
+    JS_ASSERT(masm.framePushed() == 0);
+    masm.popFlags();              // after this, nothing that sets conditions
+    masm.ret();                   // pop resumePC into PC
 }
 
 // If an exception is thrown, simply pop all frames (since asm.js does not

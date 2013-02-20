@@ -227,6 +227,8 @@ private:
         OP_LEA                          = 0x8D,
         OP_GROUP1A_Ev                   = 0x8F,
         OP_NOP                          = 0x90,
+        OP_PUSHFLAGS                    = 0x9C,
+        OP_POPFLAGS                     = 0x9D,
         OP_CDQ                          = 0x99,
         OP_MOV_EAXOv                    = 0xA1,
         OP_MOV_OvEAX                    = 0xA3,
@@ -437,6 +439,18 @@ public:
     {
         FIXME_INSN_PRINTING;
         m_formatter.oneByteOp(OP_GROUP1A_Ev, GROUP1A_OP_POP, base, offset);
+    }
+
+    void push_flags()
+    {
+        spew("push flags register");
+        m_formatter.oneByteOp(OP_PUSHFLAGS);
+    }
+
+    void pop_flags()
+    {
+        spew("pop flags register");
+        m_formatter.oneByteOp(OP_POPFLAGS);
     }
 
     // Arithmetic operations:

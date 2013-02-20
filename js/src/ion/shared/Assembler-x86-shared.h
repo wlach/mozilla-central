@@ -1010,6 +1010,13 @@ class AssemblerX86Shared
         masm.pop_r(src.code());
     }
 
+    void pushFlags() {
+        masm.push_flags();
+    }
+    void popFlags() {
+        masm.pop_flags();
+    }
+
 #ifdef JS_CPU_X86
     void pushAllRegs() {
         masm.pusha();
