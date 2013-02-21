@@ -56,7 +56,7 @@ class MediaEngineWebRTCVideoSource : public MediaEngineVideoSource,
                                      public nsRunnable
 {
 public:
-  static const int DEFAULT_VIDEO_FPS = 60;
+  static const int DEFAULT_VIDEO_FPS = 30;
   static const int DEFAULT_VIDEO_MIN_FPS = 10;
   static const int DEFAULT_VIDEO_WIDTH = 640;
   static const int DEFAULT_VIDEO_HEIGHT = 480;
