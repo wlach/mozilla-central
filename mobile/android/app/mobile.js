@@ -677,3 +677,5 @@ pref("memory.free_dirty_pages", true);
 
 // Enable tiled layers rendering by default on android
 pref("gfx.use_tiled_thebes", true);
+
+pref("media.cubeb_latency_ms", 20);

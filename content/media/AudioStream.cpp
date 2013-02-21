@@ -768,10 +768,16 @@ BufferedAudioStream::Init(int32_t aNumChannels, int32_t aRate,
     return NS_ERROR_FAILURE;
   }
 
+#ifdef ANDROID
+  // Size mBuffer for 50ms of audio. We might be able to go lower.
+  uint32_t bufferLimit = FramesToBytes(aRate / 20);
+#else
   // Size mBuffer for one second of audio.  This value is arbitrary, and was
   // selected based on the observed behaviour of the existing AudioStream
   // implementations.
   uint32_t bufferLimit = FramesToBytes(aRate);
+#endif
+
   NS_ABORT_IF_FALSE(bufferLimit % mBytesPerFrame == 0, "Must buffer complete frames");
   mBuffer.SetCapacity(bufferLimit);
 
