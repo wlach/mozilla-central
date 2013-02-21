@@ -101,13 +101,13 @@ struct frontend::StmtInfoBCE : public StmtInfoBase
 };
 
 BytecodeEmitter::BytecodeEmitter(BytecodeEmitter *parent, Parser *parser, SharedContext *sc,
-                                 HandleScript script, AbstractFramePtr callerFrame, bool hasGlobalScope,
+                                 HandleScript script, HandleScript evalCaller, bool hasGlobalScope,
                                  unsigned lineno, bool selfHostingMode)
   : sc(sc),
     parent(parent),
     script(sc->context, script),
     parser(parser),
-    callerFrame(callerFrame),
+    evalCaller(evalCaller),
     topStmt(NULL),
     topScopeStmt(NULL),
     blockChain(sc->context),
@@ -1282,7 +1282,7 @@ BindNameToSlot(JSContext *cx, BytecodeEmitter *bce, ParseNode *pn)
     }
 
     if (dn->pn_cookie.isFree()) {
-        if (AbstractFramePtr caller = bce->callerFrame) {
+        if (HandleScript caller = bce->evalCaller) {
             JS_ASSERT(bce->script->compileAndGo);
 
             /*
@@ -1296,7 +1296,7 @@ BindNameToSlot(JSContext *cx, BytecodeEmitter *bce, ParseNode *pn)
              * If this is an eval in the global scope, then unbound variables
              * must be globals, so try to use GNAME ops.
              */
-            if (caller.isGlobalFrame() && TryConvertToGname(bce, pn, &op)) {
+            if (!caller->functionOrCallerFunction() && TryConvertToGname(bce, pn, &op)) {
                 pn->setOp(op);
                 pn->pn_dflags |= PND_BOUND;
                 return true;
@@ -1478,7 +1478,7 @@ CheckSideEffects(JSContext *cx, BytecodeEmitter *bce, ParseNode *pn, bool *answe
         return true;
 
     switch (pn->getArity()) {
-      case PN_FUNC:
+      case PN_CODE:
         /*
          * A named function, contrary to ES3, is no longer useful, because we
          * bind its name lexically (using JSOP_CALLEE) instead of creating an
@@ -3009,7 +3009,7 @@ MaybeEmitGroupAssignment(JSContext *cx, BytecodeEmitter *bce, JSOp prologOp, Par
     ParseNode *lhs = pn->pn_left;
     ParseNode *rhs = pn->pn_right;
     if (lhs->isKind(PNK_ARRAY) && rhs->isKind(PNK_ARRAY) &&
-        !(rhs->pn_xflags & PNX_HOLEY) &&
+        !(rhs->pn_xflags & PNX_SPECIALARRAYINIT) &&
         lhs->pn_count <= rhs->pn_count)
     {
         if (groupOption == GroupIsDecl && !EmitDestructuringDecls(cx, bce, prologOp, lhs))
@@ -3041,8 +3041,8 @@ MaybeEmitLetGroupDecl(JSContext *cx, BytecodeEmitter *bce, ParseNode *pn, JSOp *
     ParseNode *lhs = pn->pn_left;
     ParseNode *rhs = pn->pn_right;
     if (lhs->isKind(PNK_ARRAY) && rhs->isKind(PNK_ARRAY) &&
-        !(rhs->pn_xflags & PNX_HOLEY) &&
-        !(lhs->pn_xflags & PNX_HOLEY) &&
+        !(rhs->pn_xflags & PNX_SPECIALARRAYINIT) &&
+        !(lhs->pn_xflags & PNX_SPECIALARRAYINIT) &&
         lhs->pn_count == rhs->pn_count)
     {
         for (ParseNode *l = lhs->pn_head; l; l = l->pn_next) {
@@ -4488,7 +4488,7 @@ EmitFunc(JSContext *cx, BytecodeEmitter *bce, ParseNode *pn)
         if (funbox->useAsm && !CompileAsmJS(cx, *bce->tokenStream(), pn, script))
             return false;
 
-        BytecodeEmitter bce2(bce, bce->parser, funbox, script, bce->callerFrame,
+        BytecodeEmitter bce2(bce, bce->parser, funbox, script, bce->evalCaller,
                              bce->hasGlobalScope, pn->pn_pos.begin.lineno, bce->selfHostingMode);
         if (!bce2.init())
             return false;

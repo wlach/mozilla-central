@@ -262,11 +262,17 @@ frontend::FoldConstants(JSContext *cx, ParseNode **pnp, Parser *parser, bool inG
         return true;
 
     switch (pn->getArity()) {
-      case PN_FUNC:
+      case PN_CODE:
         if (pn->pn_funbox->useAsmOrInsideUseAsm())
             return true;
-        if (!FoldConstants(cx, &pn->pn_body, parser, pn->pn_funbox->inGenexpLambda))
-            return false;
+        if (pn->getKind() == PNK_MODULE) {
+            if (!FoldConstants(cx, &pn->pn_body, parser))
+                return false;
+        } else {
+            JS_ASSERT(pn->getKind() == PNK_FUNCTION);
+            if (!FoldConstants(cx, &pn->pn_body, parser, pn->pn_funbox->inGenexpLambda))
+                return false;
+        }
         break;
 
       case PN_LIST:

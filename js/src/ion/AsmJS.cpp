@@ -214,7 +214,7 @@ static inline JSFunction *
 FunctionObject(ParseNode *fn)
 {
     JS_ASSERT(fn->isKind(PNK_FUNCTION));
-    JS_ASSERT(fn->isArity(PN_FUNC));
+    JS_ASSERT(fn->isArity(PN_CODE));
     return fn->pn_funbox->function();
 }
 
