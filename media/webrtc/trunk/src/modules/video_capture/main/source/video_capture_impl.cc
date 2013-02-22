@@ -260,8 +260,15 @@ WebRtc_Word32 VideoCaptureImpl::IncomingFrame(
 
     CriticalSectionScoped cs(&_callBackCs);
 
-    const WebRtc_Word32 width = frameInfo.width;
-    const WebRtc_Word32 height = frameInfo.height;
+    WebRtc_Word32 width = frameInfo.width;
+    WebRtc_Word32 height = frameInfo.height;
+    // These need to be inverted, we rotated the reported camera
+    // sizes to what the app will get, but the source for our
+    // rotation doesn't have it applied yet, so undo that here.
+    if (_rotateFrame == kRotate90 || _rotateFrame == kRotate270) {
+        width = frameInfo.height;
+        height = frameInfo.width;
+    }
     WebRtc_Word32 target_width = width;
     WebRtc_Word32 target_height = height;
 

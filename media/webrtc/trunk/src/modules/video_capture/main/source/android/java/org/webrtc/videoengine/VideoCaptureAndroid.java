@@ -1,3 +1,4 @@
+
 /*
  *  Copyright (c) 2012 The WebRTC project authors. All Rights Reserved.
  *
@@ -116,10 +117,7 @@ public class VideoCaptureAndroid implements PreviewCallback, Callback {
 	}
     }
 
-    public int GetRotateAmount() {
-        android.hardware.Camera.CameraInfo info =
-            new android.hardware.Camera.CameraInfo();
-        android.hardware.Camera.getCameraInfo(cameraId, info);
+    static public int GetRotateAmount(android.hardware.Camera.CameraInfo info) {
         int rotation = GeckoApp.mAppContext.getWindowManager().getDefaultDisplay().getRotation();
         int degrees = 0;
         switch (rotation) {
@@ -138,6 +136,13 @@ public class VideoCaptureAndroid implements PreviewCallback, Callback {
         }
 
         return result;
+    }
+
+    public int GetRotateAmount() {
+        android.hardware.Camera.CameraInfo info =
+            new android.hardware.Camera.CameraInfo();
+        android.hardware.Camera.getCameraInfo(cameraId, info);
+        return GetRotateAmount(info);
     }
 
     private int tryStartCapture(int width, int height, int frameRate) {
@@ -161,8 +166,14 @@ public class VideoCaptureAndroid implements PreviewCallback, Callback {
 
             CaptureCapabilityAndroid currentCapability =
                     new CaptureCapabilityAndroid();
-            currentCapability.width = width;
-            currentCapability.height = height;
+            int rotation = GetRotateAmount();
+            if (rotation == 90 || rotation == 270) {
+                currentCapability.width = height;
+                currentCapability.height = width;
+            } else {
+                currentCapability.width = width;
+                currentCapability.height = height;
+            }
             currentCapability.maxFPS = frameRate;
             PixelFormat.getPixelFormatInfo(PIXEL_FORMAT, pixelFormat);
 

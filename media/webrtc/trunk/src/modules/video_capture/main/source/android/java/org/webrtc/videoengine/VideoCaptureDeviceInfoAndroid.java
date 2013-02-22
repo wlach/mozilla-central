@@ -111,10 +111,16 @@ public class VideoCaptureDeviceInfoAndroid {
                         newDevice.frontCameraType = FrontFacingCameraType.Android23;
                         Log.d(TAG, "Camera " + i +", Facing front, Orientation "+ info.orientation);
                     }
-
                     camera = Camera.open(i);
                     Camera.Parameters parameters = camera.getParameters();
-                    AddDeviceInfo(newDevice, parameters);
+                    // Fix the reported width/height to account for
+                    // cameras being rotated
+                    boolean flipSizes = false;
+                    int rotation = VideoCaptureAndroid.GetRotateAmount(info);
+                    if (rotation == 90 || rotation == 270) {
+                        flipSizes = true;
+                    }
+                    AddDeviceInfo(newDevice, parameters, flipSizes);
                     camera.release();
                     camera = null;
                     deviceList.add(newDevice);
@@ -132,7 +138,7 @@ public class VideoCaptureDeviceInfoAndroid {
 
     // Adds the capture capabilities of the currently opened device
     private void AddDeviceInfo(AndroidVideoCaptureDevice newDevice,
-            Camera.Parameters parameters) {
+                               Camera.Parameters parameters, boolean flipSizes) {
 
         List<Size> sizes = parameters.getSupportedPreviewSizes();
         List<Integer> frameRates = parameters.getSupportedPreviewFrameRates();
@@ -147,12 +153,13 @@ public class VideoCaptureDeviceInfoAndroid {
         for(int i = 0; i < sizes.size(); ++i) {
             Size s = sizes.get(i);
             newDevice.captureCapabilies[i] = new CaptureCapabilityAndroid();
-            newDevice.captureCapabilies[i].height = s.height;
-            newDevice.captureCapabilies[i].width = s.width;
+            newDevice.captureCapabilies[i].height = (flipSizes ? s.width : s.height);
+            newDevice.captureCapabilies[i].width = (flipSizes ? s.height : s.width);
             newDevice.captureCapabilies[i].maxFPS = maxFPS;
             Log.v(TAG,
                     "VideoCaptureDeviceInfo " + "maxFPS:" + maxFPS +
-                    " width:" + s.width + " height:" + s.height);
+                    " width:" + s.width + " height:" + s.height +
+                    " flipped:" + flipSizes);
         }
     }
 
