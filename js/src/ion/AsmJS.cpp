@@ -237,21 +237,29 @@ FunctionArgsList(ParseNode *fn, unsigned *numFormals)
 }
 
 static inline ParseNode *
-FunctionStatementList(ParseNode *fn)
+MaybeFunctionStatementList(ParseNode *fn)
 {
     JS_ASSERT(fn->isKind(PNK_FUNCTION));
     ParseNode *argsBody = fn->pn_body;
     JS_ASSERT(argsBody->isKind(PNK_ARGSBODY));
     ParseNode *body = argsBody->last();
-    JS_ASSERT(body->isKind(PNK_STATEMENTLIST));
+    if (!body->isKind(PNK_STATEMENTLIST))
+        return NULL;
     return body;
+}
+
+static inline ParseNode *
+FunctionFirstStatementOrNull(ParseNode *fn)
+{
+    ParseNode *list = MaybeFunctionStatementList(fn);
+    return list ? ListHead(list) : NULL;
 }
 
 static inline ParseNode *
 FunctionLastStatementOrNull(ParseNode *fn)
 {
-    ParseNode *list = FunctionStatementList(fn);
-    return list->pn_count == 0 ? NULL : list->last();
+    ParseNode *list = MaybeFunctionStatementList(fn);
+    return list ? list->pn_count == 0 ? NULL : list->last() : NULL;
 }
 
 static inline bool
@@ -2316,7 +2324,7 @@ CheckFunctionHead(ModuleCompiler &m, ParseNode *fn, ParseNode **stmtIter)
     if (FunctionObject(fn)->hasRest())
         return m.fail("rest args not allowed in asm.js", fn);
 
-    *stmtIter = ListHead(FunctionStatementList(fn));
+    *stmtIter = FunctionFirstStatementOrNull(fn);
     return true;
 }
 
