@@ -262,6 +262,8 @@ WebRtc_Word32 VideoCaptureImpl::IncomingFrame(
 
     const WebRtc_Word32 width = frameInfo.width;
     const WebRtc_Word32 height = frameInfo.height;
+    WebRtc_Word32 target_width = width;
+    WebRtc_Word32 target_height = height;
 
     if (frameInfo.codecType == kVideoCodecUnknown)
     {
@@ -278,8 +280,14 @@ WebRtc_Word32 VideoCaptureImpl::IncomingFrame(
             return -1;
         }
 
+        // Rotating resolution when for 90/270 degree rotations.
+        if (_rotateFrame == kRotate90 || _rotateFrame == kRotate270)  {
+            target_width = abs(height);
+            target_height = width;
+        }
+
         // Allocate I420 buffer.
-        int requiredLength = CalcBufferSize(kI420, width, abs(height));
+        int requiredLength = CalcBufferSize(kI420, target_width, abs(target_height));
         _captureFrame.VerifyAndAllocate(requiredLength);
         if (!_captureFrame.Buffer())
         {
@@ -289,14 +297,12 @@ WebRtc_Word32 VideoCaptureImpl::IncomingFrame(
         }
 
         memset(_captureFrame.Buffer(), 0, _captureFrame.Size());
-        // Keeping stride = width for I420 destination.
-        int dstStride  = width;
         const int conversionResult = ConvertToI420(commonVideoType,
                                                    videoFrame,
                                                    0, 0,  // No cropping
                                                    width, height,
                                                    videoFrameLength,
-                                                   width, height, dstStride,
+                                                   width, height, target_width,
                                                    _rotateFrame,
                                                    _captureFrame.Buffer());
         if (conversionResult < 0)
@@ -317,8 +323,8 @@ WebRtc_Word32 VideoCaptureImpl::IncomingFrame(
         }
     }
 
-    DeliverCapturedFrame(_captureFrame, width, abs(height), captureTime,
-                         frameInfo.codecType);
+    DeliverCapturedFrame(_captureFrame, target_width, abs(target_height),
+                         captureTime, frameInfo.codecType);
 
 
     const WebRtc_UWord32 processTime =

@@ -491,6 +491,9 @@ WebRtc_Word32 VideoCaptureAndroid::StartCapture(
                    "%s: Could not detach thread from JVM", __FUNCTION__);
     }
   }
+
+  //SetCaptureRotation(kCameraRotate270);
+
   if (result == 0) {
     _requestedCapability = capability;
     _captureStarted = true;
