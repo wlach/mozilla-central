@@ -1678,7 +1678,7 @@ MTruncateToInt32::foldsTo(bool useValueNumbers)
 
     if (input->type() == MIRType_Double && input->isConstant()) {
         const Value &v = input->toConstant()->value();
-        uint32_t ret = ToInt32(v.toDouble());
+        int32_t ret = ToInt32(v.toDouble());
         return MConstant::New(Int32Value(ret));
     }
 

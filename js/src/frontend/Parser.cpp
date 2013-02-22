@@ -5737,10 +5737,8 @@ Parser::primaryExpr(TokenKind tt)
                 }
 
                 tt = tokenStream.peekToken(TSF_OPERAND);
-                if (tt == TOK_RB) {
-                    pn->pn_xflags |= PNX_ENDCOMMA;
+                if (tt == TOK_RB)
                     break;
-                }
 
                 if (tt == TOK_COMMA) {
                     /* So CURRENT_TOKEN gets TOK_COMMA and not TOK_LB. */
