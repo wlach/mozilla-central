@@ -844,6 +844,13 @@ class ModuleCompiler
             code_(rhs->code_)
         {}
 
+        ~Func()
+        {
+            // Avoid spurious Label assertions on compilation failure.
+            if (!code_.bound())
+                code_.bind(0);
+        }
+
         ParseNode *fn() const { return fn_; }
         ParseNode *body() const { return body_; }
         unsigned numArgs() const { return argTypes_.length(); }
