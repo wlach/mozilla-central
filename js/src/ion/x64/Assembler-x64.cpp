@@ -15,18 +15,41 @@ using namespace js;
 using namespace js::ion;
 
 ABIArgGenerator::ABIArgGenerator()
-  : intRegIndex_(0),
+  : 
+#if defined(XP_WIN)
+    regIndex_(0),
+    stackOffset_(ShadowSpaceSize),
+#else
+    intRegIndex_(0),
     floatRegIndex_(0),
     stackOffset_(0),
+#endif
     current_()
 {}
 
 ABIArg
 ABIArgGenerator::next(MIRType type)
 {
-#if defined(_WIN64)
-# error "ABI is different on win64"
-#else
+#if defined(XP_WIN)
+    JS_STATIC_ASSERT(NumIntArgRegs == NumFloatArgRegs);
+    if (regIndex_ == NumIntArgRegs) {
+        current_ = ABIArg(stackOffset_);
+        stackOffset_ += sizeof(uint64_t);
+        return current_;
+    }
+    switch (type) {
+      case MIRType_Int32:
+      case MIRType_Pointer:
+        current_ = ABIArg(IntArgRegs[regIndex_++]);
+        break;
+      case MIRType_Double:
+        current_ = ABIArg(FloatArgRegs[regIndex_++]);
+        break;
+      default:
+        JS_NOT_REACHED("Unexpected argument type");
+    }
+    return current_;
+#elif defined(XP_MACOSX) || defined(__linux__)
     switch (type) {
       case MIRType_Int32:
       case MIRType_Pointer:
@@ -35,8 +58,7 @@ ABIArgGenerator::next(MIRType type)
             stackOffset_ += sizeof(uint64_t);
             break;
         }
-        current_ = ABIArg(IntArgRegs[intRegIndex_]);
-        intRegIndex_++;
+        current_ = ABIArg(IntArgRegs[intRegIndex_++]);
         break;
       case MIRType_Double:
         if (floatRegIndex_ == NumFloatArgRegs) {
@@ -44,13 +66,14 @@ ABIArgGenerator::next(MIRType type)
             stackOffset_ += sizeof(uint64_t);
             break;
         }
-        current_ = ABIArg(FloatArgRegs[floatRegIndex_]);
-        floatRegIndex_++;
+        current_ = ABIArg(FloatArgRegs[floatRegIndex_++]);
         break;
       default:
         JS_NOT_REACHED("Unexpected argument type");
     }
     return current_;
+#else
+# error "Missing ABI"
 #endif
 }
 

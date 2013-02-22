@@ -114,8 +114,6 @@ static const Register IntArgReg5 = r9;
 static const uint32_t NumIntArgRegs = 6;
 static const Register IntArgRegs[NumIntArgRegs] = { rdi, rsi, rdx, rcx, r8, r9 };
 
-static const Register SomeNonVolatileReg = rbx;
-
 static const Register CallTempNonArgRegs[] = { rax, rbx };
 static const uint32_t NumCallTempNonArgRegs =
     mozilla::ArrayLength(CallTempNonArgRegs);
@@ -134,8 +132,12 @@ static const FloatRegister FloatArgRegs[NumFloatArgRegs] = { xmm0, xmm1, xmm2, x
 
 class ABIArgGenerator
 {
+#if defined(XP_WIN)
+    unsigned regIndex_;
+#else
     unsigned intRegIndex_;
     unsigned floatRegIndex_;
+#endif
     uint32_t stackOffset_;
     ABIArg current_;
 

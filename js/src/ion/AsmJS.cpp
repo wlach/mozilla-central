@@ -3267,6 +3267,18 @@ CheckFFICall(FunctionCompiler &f, ParseNode *callNode, unsigned ffiIndex, Use us
     return true;
 }
 
+static inline void *
+UnaryMathFunCast(double (*pf)(double))
+{
+    return JS_FUNC_TO_DATA_PTR(void*, pf);
+}
+
+static inline void *
+BinaryMathFunCast(double (*pf)(double, double))
+{
+    return JS_FUNC_TO_DATA_PTR(void*, pf);
+}
+
 static bool
 CheckMathBuiltinCall(FunctionCompiler &f, ParseNode *callNode, AsmJSMathBuiltin mathBuiltin,
                      MDefinition **def, Type *type)
@@ -3276,19 +3288,19 @@ CheckMathBuiltinCall(FunctionCompiler &f, ParseNode *callNode, AsmJSMathBuiltin 
     switch (mathBuiltin) {
       case AsmJSMathBuiltin_imul:  return CheckMathIMul(f, callNode, def, type);
       case AsmJSMathBuiltin_abs:   return CheckMathAbs(f, callNode, def, type);
-      case AsmJSMathBuiltin_sin:   arity = 1; callee = JS_FUNC_TO_DATA_PTR(void*, sin);     break;
-      case AsmJSMathBuiltin_cos:   arity = 1; callee = JS_FUNC_TO_DATA_PTR(void*, cos);     break;
-      case AsmJSMathBuiltin_tan:   arity = 1; callee = JS_FUNC_TO_DATA_PTR(void*, tan);     break;
-      case AsmJSMathBuiltin_asin:  arity = 1; callee = JS_FUNC_TO_DATA_PTR(void*, asin);    break;
-      case AsmJSMathBuiltin_acos:  arity = 1; callee = JS_FUNC_TO_DATA_PTR(void*, acos);    break;
-      case AsmJSMathBuiltin_atan:  arity = 1; callee = JS_FUNC_TO_DATA_PTR(void*, atan);    break;
-      case AsmJSMathBuiltin_ceil:  arity = 1; callee = JS_FUNC_TO_DATA_PTR(void*, ceil);    break;
-      case AsmJSMathBuiltin_floor: arity = 1; callee = JS_FUNC_TO_DATA_PTR(void*, floor);   break;
-      case AsmJSMathBuiltin_exp:   arity = 1; callee = JS_FUNC_TO_DATA_PTR(void*, exp);     break;
-      case AsmJSMathBuiltin_log:   arity = 1; callee = JS_FUNC_TO_DATA_PTR(void*, log);     break;
-      case AsmJSMathBuiltin_sqrt:  arity = 1; callee = JS_FUNC_TO_DATA_PTR(void*, sqrt);    break;
-      case AsmJSMathBuiltin_pow:   arity = 2; callee = JS_FUNC_TO_DATA_PTR(void*, ecmaPow); break;
-      case AsmJSMathBuiltin_atan2: arity = 2; callee = JS_FUNC_TO_DATA_PTR(void*, atan2);   break;
+      case AsmJSMathBuiltin_sin:   arity = 1; callee = UnaryMathFunCast(sin);     break;
+      case AsmJSMathBuiltin_cos:   arity = 1; callee = UnaryMathFunCast(cos);     break;
+      case AsmJSMathBuiltin_tan:   arity = 1; callee = UnaryMathFunCast(tan);     break;
+      case AsmJSMathBuiltin_asin:  arity = 1; callee = UnaryMathFunCast(asin);    break;
+      case AsmJSMathBuiltin_acos:  arity = 1; callee = UnaryMathFunCast(acos);    break;
+      case AsmJSMathBuiltin_atan:  arity = 1; callee = UnaryMathFunCast(atan);    break;
+      case AsmJSMathBuiltin_ceil:  arity = 1; callee = UnaryMathFunCast(ceil);    break;
+      case AsmJSMathBuiltin_floor: arity = 1; callee = UnaryMathFunCast(floor);   break;
+      case AsmJSMathBuiltin_exp:   arity = 1; callee = UnaryMathFunCast(exp);     break;
+      case AsmJSMathBuiltin_log:   arity = 1; callee = UnaryMathFunCast(log);     break;
+      case AsmJSMathBuiltin_sqrt:  arity = 1; callee = UnaryMathFunCast(sqrt);    break;
+      case AsmJSMathBuiltin_pow:   arity = 2; callee = BinaryMathFunCast(ecmaPow); break;
+      case AsmJSMathBuiltin_atan2: arity = 2; callee = BinaryMathFunCast(atan2);   break;
     }
 
     FunctionCompiler::Args args(f);
@@ -4660,7 +4672,8 @@ GenerateOperationCallbackExit(ModuleCompiler &m, Label *throwLabel)
 
     // We know that StackPointer is word-aligned, but not necessarily
     // stack-aligned (StackAlignment is greater than word size on x64).
-    masm.mov(StackPointer, SomeNonVolatileReg);
+    Register nonVolatileReg = *GeneralRegisterIterator(GeneralRegisterSet(Registers::NonVolatileMask));
+    masm.mov(StackPointer, nonVolatileReg);
     masm.andPtr(Imm32(~(StackAlignment - 1)), StackPointer);
     if (ShadowSpaceSize)
         masm.subPtr(Imm32(ShadowSpaceSize), StackPointer);
@@ -4670,7 +4683,7 @@ GenerateOperationCallbackExit(ModuleCompiler &m, Label *throwLabel)
     masm.branchTest32(Assembler::Zero, ReturnReg, ReturnReg, throwLabel);
 
     // Restore the saved StackPointer.
-    masm.mov(SomeNonVolatileReg, StackPointer);
+    masm.mov(nonVolatileReg, StackPointer);
 
     // Restore the machine state to before the interrupt.
     masm.PopRegsInMask(AllRegs);  // restore all GP/FP registers

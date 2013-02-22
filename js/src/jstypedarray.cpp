@@ -43,7 +43,6 @@
 #ifdef XP_WIN
 # include "jswin.h"
 #else
-# include <unistd.h>
 # include <sys/mman.h>
 #endif
 
@@ -359,27 +358,48 @@ ArrayBufferObject::prepareForAsmJS(JSContext *cx, Handle<ArrayBufferObject*> buf
     if (buffer->isAsmJSArrayBuffer())
         return true;
 
-    void *p = mmap(NULL, AsmJSBufferReservedLength, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
+    // Get the entire reserved region (with all pages inaccessible).
+    void *p;
+#ifdef XP_WIN
+    p = VirtualAlloc(NULL, AsmJSBufferReservedLength, MEM_RESERVE, PAGE_NOACCESS);
+    if (!p)
+        return false;
+#else
+    p = mmap(NULL, AsmJSBufferReservedLength, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
     if (p == MAP_FAILED)
         return false;
+#endif
 
+    // Compute the valid region of the reserved memory, aligning the base address
+    // of the elements with 'padding' bytes to ensure that the end of the
+    // elements array lines up exactly with a page boundary.
     JS_ASSERT(uintptr_t(p) % PageSize == 0);
     uint8_t *begin = reinterpret_cast<uint8_t*>(p);
     uint32_t padding = ComputeByteAlignment(buffer->byteLength(), PageSize);
-    uint8_t *data = begin + PageSize + padding;
-    ObjectElements *newHeader = reinterpret_cast<ObjectElements*>(data - sizeof(ObjectElements));
-
     size_t validLength = PageSize + padding + buffer->byteLength();
     JS_ASSERT(validLength % PageSize == 0);
+
+    // Enable access to the valid region.
+#ifdef XP_WIN
+    if (!VirtualAlloc(begin, validLength, MEM_COMMIT, PAGE_READWRITE))
+        return false;
+#else
     if (mprotect(begin, validLength, PROT_READ | PROT_WRITE))
         return false;
+#endif
 
+    // Copy over the current contents of the typed array.
+    uint8_t *data = begin + PageSize + padding;
     memcpy(data, buffer->dataPointer(), buffer->byteLength());
 
+    // Swap the new elements into the ArrayBufferObject.
+    ObjectElements *newHeader = reinterpret_cast<ObjectElements*>(data - sizeof(ObjectElements));
     ObjectElements *oldHeader = buffer->hasDynamicElements() ? buffer->getElementsHeader() : NULL;
     buffer->changeContents(cx, newHeader);
     js_free(oldHeader);
 
+    // Mark the ArrayBufferObject so (1) we don't do this again, (2) we know not
+    // to js_free the header in the normal way.
     newHeader->setIsAsmJSArrayBuffer();
     JS_ASSERT(data == buffer->dataPointer());
     return true;
@@ -389,8 +409,24 @@ void
 ArrayBufferObject::neuterAsmJSArrayBuffer(ArrayBufferObject &buffer)
 {
     JS_ASSERT(buffer.isAsmJSArrayBuffer());
+
+    // TODO: need to actually allow this to be tested from the shell. roughly,
+    // we want to mprotect [buffer.dataPointer(), buffer.byteLength()).
+    // However, this region is not page length.  Instead, shift the
+    // ObjectElements header down so that it lies right before the page boundary
+    // and then mprotect the (now-aligned) region:
+    //   [newDataPointer, oldDataPointer+byteLength)
+    MOZ_CRASH();
+
+#ifdef XP_WIN
+    // Wrong:
+    if (!VirtualAlloc(buffer.dataPointer(), buffer.byteLength(), MEM_RESERVE, PAGE_NOACCESS))
+        MOZ_CRASH();
+#else
+    // Wrong:
     if (mprotect(buffer.dataPointer(), buffer.byteLength(), PROT_NONE))
         MOZ_CRASH();
+#endif
 }
 
 void
@@ -405,7 +441,11 @@ ArrayBufferObject::releaseAsmJSArrayBuffer(RawObject obj)
     uint8_t *begin = data - padding - PageSize;
     JS_ASSERT(uintptr_t(begin) % PageSize == 0);
 
+#ifdef XP_WIN
+    VirtualAlloc(begin, AsmJSBufferReservedLength, MEM_RESERVE, PAGE_NOACCESS);
+#else
     munmap(begin, AsmJSBufferReservedLength);
+#endif
 }
 #endif
 

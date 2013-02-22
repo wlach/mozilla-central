@@ -14,16 +14,14 @@
 #include "ion/AsmJSSignalHandlers.h"
 #include "assembler/assembler/MacroAssembler.h"
 
-#include <signal.h>
-#include <sys/mman.h>
 
 using namespace js;
 using namespace js::ion;
 
+// Prevent races trying to install the signal handlers.
 #ifdef JS_THREADSAFE
 # include "jslock.h"
 
-// Prevent races trying to install the signal handlers.
 class SignalMutex
 {
     PRLock *mutex_;
@@ -73,6 +71,18 @@ struct SignalMutex
 bool SignalMutex::Lock::sHandlersInstalled = false;
 #endif
 
+// Platform-independent reusable functions:
+
+static AsmJSActivation *
+InnermostAsmJSActivation()
+{
+    PerThreadData *threadData = TlsPerThreadData.get();
+    if (!threadData)
+        return NULL;
+
+    return threadData->asmJSActivationStackFromOwnerThread();
+}
+
 template <class T>
 static void
 SetXMMRegToNaN(T *xmm_reg)
@@ -82,132 +92,6 @@ SetXMMRegToNaN(T *xmm_reg)
     dbls[0] = js_NaN;
     dbls[1] = 0;
 }
-
-#if defined(__linux__)
-
-static const int SignalCode = SIGSEGV;
-
-static uint8_t **
-ContextToPC(mcontext_t &mcontext)
-{
-# if defined(JS_CPU_X64)
-    JS_STATIC_ASSERT(sizeof(mcontext.gregs[REG_RIP]) == 8);
-    return reinterpret_cast<uint8_t**>(&mcontext.gregs[REG_RIP]);
-# else
-#  error "TODO"
-# endif
-}
-
-static void
-SetRegisterToCoercedUndefined(mcontext_t &mcontext, AnyRegister reg)
-{
-# if defined(JS_CPU_X64)
-    if (reg.isFloat()) {
-        switch (reg.fpu().code()) {
-          case JSC::X86Registers::xmm0:  SetXMMRegToNaN(&mcontext.fpregs->_xmm[0]); break;
-          case JSC::X86Registers::xmm1:  SetXMMRegToNaN(&mcontext.fpregs->_xmm[1]); break;
-          case JSC::X86Registers::xmm2:  SetXMMRegToNaN(&mcontext.fpregs->_xmm[2]); break;
-          case JSC::X86Registers::xmm3:  SetXMMRegToNaN(&mcontext.fpregs->_xmm[3]); break;
-          case JSC::X86Registers::xmm4:  SetXMMRegToNaN(&mcontext.fpregs->_xmm[4]); break;
-          case JSC::X86Registers::xmm5:  SetXMMRegToNaN(&mcontext.fpregs->_xmm[5]); break;
-          case JSC::X86Registers::xmm6:  SetXMMRegToNaN(&mcontext.fpregs->_xmm[6]); break;
-          case JSC::X86Registers::xmm7:  SetXMMRegToNaN(&mcontext.fpregs->_xmm[7]); break;
-          case JSC::X86Registers::xmm8:  SetXMMRegToNaN(&mcontext.fpregs->_xmm[8]); break;
-          case JSC::X86Registers::xmm9:  SetXMMRegToNaN(&mcontext.fpregs->_xmm[9]); break;
-          case JSC::X86Registers::xmm10: SetXMMRegToNaN(&mcontext.fpregs->_xmm[10]); break;
-          case JSC::X86Registers::xmm11: SetXMMRegToNaN(&mcontext.fpregs->_xmm[11]); break;
-          case JSC::X86Registers::xmm12: SetXMMRegToNaN(&mcontext.fpregs->_xmm[12]); break;
-          case JSC::X86Registers::xmm13: SetXMMRegToNaN(&mcontext.fpregs->_xmm[13]); break;
-          case JSC::X86Registers::xmm14: SetXMMRegToNaN(&mcontext.fpregs->_xmm[14]); break;
-          case JSC::X86Registers::xmm15: SetXMMRegToNaN(&mcontext.fpregs->_xmm[15]); break;
-          default: MOZ_CRASH();
-        }
-    } else {
-        switch (reg.gpr().code()) {
-          case JSC::X86Registers::eax: mcontext.gregs[REG_RAX] = 0; break;
-          case JSC::X86Registers::ecx: mcontext.gregs[REG_RCX] = 0; break;
-          case JSC::X86Registers::edx: mcontext.gregs[REG_RDX] = 0; break;
-          case JSC::X86Registers::ebx: mcontext.gregs[REG_RBX] = 0; break;
-          case JSC::X86Registers::esp: mcontext.gregs[REG_RSP] = 0; break;
-          case JSC::X86Registers::ebp: mcontext.gregs[REG_RBP] = 0; break;
-          case JSC::X86Registers::esi: mcontext.gregs[REG_RSI] = 0; break;
-          case JSC::X86Registers::edi: mcontext.gregs[REG_RDI] = 0; break;
-          case JSC::X86Registers::r8:  mcontext.gregs[REG_R8]  = 0; break;
-          case JSC::X86Registers::r9:  mcontext.gregs[REG_R9]  = 0; break;
-          case JSC::X86Registers::r10: mcontext.gregs[REG_R10] = 0; break;
-          case JSC::X86Registers::r11: mcontext.gregs[REG_R11] = 0; break;
-          case JSC::X86Registers::r12: mcontext.gregs[REG_R12] = 0; break;
-          case JSC::X86Registers::r13: mcontext.gregs[REG_R13] = 0; break;
-          case JSC::X86Registers::r14: mcontext.gregs[REG_R14] = 0; break;
-          case JSC::X86Registers::r15: mcontext.gregs[REG_R15] = 0; break;
-          default: MOZ_CRASH();
-        }
-    }
-# else
-#  error "TODO"
-# endif
-}
-
-#elif defined(XP_MACOSX)
-
-static const int SignalCode = SIGBUS;
-
-static uint8_t **
-ContextToPC(mcontext_t mcontext)
-{
-    JS_STATIC_ASSERT(sizeof(mcontext->__ss.__rip) == 8);
-    return reinterpret_cast<uint8_t **>(&mcontext->__ss.__rip);
-}
-
-static void
-SetRegisterToCoercedUndefined(mcontext_t &mcontext, AnyRegister reg)
-{
-    if (reg.isFloat()) {
-        switch (reg.fpu().code()) {
-          case JSC::X86Registers::xmm0:  SetXMMRegToNaN(&mcontext->__fs.__fpu_xmm0); break;
-          case JSC::X86Registers::xmm1:  SetXMMRegToNaN(&mcontext->__fs.__fpu_xmm1); break;
-          case JSC::X86Registers::xmm2:  SetXMMRegToNaN(&mcontext->__fs.__fpu_xmm2); break;
-          case JSC::X86Registers::xmm3:  SetXMMRegToNaN(&mcontext->__fs.__fpu_xmm3); break;
-          case JSC::X86Registers::xmm4:  SetXMMRegToNaN(&mcontext->__fs.__fpu_xmm4); break;
-          case JSC::X86Registers::xmm5:  SetXMMRegToNaN(&mcontext->__fs.__fpu_xmm5); break;
-          case JSC::X86Registers::xmm6:  SetXMMRegToNaN(&mcontext->__fs.__fpu_xmm6); break;
-          case JSC::X86Registers::xmm7:  SetXMMRegToNaN(&mcontext->__fs.__fpu_xmm7); break;
-          case JSC::X86Registers::xmm8:  SetXMMRegToNaN(&mcontext->__fs.__fpu_xmm8); break;
-          case JSC::X86Registers::xmm9:  SetXMMRegToNaN(&mcontext->__fs.__fpu_xmm9); break;
-          case JSC::X86Registers::xmm10: SetXMMRegToNaN(&mcontext->__fs.__fpu_xmm10); break;
-          case JSC::X86Registers::xmm11: SetXMMRegToNaN(&mcontext->__fs.__fpu_xmm11); break;
-          case JSC::X86Registers::xmm12: SetXMMRegToNaN(&mcontext->__fs.__fpu_xmm12); break;
-          case JSC::X86Registers::xmm13: SetXMMRegToNaN(&mcontext->__fs.__fpu_xmm13); break;
-          case JSC::X86Registers::xmm14: SetXMMRegToNaN(&mcontext->__fs.__fpu_xmm14); break;
-          case JSC::X86Registers::xmm15: SetXMMRegToNaN(&mcontext->__fs.__fpu_xmm15); break;
-          default: MOZ_CRASH();
-        }
-    } else {
-        switch (reg.gpr().code()) {
-          case JSC::X86Registers::eax: mcontext->__ss.__rax = 0; break;
-          case JSC::X86Registers::ecx: mcontext->__ss.__rcx = 0; break;
-          case JSC::X86Registers::edx: mcontext->__ss.__rdx = 0; break;
-          case JSC::X86Registers::ebx: mcontext->__ss.__rbx = 0; break;
-          case JSC::X86Registers::esp: mcontext->__ss.__rsp = 0; break;
-          case JSC::X86Registers::ebp: mcontext->__ss.__rbp = 0; break;
-          case JSC::X86Registers::esi: mcontext->__ss.__rsi = 0; break;
-          case JSC::X86Registers::edi: mcontext->__ss.__rdi = 0; break;
-          case JSC::X86Registers::r8:  mcontext->__ss.__r8  = 0; break;
-          case JSC::X86Registers::r9:  mcontext->__ss.__r9  = 0; break;
-          case JSC::X86Registers::r10: mcontext->__ss.__r10 = 0; break;
-          case JSC::X86Registers::r11: mcontext->__ss.__r11 = 0; break;
-          case JSC::X86Registers::r12: mcontext->__ss.__r12 = 0; break;
-          case JSC::X86Registers::r13: mcontext->__ss.__r13 = 0; break;
-          case JSC::X86Registers::r14: mcontext->__ss.__r14 = 0; break;
-          case JSC::X86Registers::r15: mcontext->__ss.__r15 = 0; break;
-          default: MOZ_CRASH();
-        }
-    }
-}
-
-#endif
-
-struct sigaction prevSigAction;
 
 static bool
 PCIsInModule(const AsmJSModule &module, void *pc)
@@ -247,24 +131,287 @@ LookupHeapAccess(const AsmJSModule &module, uint8_t *pc)
     return NULL;
 }
 
-// Be very cautious and default to not handling; we don't want to accidentally
-// silence real crashes from real bugs.
-static bool
-HandleSignal(int signum, siginfo_t *info, void *context)
+#if defined(XP_WIN)
+# include "jswin.h"
+
+static uint8_t **
+ContextToPC(PCONTEXT context)
 {
-    if (signum != SignalCode)
-        return false;
-    
-    PerThreadData *threadData = TlsPerThreadData.get();
-    if (!threadData)
+#  if defined(JS_CPU_X64)
+    JS_STATIC_ASSERT(sizeof(context->Rip) == 8);
+    return reinterpret_cast<uint8_t**>(&context->Rip);
+#  else
+#   error "TODO"
+#  endif
+}
+
+static void
+SetRegisterToCoercedUndefined(CONTEXT *context, AnyRegister reg)
+{
+#  if defined(JS_CPU_X64)
+    if (reg.isFloat()) {
+        switch (reg.fpu().code()) {
+          case JSC::X86Registers::xmm0:  SetXMMRegToNaN(&context->Xmm0); break;
+          case JSC::X86Registers::xmm1:  SetXMMRegToNaN(&context->Xmm1); break;
+          case JSC::X86Registers::xmm2:  SetXMMRegToNaN(&context->Xmm2); break;
+          case JSC::X86Registers::xmm3:  SetXMMRegToNaN(&context->Xmm3); break;
+          case JSC::X86Registers::xmm4:  SetXMMRegToNaN(&context->Xmm4); break;
+          case JSC::X86Registers::xmm5:  SetXMMRegToNaN(&context->Xmm5); break;
+          case JSC::X86Registers::xmm6:  SetXMMRegToNaN(&context->Xmm6); break;
+          case JSC::X86Registers::xmm7:  SetXMMRegToNaN(&context->Xmm7); break;
+          case JSC::X86Registers::xmm8:  SetXMMRegToNaN(&context->Xmm8); break;
+          case JSC::X86Registers::xmm9:  SetXMMRegToNaN(&context->Xmm9); break;
+          case JSC::X86Registers::xmm10: SetXMMRegToNaN(&context->Xmm10); break;
+          case JSC::X86Registers::xmm11: SetXMMRegToNaN(&context->Xmm11); break;
+          case JSC::X86Registers::xmm12: SetXMMRegToNaN(&context->Xmm12); break;
+          case JSC::X86Registers::xmm13: SetXMMRegToNaN(&context->Xmm13); break;
+          case JSC::X86Registers::xmm14: SetXMMRegToNaN(&context->Xmm14); break;
+          case JSC::X86Registers::xmm15: SetXMMRegToNaN(&context->Xmm15); break;
+          default: MOZ_CRASH();
+        }
+    } else {
+        switch (reg.gpr().code()) {
+          case JSC::X86Registers::eax: context->Rax = 0; break;
+          case JSC::X86Registers::ecx: context->Rcx = 0; break;
+          case JSC::X86Registers::edx: context->Rdx = 0; break;
+          case JSC::X86Registers::ebx: context->Rbx = 0; break;
+          case JSC::X86Registers::esp: context->Rsp = 0; break;
+          case JSC::X86Registers::ebp: context->Rbp = 0; break;
+          case JSC::X86Registers::esi: context->Rsi = 0; break;
+          case JSC::X86Registers::edi: context->Rdi = 0; break;
+          case JSC::X86Registers::r8:  context->R8  = 0; break;
+          case JSC::X86Registers::r9:  context->R9  = 0; break;
+          case JSC::X86Registers::r10: context->R10 = 0; break;
+          case JSC::X86Registers::r11: context->R11 = 0; break;
+          case JSC::X86Registers::r12: context->R12 = 0; break;
+          case JSC::X86Registers::r13: context->R13 = 0; break;
+          case JSC::X86Registers::r14: context->R14 = 0; break;
+          case JSC::X86Registers::r15: context->R15 = 0; break;
+          default: MOZ_CRASH();
+        }
+    }
+#  else
+#   error "TODO"
+#  endif
+}
+
+static bool
+HandleException(PEXCEPTION_POINTERS exception)
+{
+    EXCEPTION_RECORD *record = exception->ExceptionRecord;
+    CONTEXT *context = exception->ContextRecord;
+
+    if (record->ExceptionCode != EXCEPTION_ACCESS_VIOLATION)
         return false;
 
-    AsmJSActivation *activation = threadData->asmJSActivationStackFromOwnerThread();
+    AsmJSActivation *activation = InnermostAsmJSActivation();
     if (!activation)
         return false;
 
-    mcontext_t &mcontext = reinterpret_cast<ucontext_t*>(context)->uc_mcontext;
-    uint8_t **ppc = ContextToPC(mcontext);
+    uint8_t **ppc = ContextToPC(context);
+    uint8_t *pc = *ppc;
+	JS_ASSERT(pc == record->ExceptionAddress);
+
+    const AsmJSModule &module = activation->module();
+    if (!PCIsInModule(module, pc))
+        return false;
+
+	if (record->NumberParameters < 2)
+		return false;
+
+    void *faultingAddress = (void*)record->ExceptionInformation[1];
+
+    // If we faulted trying to execute code in 'module', this must be an
+    // operation callback (see TriggerOperationCallbackForAsmJSCode). Redirect
+    // execution to a trampoline which will call js_HandleExecutionInterrupt.
+    // The trampoline will jump to activation->resumePC if execution isn't
+    // interrupted.
+    if (PCIsInModule(module, faultingAddress)) {
+        activation->setResumePC(pc);
+        *ppc = module.operationCallbackExit();
+        DWORD oldProtect;
+        if (!VirtualProtect(module.functionCode(), module.functionBytes(), PAGE_EXECUTE, &oldProtect))
+            MOZ_CRASH();
+        return true;
+    }
+
+#ifdef JS_CPU_X64
+    // This isn't necessary, but, since we can, include this extra layer of
+    // checking to make sure we aren't covering up a real bug.
+    if (faultingAddress < activation->heap() || faultingAddress >= activation->heap() + FourGiB)
+        return false;
+#endif
+
+    const AsmJSHeapAccess *heapAccess = LookupHeapAccess(module, pc);
+    if (!heapAccess)
+        return false;
+
+    // Also not necessary, but, since we can, do.
+    if (heapAccess->isLoad() != !record->ExceptionInformation[0])
+        return false;
+
+    // We now know that this is an out-of-bounds access made by an asm.js
+    // load/store that we should handle. If this is a load, assign the
+    // JS-defined result value to the destination register (ToInt32(undefined)
+    // or ToNumber(undefined), determined by the type of the destination
+    // register) and set the PC to the next op. Upon return from the handler,
+    // execution will resume at this next PC.
+    if (heapAccess->isLoad())
+        SetRegisterToCoercedUndefined(context, heapAccess->loadedReg());
+    *ppc += heapAccess->opLength();
+    return true;
+}
+
+static LONG WINAPI
+AsmJSExceptionHandler(LPEXCEPTION_POINTERS exception)
+{
+    if (HandleException(exception))
+        return EXCEPTION_CONTINUE_EXECUTION;
+
+    // No need to worry about calling other handlers, the OS does this for us.
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+
+#else  // If not Windows, assume Unix
+# include <signal.h>
+# include <sys/mman.h>
+
+// Unfortunately, we still need OS-specific code to read/write to the thread
+// state via the mcontext_t.
+# if defined(__linux__)
+static const int SignalCode = SIGSEGV;
+
+static uint8_t **
+ContextToPC(mcontext_t &context)
+{
+#  if defined(JS_CPU_X64)
+    JS_STATIC_ASSERT(sizeof(context.gregs[REG_RIP]) == 8);
+    return reinterpret_cast<uint8_t**>(&context.gregs[REG_RIP]);
+#  else
+#   error "TODO"
+#  endif
+}
+
+static void
+SetRegisterToCoercedUndefined(mcontext_t &context, AnyRegister reg)
+{
+#  if defined(JS_CPU_X64)
+    if (reg.isFloat()) {
+        switch (reg.fpu().code()) {
+          case JSC::X86Registers::xmm0:  SetXMMRegToNaN(&context.fpregs->_xmm[0]); break;
+          case JSC::X86Registers::xmm1:  SetXMMRegToNaN(&context.fpregs->_xmm[1]); break;
+          case JSC::X86Registers::xmm2:  SetXMMRegToNaN(&context.fpregs->_xmm[2]); break;
+          case JSC::X86Registers::xmm3:  SetXMMRegToNaN(&context.fpregs->_xmm[3]); break;
+          case JSC::X86Registers::xmm4:  SetXMMRegToNaN(&context.fpregs->_xmm[4]); break;
+          case JSC::X86Registers::xmm5:  SetXMMRegToNaN(&context.fpregs->_xmm[5]); break;
+          case JSC::X86Registers::xmm6:  SetXMMRegToNaN(&context.fpregs->_xmm[6]); break;
+          case JSC::X86Registers::xmm7:  SetXMMRegToNaN(&context.fpregs->_xmm[7]); break;
+          case JSC::X86Registers::xmm8:  SetXMMRegToNaN(&context.fpregs->_xmm[8]); break;
+          case JSC::X86Registers::xmm9:  SetXMMRegToNaN(&context.fpregs->_xmm[9]); break;
+          case JSC::X86Registers::xmm10: SetXMMRegToNaN(&context.fpregs->_xmm[10]); break;
+          case JSC::X86Registers::xmm11: SetXMMRegToNaN(&context.fpregs->_xmm[11]); break;
+          case JSC::X86Registers::xmm12: SetXMMRegToNaN(&context.fpregs->_xmm[12]); break;
+          case JSC::X86Registers::xmm13: SetXMMRegToNaN(&context.fpregs->_xmm[13]); break;
+          case JSC::X86Registers::xmm14: SetXMMRegToNaN(&context.fpregs->_xmm[14]); break;
+          case JSC::X86Registers::xmm15: SetXMMRegToNaN(&context.fpregs->_xmm[15]); break;
+          default: MOZ_CRASH();
+        }
+    } else {
+        switch (reg.gpr().code()) {
+          case JSC::X86Registers::eax: context.gregs[REG_RAX] = 0; break;
+          case JSC::X86Registers::ecx: context.gregs[REG_RCX] = 0; break;
+          case JSC::X86Registers::edx: context.gregs[REG_RDX] = 0; break;
+          case JSC::X86Registers::ebx: context.gregs[REG_RBX] = 0; break;
+          case JSC::X86Registers::esp: context.gregs[REG_RSP] = 0; break;
+          case JSC::X86Registers::ebp: context.gregs[REG_RBP] = 0; break;
+          case JSC::X86Registers::esi: context.gregs[REG_RSI] = 0; break;
+          case JSC::X86Registers::edi: context.gregs[REG_RDI] = 0; break;
+          case JSC::X86Registers::r8:  context.gregs[REG_R8]  = 0; break;
+          case JSC::X86Registers::r9:  context.gregs[REG_R9]  = 0; break;
+          case JSC::X86Registers::r10: context.gregs[REG_R10] = 0; break;
+          case JSC::X86Registers::r11: context.gregs[REG_R11] = 0; break;
+          case JSC::X86Registers::r12: context.gregs[REG_R12] = 0; break;
+          case JSC::X86Registers::r13: context.gregs[REG_R13] = 0; break;
+          case JSC::X86Registers::r14: context.gregs[REG_R14] = 0; break;
+          case JSC::X86Registers::r15: context.gregs[REG_R15] = 0; break;
+          default: MOZ_CRASH();
+        }
+    }
+#  else
+#   error "TODO"
+#  endif
+}
+# elif defined(XP_MACOSX)
+static const int SignalCode = SIGBUS;
+
+static uint8_t **
+ContextToPC(mcontext_t context)
+{
+    JS_STATIC_ASSERT(sizeof(context->__ss.__rip) == 8);
+    return reinterpret_cast<uint8_t **>(&context->__ss.__rip);
+}
+
+static void
+SetRegisterToCoercedUndefined(mcontext_t &context, AnyRegister reg)
+{
+    if (reg.isFloat()) {
+        switch (reg.fpu().code()) {
+          case JSC::X86Registers::xmm0:  SetXMMRegToNaN(&context->__fs.__fpu_xmm0); break;
+          case JSC::X86Registers::xmm1:  SetXMMRegToNaN(&context->__fs.__fpu_xmm1); break;
+          case JSC::X86Registers::xmm2:  SetXMMRegToNaN(&context->__fs.__fpu_xmm2); break;
+          case JSC::X86Registers::xmm3:  SetXMMRegToNaN(&context->__fs.__fpu_xmm3); break;
+          case JSC::X86Registers::xmm4:  SetXMMRegToNaN(&context->__fs.__fpu_xmm4); break;
+          case JSC::X86Registers::xmm5:  SetXMMRegToNaN(&context->__fs.__fpu_xmm5); break;
+          case JSC::X86Registers::xmm6:  SetXMMRegToNaN(&context->__fs.__fpu_xmm6); break;
+          case JSC::X86Registers::xmm7:  SetXMMRegToNaN(&context->__fs.__fpu_xmm7); break;
+          case JSC::X86Registers::xmm8:  SetXMMRegToNaN(&context->__fs.__fpu_xmm8); break;
+          case JSC::X86Registers::xmm9:  SetXMMRegToNaN(&context->__fs.__fpu_xmm9); break;
+          case JSC::X86Registers::xmm10: SetXMMRegToNaN(&context->__fs.__fpu_xmm10); break;
+          case JSC::X86Registers::xmm11: SetXMMRegToNaN(&context->__fs.__fpu_xmm11); break;
+          case JSC::X86Registers::xmm12: SetXMMRegToNaN(&context->__fs.__fpu_xmm12); break;
+          case JSC::X86Registers::xmm13: SetXMMRegToNaN(&context->__fs.__fpu_xmm13); break;
+          case JSC::X86Registers::xmm14: SetXMMRegToNaN(&context->__fs.__fpu_xmm14); break;
+          case JSC::X86Registers::xmm15: SetXMMRegToNaN(&context->__fs.__fpu_xmm15); break;
+          default: MOZ_CRASH();
+        }
+    } else {
+        switch (reg.gpr().code()) {
+          case JSC::X86Registers::eax: context->__ss.__rax = 0; break;
+          case JSC::X86Registers::ecx: context->__ss.__rcx = 0; break;
+          case JSC::X86Registers::edx: context->__ss.__rdx = 0; break;
+          case JSC::X86Registers::ebx: context->__ss.__rbx = 0; break;
+          case JSC::X86Registers::esp: context->__ss.__rsp = 0; break;
+          case JSC::X86Registers::ebp: context->__ss.__rbp = 0; break;
+          case JSC::X86Registers::esi: context->__ss.__rsi = 0; break;
+          case JSC::X86Registers::edi: context->__ss.__rdi = 0; break;
+          case JSC::X86Registers::r8:  context->__ss.__r8  = 0; break;
+          case JSC::X86Registers::r9:  context->__ss.__r9  = 0; break;
+          case JSC::X86Registers::r10: context->__ss.__r10 = 0; break;
+          case JSC::X86Registers::r11: context->__ss.__r11 = 0; break;
+          case JSC::X86Registers::r12: context->__ss.__r12 = 0; break;
+          case JSC::X86Registers::r13: context->__ss.__r13 = 0; break;
+          case JSC::X86Registers::r14: context->__ss.__r14 = 0; break;
+          case JSC::X86Registers::r15: context->__ss.__r15 = 0; break;
+          default: MOZ_CRASH();
+        }
+    }
+}
+# endif  // end of OS-specific mcontext accessors
+
+// Be very cautious and default to not handling; we don't want to accidentally
+// silence real crashes from real bugs.
+static bool
+HandleSignal(int signum, siginfo_t *info, void *ctx)
+{
+    if (signum != SignalCode)
+        return false;
+
+    AsmJSActivation *activation = InnermostAsmJSActivation();
+    if (!activation)
+        return false;
+
+    mcontext_t &context = reinterpret_cast<ucontext_t*>(ctx)->uc_mcontext;
+    uint8_t **ppc = ContextToPC(context);
     uint8_t *pc = *ppc;
 
     const AsmJSModule &module = activation->module();
@@ -281,7 +428,7 @@ HandleSignal(int signum, siginfo_t *info, void *context)
     if (PCIsInModule(module, faultingAddress)) {
         activation->setResumePC(pc);
         *ppc = module.operationCallbackExit();
-        mprotect(module.functionCode(), module.functionBytes(), PROT_READ | PROT_WRITE | PROT_EXEC);
+        mprotect(module.functionCode(), module.functionBytes(), PROT_EXEC);
         return true;
     }
 
@@ -303,10 +450,12 @@ HandleSignal(int signum, siginfo_t *info, void *context)
     // register) and set the PC to the next op. Upon return from the handler,
     // execution will resume at this next PC.
     if (heapAccess->isLoad())
-        SetRegisterToCoercedUndefined(mcontext, heapAccess->loadedReg());
+        SetRegisterToCoercedUndefined(context, heapAccess->loadedReg());
     *ppc += heapAccess->opLength();
     return true;
 }
+
+static struct sigaction sPrevHandler;
 
 static void
 AsmJSMemoryFaultHandler(int signum, siginfo_t *info, void *context)
@@ -321,16 +470,17 @@ AsmJSMemoryFaultHandler(int signum, siginfo_t *info, void *context)
     // be re-executed which will crash in the normal way. The advantage to
     // doing this is that we remove ourselves from the crash stack which
     // simplifies crash reports. Note: the order of these tests matter.
-    if (prevSigAction.sa_flags & SA_SIGINFO) {
-        prevSigAction.sa_sigaction(signum, info, context);
+    if (sPrevHandler.sa_flags & SA_SIGINFO) {
+        sPrevHandler.sa_sigaction(signum, info, context);
         exit(signum);  // backstop
-    } else if (prevSigAction.sa_handler == SIG_DFL || prevSigAction.sa_handler == SIG_IGN) {
-        sigaction(SignalCode, &prevSigAction, NULL);
+    } else if (sPrevHandler.sa_handler == SIG_DFL || sPrevHandler.sa_handler == SIG_IGN) {
+        sigaction(SignalCode, &sPrevHandler, NULL);
     } else {
-        prevSigAction.sa_handler(signum);
+        sPrevHandler.sa_handler(signum);
         exit(signum);  // backstop
     }
 }
+#endif
 
 bool
 js::EnsureAsmJSSignalHandlersInstalled()
@@ -339,12 +489,17 @@ js::EnsureAsmJSSignalHandlersInstalled()
     if (lock.handlersInstalled())
         return true;
 
+#if defined(XP_WIN)
+    if (!AddVectoredExceptionHandler(/* FirstHandler = */true, AsmJSExceptionHandler))
+        return false;
+#else
     struct sigaction sigAction;
     sigAction.sa_sigaction = &AsmJSMemoryFaultHandler;
     sigemptyset(&sigAction.sa_mask);
     sigAction.sa_flags = SA_SIGINFO;
-    if (sigaction(SignalCode, &sigAction, &prevSigAction))
+    if (sigaction(SignalCode, &sigAction, &sPrevHandler))
         return false;
+#endif
 
     lock.setHandlersInstalled();
     return true;
@@ -370,6 +525,13 @@ js::TriggerOperationCallbackForAsmJSCode(JSRuntime *rt)
         return;
 
     const AsmJSModule &module = activation->module();
+
+#if defined(XP_WIN)
+    DWORD oldProtect;
+    if (!VirtualProtect(module.functionCode(), 4096, PAGE_NOACCESS, &oldProtect))
+        MOZ_CRASH();
+#else
     if (mprotect(module.functionCode(), module.functionBytes(), PROT_NONE))
         MOZ_CRASH();
+#endif
 }
