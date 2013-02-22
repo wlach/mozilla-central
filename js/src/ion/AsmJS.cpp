@@ -2862,7 +2862,7 @@ CheckModuleExports(ModuleCompiler &m, ParseNode *fn, ParseNode **stmtIter)
     ParseNode *returnExpr = UnaryKid(returnNode);
 
     if (!returnExpr)
-        return m.fail("an asm.js export statement must return something", returnExpr);
+        return m.fail("an asm.js export statement must return something", returnNode);
 
     if (returnExpr->isKind(PNK_OBJECT)) {
         if (!CheckModuleExportObject(m, returnExpr))

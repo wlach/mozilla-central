@@ -1,6 +1,7 @@
 load(libdir + "asm.js");
 
 assertAsmTypeFail(USE_ASM);
+assertAsmTypeFail(USE_ASM + 'return');
 assertAsmTypeFail(USE_ASM + 'function f(){}');
 assertAsmTypeFail(USE_ASM + 'function f(){} return 0');
 assertAsmTypeFail(USE_ASM + 'function f(){} return g');
