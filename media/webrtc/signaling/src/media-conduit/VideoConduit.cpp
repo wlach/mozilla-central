@@ -534,6 +534,39 @@ WebrtcVideoConduit::SendVideoFrame(unsigned char* video_frame,
     return kMediaConduitSessionNotInited;
   }
 
+  // enforce even width/height (paranoia)
+  width &= ~1;
+  height &= ~1;
+
+  // check if we need to reconfigure the sending resolution
+  if (mSendingWidth == 0 ||
+      mSendingWidth != width || mSendingHeight != height) {
+
+    // Get current vie codec.
+    webrtc::VideoCodec vie_codec;
+
+    if (mPtrViECodec->GetSendCodec(mChannel, vie_codec) != 0) {
+      CSFLogError(logTag, "%s: GetSendCodec failed", __FUNCTION__);
+      return kMediaConduitCaptureError;
+    }
+    if (vie_codec.width != width || vie_codec.height != height) {
+      vie_codec.width = width;
+      vie_codec.height = height;
+
+      if (mPtrViECodec->SetSendCodec(mChannel, vie_codec) != 0) {
+        CSFLogError(logTag, "%s: SetSendCodec(%ux%u) failed", 
+                    __FUNCTION__, width, height);
+        return kMediaConduitCaptureError;
+      }
+      CSFLogDebug(logTag, "%s: Encoder resolution changed to %ux%u",
+                  __FUNCTION__, width, height);
+    }
+    // If we tried and failed to set it, this will keep us from continuously
+    // trying
+    mSendingWidth = width;
+    mSendingHeight = height;
+  }
+
   //insert the frame to video engine in I420 format only
   if(mPtrExtCapture->IncomingFrame(video_frame,
                                    video_frame_length,

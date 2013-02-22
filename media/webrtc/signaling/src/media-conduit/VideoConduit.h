@@ -153,8 +153,9 @@ public:
                       mEngineRendererStarted(false),
                       mChannel(-1),
                       mCapId(-1),
-                      mCurSendCodecConfig(NULL)
-
+                      mCurSendCodecConfig(NULL),
+                      mSendingWidth(0),
+                      mSendingHeight(0)
   {
   }
 
@@ -213,6 +214,8 @@ private:
   int mCapId;   // Capturer for this conduit
   RecvCodecList    mRecvCodecList;
   VideoCodecConfig* mCurSendCodecConfig;
+  unsigned short mSendingWidth;
+  unsigned short mSendingHeight;
 
   mozilla::RefPtr<WebrtcAudioConduit> mSyncedTo;
 };
