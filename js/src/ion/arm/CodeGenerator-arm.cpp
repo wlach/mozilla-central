@@ -846,9 +846,9 @@ CodeGeneratorARM::visitMoveGroup(LMoveGroup *group)
         // No bogus moves.
         JS_ASSERT(*from != *to);
         JS_ASSERT(!from->isConstant());
-        JS_ASSERT_IF(!from->isArgument(), from->isDouble() == to->isDouble());
+        JS_ASSERT(from->isDouble() == to->isDouble());
 
-        MoveResolver::Move::Kind kind = to->isDouble()
+        MoveResolver::Move::Kind kind = from->isDouble()
                                         ? MoveResolver::Move::DOUBLE
                                         : MoveResolver::Move::GENERAL;
 

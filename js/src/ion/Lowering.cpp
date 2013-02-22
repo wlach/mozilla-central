@@ -37,14 +37,14 @@ LIRGenerator::visitParameter(MParameter *param)
     offset *= sizeof(Value);
 #if defined(JS_NUNBOX32)
 # if defined(IS_BIG_ENDIAN)
-    ins->getDef(0)->setOutput(LArgument(offset));
-    ins->getDef(1)->setOutput(LArgument(offset + 4));
+    ins->getDef(0)->setOutput(LArgument(LAllocation::INT_ARGUMENT, offset));
+    ins->getDef(1)->setOutput(LArgument(LAllocation::INT_ARGUMENT, offset + 4));
 # else
-    ins->getDef(0)->setOutput(LArgument(offset + 4));
-    ins->getDef(1)->setOutput(LArgument(offset));
+    ins->getDef(0)->setOutput(LArgument(LAllocation::INT_ARGUMENT, offset + 4));
+    ins->getDef(1)->setOutput(LArgument(LAllocation::INT_ARGUMENT, offset));
 # endif
 #elif defined(JS_PUNBOX64)
-    ins->getDef(0)->setOutput(LArgument(offset));
+    ins->getDef(0)->setOutput(LArgument(LAllocation::INT_ARGUMENT, offset));
 #endif
 
     return true;
@@ -2404,7 +2404,12 @@ LIRGenerator::visitAsmParameter(MAsmParameter *ins)
     ABIArg abi = ins->abi();
     if (abi.argInRegister())
         return defineFixed(new LAsmParameter, ins, LAllocation(abi.reg()));
-    return defineFixed(new LAsmParameter, ins, LArgument(abi.offsetFromArgBase()));
+
+    JS_ASSERT(ins->type() == MIRType_Int32 || ins->type() == MIRType_Double);
+    LAllocation::Kind argKind = ins->type() == MIRType_Int32
+                                ? LAllocation::INT_ARGUMENT
+                                : LAllocation::DOUBLE_ARGUMENT;
+    return defineFixed(new LAsmParameter, ins, LArgument(argKind, abi.offsetFromArgBase()));
 }
 
 bool

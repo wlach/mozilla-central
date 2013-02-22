@@ -66,7 +66,7 @@ class LAllocation : public TempObject
     static const uintptr_t TAG_BIT = 1;
     static const uintptr_t TAG_SHIFT = 0;
     static const uintptr_t TAG_MASK = 1 << TAG_SHIFT;
-    static const uintptr_t KIND_BITS = 3;
+    static const uintptr_t KIND_BITS = 4;
     static const uintptr_t KIND_SHIFT = TAG_SHIFT + TAG_BIT;
     static const uintptr_t KIND_MASK = (1 << KIND_BITS) - 1;
     static const uintptr_t DATA_BITS = (sizeof(uint32_t) * 8) - KIND_BITS - TAG_BIT;
@@ -82,7 +82,8 @@ class LAllocation : public TempObject
         FPU,            // Floating-point register.
         STACK_SLOT,     // 32-bit stack slot.
         DOUBLE_SLOT,    // 64-bit stack slot.
-        ARGUMENT        // Argument slot.
+        INT_ARGUMENT,   // Argument slot that gets loaded into a GPR.
+        DOUBLE_ARGUMENT // Argument slot to be loaded into an FPR
     };
 
   protected:
@@ -161,7 +162,7 @@ class LAllocation : public TempObject
         return kind() == STACK_SLOT || kind() == DOUBLE_SLOT;
     }
     bool isArgument() const {
-        return kind() == ARGUMENT;
+        return kind() == INT_ARGUMENT || kind() == DOUBLE_ARGUMENT;
     }
     bool isRegister() const {
         return isGeneralReg() || isFloatReg();
@@ -170,7 +171,7 @@ class LAllocation : public TempObject
         return isStackSlot() || isArgument();
     }
     bool isDouble() const {
-        return kind() == DOUBLE_SLOT || kind() == FPU;
+        return kind() == DOUBLE_SLOT || kind() == FPU || kind() == DOUBLE_ARGUMENT;
     }
     inline LUse *toUse();
     inline const LUse *toUse() const;
@@ -375,9 +376,11 @@ class LStackSlot : public LAllocation
 class LArgument : public LAllocation
 {
   public:
-    explicit LArgument(int32_t index)
-      : LAllocation(ARGUMENT, index)
-    { }
+    explicit LArgument(LAllocation::Kind kind, int32_t index)
+      : LAllocation(kind, index)
+    {
+        JS_ASSERT(kind == INT_ARGUMENT || kind == DOUBLE_ARGUMENT);
+    }
 
     int32_t index() const {
         return data();
