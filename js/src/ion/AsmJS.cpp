@@ -2605,7 +2605,7 @@ static bool
 CheckArgumentType(ModuleCompiler &m, ParseNode *fn, PropertyName *argName, ParseNode *stmt,
                   VarType *type)
 {
-    if (!stmt || !stmt->isKind(PNK_SEMI) || !UnaryKid(stmt)->isKind(PNK_ASSIGN))
+    if (!stmt || !stmt->isKind(PNK_SEMI) || !UnaryKid(stmt) || !UnaryKid(stmt)->isKind(PNK_ASSIGN))
         return m.fail("expecting argument type declaration of the form 'arg = coercion;' where "
                       "coercion is one of ~~arg, +arg, arg|0, arg>>>0.", fn);
 
