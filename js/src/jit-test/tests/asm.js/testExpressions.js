@@ -267,8 +267,9 @@ assertEq(f(0), -1);
 assertEq(f(1), 0);
 assertEq(f(2), 0);
 
-// beware ye constant-evaluate of MCompare
+// beware ye constant-evaluate of boolean-producing operators
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { return (4 | (2 == 2))|0 } return f"))(), 5);
+assertEq(asmLink(asmCompile(USE_ASM + "function f() { return (4 | (!2))|0 } return f"))(), 5);
 
 // get that order-of-operations right!
 var buf = new ArrayBuffer(4);
