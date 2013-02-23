@@ -29,6 +29,10 @@ assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; while(1) { if (i)
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; for(;1;) { if (i) return 13; return 42 } return 0 } return f"))(), 42);
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; do { if (i) return 13; return 42 } while(1); return 0 } return f"))(), 42);
 
+assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; while(1) { break; while(1) {} } return 42 } return f"))(), 42);
+assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; for(;1;) { break; for(;1;) {} } return 42 } return f"))(), 42);
+assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; do { break; do {} while(1) {} } while(1); return 42 } return f"))(), 42);
+
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=1; while(1) { if (i) return 42; return 13 } return 0 } return f"))(), 42);
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=1; for(;1;) { if (i) return 42; return 13 } return 0 } return f"))(), 42);
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=1; do { if (i) return 42; return 13 } while(1); return 0 } return f"))(), 42);

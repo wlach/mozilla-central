@@ -1993,7 +1993,7 @@ class FunctionCompiler
         if (!loopEntry) {
             JS_ASSERT(!afterLoop);
             JS_ASSERT(!curBlock_);
-            JS_ASSERT(unlabeledBreaks_.empty());
+            JS_ASSERT(!unlabeledBreaks_.has(pn));
             return true;
         }
         JS_ASSERT(loopEntry->loopDepth() == loopStack_.length() + 1);
@@ -2014,7 +2014,7 @@ class FunctionCompiler
         ParseNode *pn = popLoop();
         if (!loopEntry) {
             JS_ASSERT(!curBlock_);
-            JS_ASSERT(unlabeledBreaks_.empty());
+            JS_ASSERT(!unlabeledBreaks_.has(pn));
             return true;
         }
         JS_ASSERT(loopEntry->loopDepth() == loopStack_.length() + 1);
