@@ -4158,7 +4158,7 @@ CheckReturn(FunctionCompiler &f, ParseNode *returnStmt)
 
     if (!expr) {
         if (f.func().returnType().which() != RetType::Void)
-            return f.fail("All return statements must return void", expr);
+            return f.fail("All return statements must return void", returnStmt);
 
         f.returnVoid();
         return true;
