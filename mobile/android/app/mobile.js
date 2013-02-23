@@ -209,7 +209,7 @@ pref("extensions.blocklist.url", "https://addons.mozilla.org/blocklist/3/%APP_ID
 pref("extensions.blocklist.detailsURL", "https://www.mozilla.com/%LOCALE%/blocklist/");
 
 /* block popups by default, and notify the user about blocked popups */
-pref("dom.disable_open_during_load", true);
+pref("dom.disable_open_during_load", false);
 pref("privacy.popups.showBrowserMessage", true);
 
 /* disable opening windows with the dialog feature */
