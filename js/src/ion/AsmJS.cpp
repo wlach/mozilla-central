@@ -4160,9 +4160,13 @@ CheckSwitch(FunctionCompiler &f, ParseNode *switchStmt)
         return false;
 
     for (; stmt && stmt->isKind(PNK_CASE); stmt = NextNode(stmt)) {
-        int32_t i = ExtractNumericLiteral(CaseExpr(stmt)).toInt32();
+        int32_t caseValue = ExtractNumericLiteral(CaseExpr(stmt)).toInt32();
+        unsigned caseIndex = caseValue - low;
 
-        if (!f.startSwitchCase(switchBlock, &cases[i - low]))
+        if (cases[caseIndex])
+            return f.fail("No duplicate case labels", stmt);
+
+        if (!f.startSwitchCase(switchBlock, &cases[caseIndex]))
             return false;
 
         if (!CheckStatement(f, CaseBody(stmt)))

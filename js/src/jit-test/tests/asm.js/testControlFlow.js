@@ -114,6 +114,9 @@ var f = asmLink(asmCompile(USE_ASM + "function f(n,m) { n=n|0;m=m|0; var i=0,sum
 assertEq(f(1,5), 10);
 assertEq(f(6,5), 15);
 
+assertAsmTypeFail(USE_ASM + "function f(i) { i=i|0; switch(i|0) { case 1: return 0; case 1: return 0 } return 0} return f");
+assertAsmTypeFail(USE_ASM + "function f(i) { i=i|0; switch(i|0) { case 1: return 0; case 2: return 0; case 1: return 0 } return 0} return f");
+assertAsmTypeFail(USE_ASM + "function f(i) { i=i|0; switch(1) { case 1: return 0; case 1: return 0 } return 0} return f");
 assertAsmTypeFail(USE_ASM + "function f() { var i=0; switch(i) {}; return i|0 } return f");
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; switch(i|0) {}; return i|0 } return f"))(), 0);
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; switch(i|0) { default: i=42 } return i|0 } return f"))(), 42);
