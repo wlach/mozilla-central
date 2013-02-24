@@ -30,7 +30,7 @@ assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; for(;1;) { if (i)
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; do { if (i) return 13; return 42 } while(1); return 0 } return f"))(), 42);
 
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; while(1) { break; while(1) {} } return 42 } return f"))(), 42);
-assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; for(;1;) { break; for(;1;) {} } return 42 } return f"))(), 42);
+assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; for(;;) { break; for(;;) {} } return 42 } return f"))(), 42);
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; do { break; do {} while(1) {} } while(1); return 42 } return f"))(), 42);
 
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=1; while(1) { if (i) return 42; return 13 } return 0 } return f"))(), 42);
@@ -38,7 +38,7 @@ assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=1; for(;1;) { if (i)
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=1; do { if (i) return 42; return 13 } while(1); return 0 } return f"))(), 42);
 
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; while(1) { if (i) return 13; else return 42; return 13 } return 0 } return f"))(), 42);
-assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; for(;1;) { if (i) return 13; else return 42; return 13 } return 0 } return f"))(), 42);
+assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; for(;;) { if (i) return 13; else return 42; return 13 } return 0 } return f"))(), 42);
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; do { if (i) return 13; else return 42; return 13 } while(1); return 0 } return f"))(), 42);
 
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; while((i|0) < 3) { if (i) return 42; i=(i+1)|0 } return 0 } return f"))(), 42);
@@ -62,7 +62,7 @@ assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0,sum=0; for (;(i=(i
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0,sum=0; do { sum=(sum+1)|0; if ((i&1)==0) continue; sum=(sum+100)|0 } while((i=(i+1)|0)<2); return sum|0 } return f"))(), 102);
 
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; x:a:y:while(1) { i=1; while(1) { i=2; break a; } i=3; } return i|0 } return f"))(), 2);
-assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; x:a:y:for(;1;) { i=1; while(1) { i=2; break a; } i=3; } return i|0 } return f"))(), 2);
+assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; x:a:y:for(;;) { i=1; while(1) { i=2; break a; } i=3; } return i|0 } return f"))(), 2);
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; x:a:y:do { i=1; while(1) { i=2; break a; } i=3; } while(1); return i|0 } return f"))(), 2);
 
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; a:b:while((i|0) < 5) { i=(i+1)|0; while(1) continue b; } return i|0 } return f"))(), 5);
@@ -84,11 +84,11 @@ assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; for(;1;i=(i+1)|0)
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; do { if ((i|0) > 10) break; i=(i+1)|0 } while(1); return i|0 } return f"))(), 11);
 
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; while(1){ if ((i|0)>0) break; while (1) { i=i+1|0; if ((i|0)==1) break; } } return i|0; } return f"))(), 1);
-assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; for(;1;){ if ((i|0)>0) break; while (1) { i=i+1|0; if ((i|0)==1) break; } } return i|0; } return f"))(), 1);
+assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; for(;;){ if ((i|0)>0) break; while (1) { i=i+1|0; if ((i|0)==1) break; } } return i|0; } return f"))(), 1);
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; do{ if ((i|0)>0) break; while (1) { i=i+1|0; if ((i|0)==1) break; } }while(1); return i|0; } return f"))(), 1);
 
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0,sum=0; while(1){ if ((i|0)>5) break; while (1) { i=i+1|0; sum=(sum+i)|0; if ((i|0)>3) break; } } return sum|0; } return f"))(), 21);
-assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0,sum=0; for(;1;){ if ((i|0)>5) break; while (1) { i=i+1|0; sum=(sum+i)|0; if ((i|0)>3) break; } } return sum|0; } return f"))(), 21);
+assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0,sum=0; for(;;){ if ((i|0)>5) break; while (1) { i=i+1|0; sum=(sum+i)|0; if ((i|0)>3) break; } } return sum|0; } return f"))(), 21);
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0,sum=0; do{ if ((i|0)>5) break; while (1) { i=i+1|0; sum=(sum+i)|0; if ((i|0)>3) break; } }while(1); return sum|0; } return f"))(), 21);
 
 assertEq(asmLink(asmCompile(USE_ASM + "function f(i) { i=i|0; while(1) { if (i) { break; } else { return i|0 } i = 1 } return i|0 } return f"))(3), 3);
@@ -96,8 +96,11 @@ assertEq(asmLink(asmCompile(USE_ASM + "function f(i) { i=i|0; for(;1;) { if (i) 
 assertEq(asmLink(asmCompile(USE_ASM + "function f(i) { i=i|0; do { if (i) { break; } else { return i|0 } i = 1 } while (0); return i|0 } return f"))(3), 3);
 
 assertEq(asmLink(asmCompile(USE_ASM + "function f(i) { i=i|0; while(1) { if (i) { return i|0 } else { return i|0 } i = 1 } return i|0 } return f"))(3), 3);
-assertEq(asmLink(asmCompile(USE_ASM + "function f(i) { i=i|0; for(;1;) { if (i) { return i|0 } else { return i|0 } i = 1 } return i|0 } return f"))(3), 3);
+assertEq(asmLink(asmCompile(USE_ASM + "function f(i) { i=i|0; for(;;) { if (i) { return i|0 } else { return i|0 } i = 1 } return i|0 } return f"))(3), 3);
 assertEq(asmLink(asmCompile(USE_ASM + "function f(i) { i=i|0; do { if (i) { return i|0 } else { return i|0 } i = 1 } while (0); return i|0 } return f"))(3), 3);
+
+assertEq(asmLink(asmCompile(USE_ASM + "function f(i) { i=i|0; for(;;) { return i|0 } return 0 } return f"))(42), 42);
+assertEq(asmLink(asmCompile(USE_ASM + "function f(n) { n=n|0; var i=0,s=0; for(;;i=(i+1)|0) { if (~~i==~~n) return s|0; s=(s+i)|0 } return 0 } return f"))(8), 28);
 
 var f = asmLink(asmCompile(USE_ASM + "function f(n,m) { n=n|0;m=m|0; var i=0,sum=0; while((n|0)>(m|0) ? ((i|0)<(n|0))|0 : ((i|0)<(m|0))|0) { sum = (sum+i)|0; i=(i+1)|0 } return sum|0 } return f"));
 assertEq(f(1,5), 10);

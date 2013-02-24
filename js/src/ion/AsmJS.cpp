@@ -3891,7 +3891,7 @@ CheckFor(FunctionCompiler &f, ParseNode *forStmt, const LabelVector *maybeLabels
         return f.fail("Unsupported for-loop statement", forHead);
 
     ParseNode *maybeInit = TernaryKid1(forHead);
-    ParseNode *cond = TernaryKid2(forHead);
+    ParseNode *maybeCond = TernaryKid2(forHead);
     ParseNode *maybeInc = TernaryKid3(forHead);
 
     if (maybeInit) {
@@ -3906,12 +3906,16 @@ CheckFor(FunctionCompiler &f, ParseNode *forStmt, const LabelVector *maybeLabels
         return false;
 
     MDefinition *condDef;
-    Type condType;
-    if (!CheckExpr(f, cond, Use::NoCoercion, &condDef, &condType))
-        return false;
+    if (maybeCond) {
+        Type condType;
+        if (!CheckExpr(f, maybeCond, Use::NoCoercion, &condDef, &condType))
+            return false;
 
-    if (!condType.isInt())
-        return f.fail("Condition of while loop must be boolish", cond);
+        if (!condType.isInt())
+            return f.fail("Condition of while loop must be boolish", maybeCond);
+    } else {
+        condDef = f.constant(Int32Value(1));
+    }
 
     MBasicBlock *afterLoop;
     if (!f.branchAndStartLoopBody(condDef, &afterLoop))
