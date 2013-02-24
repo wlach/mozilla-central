@@ -8,6 +8,7 @@ assertAsmTypeFail(USE_ASM + 'function f(){} return 0');
 assertAsmTypeFail(USE_ASM + 'function f() 0; return 0');
 assertAsmTypeFail(USE_ASM + 'function f(){} return g');
 assertAsmTypeFail(USE_ASM + 'function f() 0; return g');
+assertAsmTypeFail('"use strict";' + USE_ASM + 'function f() {} return f');
 assertEq(asmLink(asmCompile(USE_ASM + 'function f(){} return f'))(), undefined);
 assertEq(asmLink(asmCompile(USE_ASM + 'function f(){;} return f'))(), undefined);
 assertAsmTypeFail(USE_ASM + 'function f(i,j){;} return f');
@@ -75,3 +76,22 @@ assertEq(exp.f(), 1);
 assertEq(exp.g1(), 2);
 assertEq(exp.h1(), 4);
 assertEq(Object.keys(exp).join(), 'f,g1,h1');
+
+// can't test destructuring args with Function constructor
+function assertTypeFailInEval(str)
+{
+    var caught = false;
+    var oldOpts = options("werror");
+    assertEq(oldOpts.indexOf("werror"), -1);
+    try {
+        eval(str);
+    } catch (e) {
+        assertEq((''+e).indexOf(ASM_TYPE_FAIL_STRING) == -1, false);
+        caught = true;
+    }
+    assertEq(caught, true);
+    options("werror");
+}
+assertTypeFailInEval('function f({}) { "use asm"; function g() {} return g }');
+assertTypeFailInEval('function f({global}) { "use asm"; function g() {} return g }');
+assertTypeFailInEval('function f(global, {imports}) { "use asm"; function g() {} return g }');

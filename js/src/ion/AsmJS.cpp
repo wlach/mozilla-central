@@ -137,8 +137,14 @@ StringAtom(ParseNode *pn)
     return pn->pn_atom;
 }
 
+static inline bool
+IsExpressionStatement(ParseNode *pn)
+{
+    return pn->isKind(PNK_SEMI);
+}
+
 static inline ParseNode *
-StatementExpressionExpr(ParseNode *pn)
+ExpressionStatementExpr(ParseNode *pn)
 {
     JS_ASSERT(pn->isKind(PNK_SEMI));
     return UnaryKid(pn);
@@ -2404,7 +2410,14 @@ SkipUseAsmDirective(ModuleCompiler &m, ParseNode **stmtIter)
 {
     ParseNode *firstStatement = *stmtIter;
 
-    if (StringAtom(StatementExpressionExpr(firstStatement)) != m.cx()->names().useAsm)
+    if (!IsExpressionStatement(firstStatement))
+        return m.fail("No funny stuff before the 'use asm' directive", firstStatement);
+
+    ParseNode *expr = ExpressionStatementExpr(firstStatement);
+    if (!expr || !expr->isKind(PNK_STRING))
+        return m.fail("No funny stuff before the 'use asm' directive", firstStatement);
+
+    if (StringAtom(expr) != m.cx()->names().useAsm)
         return m.fail("asm.js precludes other directives", firstStatement);
 
     *stmtIter = NextNode(firstStatement);
@@ -2615,17 +2628,21 @@ static bool
 CheckArgumentType(ModuleCompiler &m, ParseNode *fn, PropertyName *argName, ParseNode *stmt,
                   VarType *type)
 {
-    if (!stmt || !stmt->isKind(PNK_SEMI) || !UnaryKid(stmt) || !UnaryKid(stmt)->isKind(PNK_ASSIGN))
-        return m.fail("expecting argument type declaration of the form 'arg = coercion;' where "
-                      "coercion is one of ~~arg, +arg, arg|0, arg>>>0.", fn);
+    if (!stmt)
+        return m.fail("Missing parameter type declaration statements", fn);
 
-    ParseNode *initNode = UnaryKid(stmt);
+    if (!IsExpressionStatement(stmt))
+        return m.fail("Expecting expression statement type of the form 'arg = coercion;'", stmt);
+
+    ParseNode *initNode = ExpressionStatementExpr(stmt);
+    if (!initNode || !initNode->isKind(PNK_ASSIGN))
+        return m.fail("Expecting expression statement type of the form 'arg = coercion;'", stmt);
+
     ParseNode *argNode = BinaryLeft(initNode);
     ParseNode *coercionNode = BinaryRight(initNode);
 
     if (!IsUseOfName(argNode, argName))
-        return m.fail("left-hand side of 'arg = expr;' decl must be the name of "
-                      "an argument.", argNode);
+        return m.fail("left-hand side of 'arg = expr;' must be the name of an argument.", argNode);
 
     ParseNode *coercedExpr;
     AsmJSCoercion coercion;
