@@ -18,6 +18,8 @@ assertEq(asmLink(asmCompile(USE_ASM + 'function f(x){x=x|0} return f'))(42), und
 assertEq(asmLink(asmCompile(USE_ASM + 'function f(x){x=x|0; return x|0} return f'))(42), 42);
 assertEq(asmLink(asmCompile(USE_ASM + 'function f(x,y){x=x|0;y=y|0; return (x+y)|0} return f'))(44, -2), 42);
 assertAsmTypeFail('a', USE_ASM + 'function a(){} return a');
+assertAsmTypeFail('a','b','c', USE_ASM + 'var c');
+assertAsmTypeFail('a','b','c', USE_ASM + 'var c=0');
 assertAsmTypeFail('x','x', USE_ASM + 'function a(){} return a');
 assertAsmTypeFail('x','y','x', USE_ASM + 'function a(){} return a');
 assertEq(asmLink(asmCompile('x', USE_ASM + 'function a(){} return a'))(), undefined);
@@ -27,6 +29,10 @@ assertAsmTypeFail('x','y', USE_ASM + 'function y(){} return f');
 assertEq(asmLink(asmCompile('x', USE_ASM + 'function f(){} return f'), 1, 2, 3)(), undefined);
 assertEq(asmLink(asmCompile('x', USE_ASM + 'function f(){} return f'), 1)(), undefined);
 assertEq(asmLink(asmCompile('x','y', USE_ASM + 'function f(){} return f'), 1, 2)(), undefined);
+
+assertEq(asmLink(asmCompile(USE_ASM + 'function f(i) {i=i|0} return f'))(42), undefined);
+assertAsmTypeFail(USE_ASM + 'function f(i) {i=i|0;var i} return f');
+assertAsmTypeFail(USE_ASM + 'function f(i) {i=i|0;var i=0} return f');
 
 assertAsmTypeFail('glob', USE_ASM + 'var im=glob.imul; function f() {} return f');
 var code = asmCompile('glob', USE_ASM + 'var im=glob.Math.imul; function f(i,j) {i=i|0;j=j|0; return im(i,j)|0} return f');

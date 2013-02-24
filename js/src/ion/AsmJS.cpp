@@ -286,6 +286,19 @@ ObjectFieldInitializer(ParseNode *pn)
 }
 
 static inline bool
+IsDefinition(ParseNode *pn)
+{
+    return pn->isKind(PNK_NAME) && pn->isDefn();
+}
+
+static inline ParseNode *
+MaybeDefinitionInitializer(ParseNode *pn)
+{
+    JS_ASSERT(IsDefinition(pn));
+    return pn->expr();
+}
+
+static inline bool
 IsUseOfName(ParseNode *pn, PropertyName *name)
 {
     return pn->isKind(PNK_NAME) && pn->name() == name;
@@ -2310,6 +2323,7 @@ CheckModuleLevelName(ModuleCompiler &m, PropertyName *name, ParseNode *nameNode)
     if (name == m.moduleFunctionName() ||
         name == m.globalArgumentName() ||
         name == m.importArgumentName() ||
+        name == m.bufferArgumentName() ||
         m.lookupGlobal(name))
     {
         return m.fail("Duplicate names not allowed", nameNode);
@@ -2331,10 +2345,10 @@ CheckFunctionHead(ModuleCompiler &m, ParseNode *fn, ParseNode **stmtIter)
 static bool
 CheckArgument(ModuleCompiler &m, ParseNode *arg, PropertyName **name)
 {
-    if (!arg->isKind(PNK_NAME) || arg->isUsed())
+    if (!IsDefinition(arg))
         return m.fail("overlapping argument names not allowed", arg);
 
-    if (arg->expr())
+    if (MaybeDefinitionInitializer(arg))
         return m.fail("default arguments not allowed", arg);
 
     if (!CheckIdentifier(m, arg->name(), arg))
@@ -2489,10 +2503,7 @@ CheckNewArrayView(ModuleCompiler &m, PropertyName *varName, ParseNode *newExpr, 
     if (NextNode(bufArg) != NULL)
         return m.fail("Only one argument may be passed to a typed array constructor", bufArg);
 
-    if (!bufArg->isKind(PNK_NAME))
-        return m.fail("Argument to typed array constructor must be ArrayBuffer name", bufArg);
-
-    if (bufArg->name() != m.bufferArgumentName())
+    if (!IsUseOfName(bufArg, m.bufferArgumentName()))
         return m.fail("Argument to typed array constructor must be ArrayBuffer name", bufArg);
 
     JSAtomState &names = m.cx()->names();
@@ -2555,16 +2566,15 @@ CheckGlobalDotImport(ModuleCompiler &m, PropertyName *varName, ParseNode *initNo
 static bool
 CheckModuleGlobal(ModuleCompiler &m, ParseNode *var, bool first)
 {
-    if (!var->isKind(PNK_NAME))
+    if (!IsDefinition(var))
         return m.fail("Import variable names must be unique", var);
 
     if (!CheckModuleLevelName(m, var->name(), var))
         return false;
 
-    if (!var->expr())
+    ParseNode *initNode = MaybeDefinitionInitializer(var);
+    if (!initNode)
         return m.fail("Module import needs initializer", var);
-
-    ParseNode *initNode = var->expr();
 
     if (IsNumericLiteral(initNode))
         return CheckGlobalVariableInitConstant(m, var->name(), initNode);
@@ -2757,7 +2767,7 @@ SameSignature(const ModuleCompiler::Func &a, const ModuleCompiler::Func &b)
 static bool
 CheckFuncPtrTable(ModuleCompiler &m, ParseNode *var)
 {
-    if (!var->isKind(PNK_NAME))
+    if (!IsDefinition(var))
         return m.fail("Function-pointer table name must be unique", var);
 
     PropertyName *name = var->name();
@@ -2765,10 +2775,10 @@ CheckFuncPtrTable(ModuleCompiler &m, ParseNode *var)
     if (!CheckModuleLevelName(m, name, var))
         return false;
 
-    if (!var->expr() || !var->expr()->isKind(PNK_ARRAY))
+    ParseNode *arrayLiteral = MaybeDefinitionInitializer(var);
+    if (!arrayLiteral || !arrayLiteral->isKind(PNK_ARRAY))
         return m.fail("Function-pointer table's initializer must be an array literal", var);
 
-    ParseNode *arrayLiteral = var->expr();
     unsigned length = ListLength(arrayLiteral);
 
     if (!IsPowerOfTwo(length))
@@ -4227,18 +4237,17 @@ CheckStatement(FunctionCompiler &f, ParseNode *stmt, LabelVector *maybeLabels)
 static bool
 CheckVariableDecl(ModuleCompiler &m, ParseNode *var, FunctionCompiler::LocalMap *locals)
 {
-    if (!var->isKind(PNK_NAME))
-        return m.fail("Local variable names should not restate argument names.", var);
+    if (!IsDefinition(var))
+        return m.fail("Local variable names must not restate argument names", var);
 
     PropertyName *name = var->name();
 
     if (!CheckIdentifier(m, name, var))
         return false;
 
-    if (!var->expr())
+    ParseNode *initNode = MaybeDefinitionInitializer(var);
+    if (!initNode)
         return m.fail("Variable needs explicit type declaration via an initial value", var);
-
-    ParseNode *initNode = var->expr();
 
     if (!IsNumericLiteral(initNode))
         return m.fail("Variable initialization value needs to be a numeric literal", initNode);
@@ -4260,7 +4269,7 @@ CheckVariableDecl(ModuleCompiler &m, ParseNode *var, FunctionCompiler::LocalMap 
 
     FunctionCompiler::LocalMap::AddPtr p = locals->lookupForAdd(name);
     if (p)
-        return m.fail("Local names should be unique", initNode);
+        return m.fail("Local names must be unique", initNode);
 
     unsigned slot = locals->count();
     if (!locals->add(p, name, FunctionCompiler::Local(type, slot, literal.value())))
