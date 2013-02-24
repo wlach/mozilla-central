@@ -2094,9 +2094,10 @@ MAsmUnsignedToDouble::foldsTo(bool useValueNumbers)
     return this;
 }
 
-MAsmLoad::MAsmLoad(ArrayBufferView::ViewType vt, Base b, MDefinition *index, Scale scale, int32_t disp)
- : MUnaryInstruction(index), viewType_(vt), base_(b), scale_(scale), displacement_(disp)
+MAsmLoad::MAsmLoad(ArrayBufferView::ViewType vt, Base b, MDefinition *index, Scale scale, uint32_t disp31)
+ : MUnaryInstruction(index), viewType_(vt), base_(b), scale_(scale), disp31_(disp31)
 {
+    JS_ASSERT(disp31 <= INT32_MAX);
     if (vt == FUNC_PTR)
         setResultType(MIRType_Pointer);
     else if (vt == ArrayBufferView::TYPE_FLOAT32 || vt == ArrayBufferView::TYPE_FLOAT64)
@@ -2105,9 +2106,27 @@ MAsmLoad::MAsmLoad(ArrayBufferView::ViewType vt, Base b, MDefinition *index, Sca
         setResultType(MIRType_Int32);
 }
 
+bool
+MAsmLoad::tryAddDisplacement(uint32_t d)
+{
+    if (INT32_MAX - disp31_ < d)
+        return false;
+    disp31_ += d;
+    return true;
+}
+
 MAsmStore::MAsmStore(ArrayBufferView::ViewType vt, Base b, MDefinition *index, MDefinition *v)
- : MBinaryInstruction(index, v), viewType_(vt), base_(b), scale_(TimesOne), displacement_(0)
+ : MBinaryInstruction(index, v), viewType_(vt), base_(b), scale_(TimesOne), disp31_(0)
 {}
+
+bool
+MAsmStore::tryAddDisplacement(uint32_t d)
+{
+    if (INT32_MAX - disp31_ < d)
+        return false;
+    disp31_ += d;
+    return true;
+}
 
 MAsmCall *
 MAsmCall::New(Callee callee, const Args &args, MIRType resultType, size_t spIncrement)

@@ -97,11 +97,11 @@ AnalyzeAsmMemoryOp(T *ins)
         JS_ASSERT(add->type() == MIRType_Int32);
 
         if (add->lhs()->isConstant()) {
-            ins->addDisplacement(add->lhs()->toConstant()->value().toInt32());
-            ins->replaceOperand(0, add->rhs());
+            if (ins->tryAddDisplacement(add->lhs()->toConstant()->value().toInt32()))
+                ins->replaceOperand(0, add->rhs());
         } else if (add->rhs()->isConstant()) {
-            ins->addDisplacement(add->rhs()->toConstant()->value().toInt32());
-            ins->replaceOperand(0, add->lhs());
+            if (ins->tryAddDisplacement(add->rhs()->toConstant()->value().toInt32()))
+                ins->replaceOperand(0, add->lhs());
         }
     }
 

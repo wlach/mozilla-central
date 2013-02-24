@@ -1,5 +1,16 @@
 load(libdir + "asm.js");
 
+// constants
+var buf = new ArrayBuffer(8);
+assertEq(asmLink(asmCompile('glob', 'imp', 'b', USE_ASM + 'var arr=new glob.Int8Array(b); function f() {return arr[0x7fffffff]|0 } return f'), this, null, buf)(), 0);
+assertEq(asmLink(asmCompile('glob', 'imp', 'b', USE_ASM + 'var arr=new glob.Int8Array(b); function f() {return arr[0x80000000]|0 } return f'), this, null, buf)(), 0);
+assertEq(asmLink(asmCompile('glob', 'imp', 'b', USE_ASM + 'var arr=new glob.Int8Array(b); function f() {return arr[0x8fffffff]|0 } return f'), this, null, buf)(), 0);
+assertEq(asmLink(asmCompile('glob', 'imp', 'b', USE_ASM + 'var arr=new glob.Int8Array(b); function f() {return arr[0xffffffff]|0 } return f'), this, null, buf)(), 0);
+assertEq(asmLink(asmCompile('glob', 'imp', 'b', USE_ASM + 'var arr=new glob.Int8Array(b); function f() {return arr[-1]|0 } return f'), this, null, buf)(), 0);
+assertEq(asmLink(asmCompile('glob', 'imp', 'b', USE_ASM + 'var arr=new glob.Int8Array(b); function f() {return arr[-2]|0 } return f'), this, null, buf)(), 0);
+assertAsmTypeFail('glob', 'imp', 'b', USE_ASM + 'var arr=new glob.Int16Array(b); function f() {return arr[-1]|0 } return f');
+assertAsmTypeFail('glob', 'imp', 'b', USE_ASM + 'var arr=new glob.Int32Array(b); function f() {return arr[-2]|0 } return f');
+
 function testInt(ctor, shift, sizes) {
     for (var bytes of sizes) {
         var ab = new ArrayBuffer(bytes);

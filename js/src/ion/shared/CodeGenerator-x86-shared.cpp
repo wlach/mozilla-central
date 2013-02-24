@@ -210,13 +210,8 @@ PointerOperand(T *ins, U *mir)
       case U::Global: base = GlobalReg; break;
     }
 
-    if (ins->index()->isConstant()) {
-        int32_t ptr = ToInt32(ins->index());
-        return Operand(base, (ptr << ScaleToShift(mir->scale())) + mir->displacement());
-    }
-
     Register reg = ToRegister(ins->index());
-    return Operand(base, reg, mir->scale(), mir->displacement());
+    return Operand(base, reg, mir->scale(), mir->disp31());
 }
 
 bool
