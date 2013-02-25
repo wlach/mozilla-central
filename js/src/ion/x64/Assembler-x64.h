@@ -146,6 +146,9 @@ class ABIArgGenerator
     ABIArg next(MIRType argType);
     ABIArg &current() { return current_; }
     uint32_t stackBytesConsumedSoFar() const { return stackOffset_; }
+
+    static const Register NonArgReturnReg0;
+    static const Register NonArgReturnReg1;
 };
 
 static const Register OsrFrameReg = IntArgReg3;
@@ -158,11 +161,6 @@ static const uint32_t StackAlignment = 16;
 static const bool StackKeptAligned = false;
 static const uint32_t NativeFrameSize = sizeof(void*);
 static const uint32_t AlignmentAtPrologue = sizeof(void*);
-#if defined(_WIN64)
-static const uint32_t ShadowSpaceSize = 32;
-#else
-static const uint32_t ShadowSpaceSize = 0;
-#endif
 
 static const Scale ScalePointer = TimesEight;
 

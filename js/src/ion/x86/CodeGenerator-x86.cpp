@@ -150,7 +150,7 @@ CodeGeneratorX86::linkDeferredDoubles()
     for (size_t i = 0; i < deferredDoubles_.length(); i++) {
         DeferredDouble *d = deferredDoubles_[i];
         const Value &v = ionScript->getConstant(d->index());
-        MacroAssembler::Bind(method, d->label(), &v);
+        MacroAssembler::Bind(method->raw(), d->label(), &v);
     }
 }
 

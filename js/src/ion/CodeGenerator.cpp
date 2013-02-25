@@ -5767,11 +5767,11 @@ CodeGenerator::visitAsmVoidReturn(LAsmVoidReturn *lir)
 bool
 CodeGenerator::visitAsmCheckOverRecursed(LAsmCheckOverRecursed *lir)
 {
-    Register limitReg = ToRegister(lir->limitTemp());
-
     uintptr_t *limitAddr = &gen->compartment->rt->mainThread.nativeStackLimit;
-    masm.loadPtr(AbsoluteAddress(limitAddr), limitReg);
-    masm.branchPtr(Assembler::BelowOrEqual, StackPointer, limitReg, lir->mir()->onError());
+    masm.branchPtr(Assembler::AboveOrEqual,
+                   AbsoluteAddress(limitAddr),
+                   StackPointer,
+                   lir->mir()->onError());
     return true;
 }
 

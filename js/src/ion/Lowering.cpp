@@ -2481,7 +2481,7 @@ LIRGenerator::visitAsmCall(MAsmCall *ins)
 bool
 LIRGenerator::visitAsmCheckOverRecursed(MAsmCheckOverRecursed *ins)
 {
-    return add(new LAsmCheckOverRecursed(temp()), ins);
+    return add(new LAsmCheckOverRecursed(), ins);
 }
 
 bool

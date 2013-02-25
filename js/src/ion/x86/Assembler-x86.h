@@ -63,8 +63,6 @@ static const uint32_t NumCallTempNonArgRegs =
 
 class ABIArgGenerator
 {
-    unsigned intRegIndex_;
-    unsigned floatRegIndex_;
     uint32_t stackOffset_;
     ABIArg current_;
 
@@ -73,6 +71,9 @@ class ABIArgGenerator
     ABIArg next(MIRType argType);
     ABIArg &current() { return current_; }
     uint32_t stackBytesConsumedSoFar() const { return stackOffset_; }
+
+    static const Register NonArgReturnReg0;
+    static const Register NonArgReturnReg1;
 };
 
 static const Register OsrFrameReg = edx;
@@ -314,6 +315,9 @@ class Assembler : public AssemblerX86Shared
     }
     void mov(const Register &src, const Operand &dest) {
         movl(src, dest);
+    }
+    void mov(Imm32 imm, const Operand &dest) {
+        movl(imm, dest);
     }
     void mov(AbsoluteLabel *label, const Register &dest) {
         JS_ASSERT(!label->bound());

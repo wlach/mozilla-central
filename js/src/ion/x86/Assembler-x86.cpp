@@ -11,6 +11,22 @@
 using namespace js;
 using namespace js::ion;
 
+ABIArgGenerator::ABIArgGenerator()
+  : stackOffset_(0),
+    current_()
+{}
+
+ABIArg
+ABIArgGenerator::next(MIRType type)
+{
+    current_ = ABIArg(stackOffset_);
+    stackOffset_ += sizeof(uint64_t);
+    return current_;
+}
+
+const Register ABIArgGenerator::NonArgReturnReg0 = ebx;
+const Register ABIArgGenerator::NonArgReturnReg1 = ebp;
+
 void
 Assembler::executableCopy(uint8_t *buffer)
 {

@@ -447,6 +447,20 @@ ArrayBufferObject::releaseAsmJSArrayBuffer(RawObject obj)
     munmap(begin, AsmJSBufferReservedLength);
 #endif
 }
+#else // defined(JS_CPU_X64)
+bool
+ArrayBufferObject::prepareForAsmJS(JSContext *cx, Handle<ArrayBufferObject*> buffer)
+{
+    return true;
+}
+
+void
+ArrayBufferObject::neuterAsmJSArrayBuffer(ArrayBufferObject &buffer)
+{}
+
+void
+ArrayBufferObject::releaseAsmJSArrayBuffer(RawObject obj)
+{}
 #endif
 
 #ifdef JSGC_GENERATIONAL

@@ -138,7 +138,7 @@ static uint8_t **
 ContextToPC(PCONTEXT context)
 {
 #  if defined(JS_CPU_X64)
-    JS_STATIC_ASSERT(sizeof(context->Rip) == 8);
+    JS_STATIC_ASSERT(sizeof(context->Rip) == sizeof(void*));
     return reinterpret_cast<uint8_t**>(&context->Rip);
 #  else
 #   error "TODO"
@@ -285,7 +285,7 @@ static uint8_t **
 ContextToPC(mcontext_t &context)
 {
 #  if defined(JS_CPU_X64)
-    JS_STATIC_ASSERT(sizeof(context.gregs[REG_RIP]) == 8);
+    JS_STATIC_ASSERT(sizeof(context.gregs[REG_RIP]) == sizeof(void*));
     return reinterpret_cast<uint8_t**>(&context.gregs[REG_RIP]);
 #  else
 #   error "TODO"
@@ -347,8 +347,13 @@ static const int SignalCode = SIGBUS;
 static uint8_t **
 ContextToPC(mcontext_t context)
 {
-    JS_STATIC_ASSERT(sizeof(context->__ss.__rip) == 8);
+#  if defined(JS_CPU_X64)
+    JS_STATIC_ASSERT(sizeof(context->__ss.__rip) == sizeof(void*));
     return reinterpret_cast<uint8_t **>(&context->__ss.__rip);
+#  else
+    JS_STATIC_ASSERT(sizeof(context->__ss.__eip) == sizeof(void*));
+    return reinterpret_cast<uint8_t **>(&context->__ss.__eip);
+#  endif
 }
 
 static void
@@ -364,6 +369,7 @@ SetRegisterToCoercedUndefined(mcontext_t &context, AnyRegister reg)
           case JSC::X86Registers::xmm5:  SetXMMRegToNaN(&context->__fs.__fpu_xmm5); break;
           case JSC::X86Registers::xmm6:  SetXMMRegToNaN(&context->__fs.__fpu_xmm6); break;
           case JSC::X86Registers::xmm7:  SetXMMRegToNaN(&context->__fs.__fpu_xmm7); break;
+#  if defined(JS_CPU_X64)
           case JSC::X86Registers::xmm8:  SetXMMRegToNaN(&context->__fs.__fpu_xmm8); break;
           case JSC::X86Registers::xmm9:  SetXMMRegToNaN(&context->__fs.__fpu_xmm9); break;
           case JSC::X86Registers::xmm10: SetXMMRegToNaN(&context->__fs.__fpu_xmm10); break;
@@ -372,10 +378,12 @@ SetRegisterToCoercedUndefined(mcontext_t &context, AnyRegister reg)
           case JSC::X86Registers::xmm13: SetXMMRegToNaN(&context->__fs.__fpu_xmm13); break;
           case JSC::X86Registers::xmm14: SetXMMRegToNaN(&context->__fs.__fpu_xmm14); break;
           case JSC::X86Registers::xmm15: SetXMMRegToNaN(&context->__fs.__fpu_xmm15); break;
+#  endif
           default: MOZ_CRASH();
         }
     } else {
         switch (reg.gpr().code()) {
+#  if defined(JS_CPU_X64)
           case JSC::X86Registers::eax: context->__ss.__rax = 0; break;
           case JSC::X86Registers::ecx: context->__ss.__rcx = 0; break;
           case JSC::X86Registers::edx: context->__ss.__rdx = 0; break;
@@ -392,6 +400,16 @@ SetRegisterToCoercedUndefined(mcontext_t &context, AnyRegister reg)
           case JSC::X86Registers::r13: context->__ss.__r13 = 0; break;
           case JSC::X86Registers::r14: context->__ss.__r14 = 0; break;
           case JSC::X86Registers::r15: context->__ss.__r15 = 0; break;
+#  else
+          case JSC::X86Registers::eax: context->__ss.__eax = 0; break;
+          case JSC::X86Registers::ecx: context->__ss.__ecx = 0; break;
+          case JSC::X86Registers::edx: context->__ss.__edx = 0; break;
+          case JSC::X86Registers::ebx: context->__ss.__ebx = 0; break;
+          case JSC::X86Registers::esp: context->__ss.__esp = 0; break;
+          case JSC::X86Registers::ebp: context->__ss.__ebp = 0; break;
+          case JSC::X86Registers::esi: context->__ss.__esi = 0; break;
+          case JSC::X86Registers::edi: context->__ss.__edi = 0; break;
+#  endif
           default: MOZ_CRASH();
         }
     }
