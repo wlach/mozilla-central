@@ -350,7 +350,7 @@ ArrayBufferObject::uninlineData(JSContext *maybecx)
 //                     obj->elements       required to be page boundaries
 //
 JS_STATIC_ASSERT(sizeof(ObjectElements) < PageSize);
-static const size_t AsmJSBufferReservedLength = FourGiB + 2 * PageSize;
+static const size_t AsmJSBufferReservedLength = AsmJSBufferProtectedSize + 2 * PageSize;
 
 bool
 ArrayBufferObject::prepareForAsmJS(JSContext *cx, Handle<ArrayBufferObject*> buffer)

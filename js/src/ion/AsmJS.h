@@ -78,7 +78,7 @@ class AsmJSActivation
 // byteLength portion of which is accessible) so that out-of-bounds accesses
 // (made using a uint32 index) are guaranteed to raise a SIGSEGV.
 #ifdef JS_CPU_X64
-static const size_t FourGiB = 4 * 1024ULL * 1024ULL * 1024ULL;
+static const size_t AsmJSBufferProtectedSize = 4 * 1024ULL * 1024ULL * 1024ULL;
 #endif
 
 } // namespace js

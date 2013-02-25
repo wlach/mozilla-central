@@ -92,6 +92,14 @@ template <class T>
 static void
 AnalyzeAsmMemoryOp(T *ins)
 {
+    // While MEffectiveAddress always performs 32-bit arithmetic (mirroring JS
+    // semantics), the effective address computation done by load/store is
+    // word-sized and thus 64-bit on x64. Technically, we could still make this
+    // work by increasing AsmJSBufferProtectedSize and handling the wraparound
+    // case (where the 32-bit index would have wrapped to an in-range index)
+    if (JS_BYTES_PER_WORD != 4 && !GetIonContext()->cx->runtime->asmJSUnsafe)
+        return;
+
     if (ins->getOperand(0)->isAdd()) {
         MAdd *add = ins->getOperand(0)->toAdd();
         JS_ASSERT(add->type() == MIRType_Int32);
