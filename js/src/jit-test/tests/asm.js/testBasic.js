@@ -7,7 +7,7 @@ assertAsmTypeFail(USE_ASM + 'function f(){}');
 assertAsmTypeFail(USE_ASM + 'function f(){} return 0');
 assertAsmTypeFail(USE_ASM + 'function f() 0; return 0');
 assertAsmTypeFail(USE_ASM + 'function f(){} return g');
-assertAsmTypeFail(USE_ASM + 'function f() 0; return g');
+assertAsmTypeFail(USE_ASM + 'function f() 0; return f');
 assertAsmTypeFail('"use strict";' + USE_ASM + 'function f() {} return f');
 assertEq(asmLink(asmCompile(USE_ASM + 'function f(){} return f'))(), undefined);
 assertEq(asmLink(asmCompile(USE_ASM + 'function f(){;} return f'))(), undefined);

@@ -242,30 +242,28 @@ FunctionArgsList(ParseNode *fn, unsigned *numFormals)
     return ListHead(argsBody);
 }
 
-static inline ParseNode *
-MaybeFunctionStatementList(ParseNode *fn)
+static inline bool
+FunctionHasStatementList(ParseNode *fn)
 {
     JS_ASSERT(fn->isKind(PNK_FUNCTION));
     ParseNode *argsBody = fn->pn_body;
     JS_ASSERT(argsBody->isKind(PNK_ARGSBODY));
     ParseNode *body = argsBody->last();
-    if (!body->isKind(PNK_STATEMENTLIST))
-        return NULL;
-    return body;
+    return body->isKind(PNK_STATEMENTLIST);
 }
 
 static inline ParseNode *
-FunctionFirstStatementOrNull(ParseNode *fn)
+FunctionStatementList(ParseNode *fn)
 {
-    ParseNode *list = MaybeFunctionStatementList(fn);
-    return list ? ListHead(list) : NULL;
+    JS_ASSERT(FunctionHasStatementList(fn));
+    return fn->pn_body->last();
 }
 
 static inline ParseNode *
 FunctionLastStatementOrNull(ParseNode *fn)
 {
-    ParseNode *list = MaybeFunctionStatementList(fn);
-    return list ? list->pn_count == 0 ? NULL : list->last() : NULL;
+    ParseNode *list = FunctionStatementList(fn);
+    return list->pn_count == 0 ? NULL : list->last();
 }
 
 static inline bool
@@ -2343,8 +2341,10 @@ CheckFunctionHead(ModuleCompiler &m, ParseNode *fn, ParseNode **stmtIter)
 {
     if (FunctionObject(fn)->hasRest())
         return m.fail("rest args not allowed in asm.js", fn);
+    if (!FunctionHasStatementList(fn))
+        return m.fail("expression closures not allowed in asm.js", fn);
 
-    *stmtIter = FunctionFirstStatementOrNull(fn);
+    *stmtIter = ListHead(FunctionStatementList(fn));
     return true;
 }
 
