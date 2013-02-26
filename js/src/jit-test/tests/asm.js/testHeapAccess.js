@@ -1,5 +1,8 @@
 load(libdir + "asm.js");
 
+assertAsmTypeFail('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f() { var x=0,y=0; return i8[x+y]|0 } return f');
+assertAsmTypeFail('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f() { var x=0,y=0; return u8[x+y]|0 } return f');
+
 assertAsmTypeFail('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f() { return i32[0>>0]|0 }; return f');
 assertAsmTypeFail('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f() { return i32[0>>1]|0 }; return f');
 assertAsmTypeFail('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f() { return i32[0>>4]|0 }; return f');

@@ -2994,30 +2994,33 @@ CheckArrayAccess(FunctionCompiler &f, ParseNode *elem, ArrayBufferView::ViewType
         return true;
     }
 
-    ParseNode *pointerNode;
+    MDefinition *pointerDef;
     if (indexExpr->isKind(PNK_RSH)) {
         ParseNode *shiftNode = BinaryRight(indexExpr);
+        ParseNode *pointerNode = BinaryLeft(indexExpr);
 
         uint32_t shift;
         if (!IsLiteralUint32(shiftNode, &shift) || shift != TypedArrayShift(*viewType))
             return f.fail("The shift amount must be a constant matching the array "
                           "element size", shiftNode);
 
-        pointerNode = BinaryLeft(indexExpr);
+        Type pointerType;
+        if (!CheckExpr(f, pointerNode, Use::ToInt32, &pointerDef, &pointerType))
+            return false;
+
+        if (!pointerType.isIntish())
+            return f.fail("Pointer input must be intish", pointerNode);
     } else {
         if (TypedArrayShift(*viewType) != 0)
             return f.fail("The shift amount is 0 so this must be a Int8/Uint8 array", indexExpr);
 
-        pointerNode = indexExpr;
+        Type pointerType;
+        if (!CheckExpr(f, indexExpr, Use::ToInt32, &pointerDef, &pointerType))
+            return false;
+
+        if (!pointerType.isInt())
+            return f.fail("Pointer input must be int", indexExpr);
     }
-
-    MDefinition *pointerDef;
-    Type pointerType;
-    if (!CheckExpr(f, pointerNode, Use::ToInt32, &pointerDef, &pointerType))
-        return false;
-
-    if (!pointerType.isIntish())
-        return f.fail("Pointer input must be intish", pointerNode);
 
     // Mask off the low bits to account for clearing effect of a right shift
     // followed by the left shift implicit in the array access. E.g., H32[i>>2]
