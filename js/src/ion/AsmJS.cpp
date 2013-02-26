@@ -2093,8 +2093,10 @@ class FunctionCompiler
     {
         if (!breakableStack_.append(pn))
             return false;
-        if (!curBlock_)
+        if (!curBlock_) {
+            *switchBlock = NULL;
             return true;
+        }
         curBlock_->end(MTableSwitch::New(expr, low, high));
         *switchBlock = curBlock_;
         curBlock_ = NULL;

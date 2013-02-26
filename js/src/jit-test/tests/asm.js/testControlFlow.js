@@ -127,6 +127,7 @@ assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; switch(i|0) { cas
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=0; switch(i|0) { case 0: default: i=42; break } return i|0 } return f"))(), 42);
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=1; switch(i|0) { case 0: case 2: break; default: i=42 } return i|0 } return f"))(), 42);
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=1; switch(i|0) { case 0: case 2: break; default: i=42; break } return i|0 } return f"))(), 42);
+assertEq(asmLink(asmCompile(USE_ASM + "function f() { return 42; switch(1) { case 1: return 13 } return 14 } return f"))(), 42);
 
 var f = asmLink(asmCompile(USE_ASM + "function f(i) { i=i|0; switch(i|0) { case 1: i=42; break; default: i=13 } return i|0 } return f"));
 assertEq(f(-1), 13);
