@@ -28,6 +28,7 @@ class LIRGeneratorX86Shared : public LIRGeneratorShared
     bool visitInterruptCheck(MInterruptCheck *ins);
     bool visitGuardShape(MGuardShape *ins);
     bool visitPowHalf(MPowHalf *ins);
+    bool visitConstant(MConstant *ins);
     bool visitAsmNeg(MAsmNeg *ins);
     bool visitAsmUDiv(MAsmUDiv *ins);
     bool visitAsmUMod(MAsmUMod *ins);
@@ -35,6 +36,7 @@ class LIRGeneratorX86Shared : public LIRGeneratorShared
     bool lowerDivI(MDiv *div);
     bool lowerModI(MMod *mod);
     bool lowerUrshD(MUrsh *mir);
+    bool lowerConstantDouble(double d, MInstruction *ins);
 };
 
 } // namespace ion

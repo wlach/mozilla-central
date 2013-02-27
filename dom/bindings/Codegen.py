@@ -59,6 +59,9 @@ class CGThing():
     def define(self):
         """Produce code for a cpp file."""
         assert(False) # Override me!
+    def deps(self):
+        """Produce the deps for a pp file"""
+        assert(False) # Override me!
 
 class CGNativePropertyHooks(CGThing):
     """
@@ -309,6 +312,13 @@ class CGList(CGThing):
         return self.join(child.declare() for child in self.children if child is not None)
     def define(self):
         return self.join(child.define() for child in self.children if child is not None)
+    def deps(self):
+        deps = set()
+        for child in self.children:
+            if child is None:
+                continue
+            deps = deps.union(child.deps())
+        return deps
 
 class CGGeneric(CGThing):
     """
@@ -322,6 +332,8 @@ class CGGeneric(CGThing):
         return self.declareText
     def define(self):
         return self.defineText
+    def deps(self):
+        return set()
 
 # We'll want to insert the indent at the beginnings of lines, but we
 # don't want to indent empty lines.  So only indent lines that have a
@@ -386,6 +398,9 @@ class CGWrapper(CGThing):
             defn = stripTrailingWhitespace(
                 defn.replace("\n", "\n" + (" " * len(self.definePre))))
         return self.definePre + defn + self.definePost
+
+    def deps(self):
+        return self.child.deps()
 
 class CGIfWrapper(CGWrapper):
     def __init__(self, child, condition):
@@ -985,14 +1000,30 @@ class CGNamedConstructors(CGThing):
     def define(self):
         if len(self.descriptor.interface.namedConstructors) == 0:
             return ""
+
+        constructorID = "constructors::id::"
+        if self.descriptor.interface.hasInterfaceObject():
+            constructorID += self.descriptor.name
+        else:
+            constructorID += "_ID_Count"
+        nativePropertyHooks = """const NativePropertyHooks sNamedConstructorNativePropertyHooks = {
+    nullptr,
+    nullptr,
+    { nullptr, nullptr },
+    prototypes::id::%s,
+    %s,
+    nullptr
+};
+
+""" % (self.descriptor.name, constructorID)
         namedConstructors = CGList([], ",\n")
         for n in self.descriptor.interface.namedConstructors:
-            namedConstructors.append(CGGeneric("{ \"%s\", { %s, nullptr }, %i }" % (n.identifier.name, NamedConstructorName(n), methodLength(n))))
+            namedConstructors.append(CGGeneric("{ \"%s\", { %s, &sNamedConstructorNativePropertyHooks }, %i }" % (n.identifier.name, NamedConstructorName(n), methodLength(n))))
         namedConstructors.append(CGGeneric("{ nullptr, { nullptr, nullptr }, 0 }"))
         namedConstructors = CGWrapper(CGIndenter(namedConstructors),
                                       pre="static const NamedConstructor namedConstructors[] = {\n",
                                       post="\n};\n")
-        return namedConstructors.define()
+        return nativePropertyHooks + namedConstructors.define()
 
 class CGClassHasInstanceHook(CGAbstractStaticMethod):
     def __init__(self, descriptor):
@@ -1819,6 +1850,18 @@ def InitUnforgeableProperties(descriptor, properties):
             "// finalizer trying to drop its ownership of the C++ object.\n"),
             post="\n")).define() if len(unforgeables) > 0 else ""
 
+def AssertInheritanceChain(descriptor):
+    asserts = ""
+    iface = descriptor.interface
+    while iface:
+        desc = descriptor.getDescriptor(iface.identifier.name)
+        asserts += (
+            "  MOZ_ASSERT(static_cast<%s*>(aObject) == \n"
+            "             reinterpret_cast<%s*>(aObject));\n" %
+            (desc.nativeType, desc.nativeType))
+        iface = iface.parent
+    return asserts
+
 class CGWrapWithCacheMethod(CGAbstractMethod):
     """
     Create a wrapper JSObject for a given native that implements nsWrapperCache.
@@ -1839,7 +1882,8 @@ class CGWrapWithCacheMethod(CGAbstractMethod):
             return """  *aTriedToWrap = true;
   return aObject->GetJSObject();"""
 
-        return """  *aTriedToWrap = true;
+        return """%s
+  *aTriedToWrap = true;
 
   JSObject* parent = WrapNativeParent(aCx, aScope, aObject->GetParentObject());
   if (!parent) {
@@ -1868,7 +1912,8 @@ class CGWrapWithCacheMethod(CGAbstractMethod):
 %s
   aCache->SetWrapper(obj);
 
-  return obj;""" % (CheckPref(self.descriptor, "global", "*aTriedToWrap", "NULL", "aCache"),
+  return obj;""" % (AssertInheritanceChain(self.descriptor),
+                    CheckPref(self.descriptor, "global", "*aTriedToWrap", "NULL", "aCache"),
                     CreateBindingJSObject(self.descriptor, "parent"),
                     InitUnforgeableProperties(self.descriptor, self.properties))
 
@@ -1899,7 +1944,7 @@ class CGWrapNonWrapperCacheMethod(CGAbstractMethod):
         self.properties = properties
 
     def definition_body(self):
-        return """
+        return """%s
   JSObject* global = JS_GetGlobalForObject(aCx, aScope);
   JSObject* proto = GetProtoObject(aCx, global);
   if (!proto) {
@@ -1908,7 +1953,8 @@ class CGWrapNonWrapperCacheMethod(CGAbstractMethod):
 
 %s
 %s
-  return obj;""" % (CreateBindingJSObject(self.descriptor, "global"),
+  return obj;""" % (AssertInheritanceChain(self.descriptor),
+                    CreateBindingJSObject(self.descriptor, "global"),
                     InitUnforgeableProperties(self.descriptor, self.properties))
 
 builtinNames = {
@@ -4838,6 +4884,9 @@ class CGEnum(CGThing):
 """ % (len(self.enum.values()) + 1,
        ",\n    ".join(['{"' + val + '", ' + str(len(val)) + '}' for val in self.enum.values()]))
 
+    def deps(self):
+        return self.enum.getDeps()
+
 def getUnionAccessorSignatureType(type, descriptorProvider):
     """
     Returns the types that are used in the getter and setter signatures for
@@ -5728,6 +5777,8 @@ class CGPrototypeTraitsClass(CGClass):
                          templateArgs=templateArgs,
                          templateSpecialization=templateSpecialization,
                          enums=enums, typedefs=typedefs, isStruct=True)
+    def deps(self):
+        return set()
 
 class CGPrototypeIDMapClass(CGClass):
     def __init__(self, descriptor, indent=''):
@@ -5739,6 +5790,8 @@ class CGPrototypeIDMapClass(CGClass):
                          templateArgs=templateArgs,
                          templateSpecialization=templateSpecialization,
                          enums=enums, isStruct=True)
+    def deps(self):
+        return set()
 
 class CGClassForwardDeclare(CGThing):
     def __init__(self, name, isStruct=False):
@@ -5751,6 +5804,8 @@ class CGClassForwardDeclare(CGThing):
     def define(self):
         # Header only
         return ''
+    def deps(self):
+        return set()
 
 class CGProxySpecialOperation(CGPerSignatureCall):
     """
@@ -6427,6 +6482,8 @@ class CGDescriptor(CGThing):
 
         assert not descriptor.concrete or descriptor.interface.hasInterfacePrototypeObject()
 
+        self._deps = descriptor.interface.getDeps()
+
         cgThings = []
         # These are set to true if at least one non-static
         # method/getter/setter exist on the interface.
@@ -6563,6 +6620,8 @@ class CGDescriptor(CGThing):
         return self.cgRoot.declare()
     def define(self):
         return self.cgRoot.define()
+    def deps(self):
+        return self._deps
 
 class CGNamespacedEnum(CGThing):
     def __init__(self, namespace, enumName, names, values, comment=""):
@@ -6766,6 +6825,9 @@ class CGDictionary(CGThing):
                 "ensureObject": CGIndenter(CGGeneric(ensureObject)).define(),
                 "defineMembers": "\n\n".join(memberDefines)
                 })
+
+    def deps(self):
+        return self.dictionary.getDeps()
 
     @staticmethod
     def makeDictionaryName(dictionary, workers):
@@ -7187,6 +7249,9 @@ class CGBindingRoot(CGThing):
         return stripTrailingWhitespace(self.root.declare())
     def define(self):
         return stripTrailingWhitespace(self.root.define())
+
+    def deps(self):
+        return self.root.deps()
 
 class CGNativeMember(ClassMethod):
     def __init__(self, descriptor, member, name, signature, extendedAttrs,
@@ -7763,6 +7828,7 @@ class CGCallback(CGClass):
     def __init__(self, idlObject, descriptorProvider, baseName, methods,
                  getters=[], setters=[]):
         self.baseName = baseName
+        self._deps = idlObject.getDeps()
         name = idlObject.identifier.name
         if descriptorProvider.workers:
             name += "Workers"
@@ -7851,6 +7917,9 @@ class CGCallback(CGClass):
                             bodyInHeader=True,
                             body=bodyWithoutThis),
                 method]
+
+    def deps(self):
+        return self._deps
 
 class CGCallbackFunction(CGCallback):
     def __init__(self, callback, descriptorProvider):

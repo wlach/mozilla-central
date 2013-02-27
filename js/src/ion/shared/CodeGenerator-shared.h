@@ -319,9 +319,6 @@ class CodeGeneratorShared : public LInstructionVisitor
     bool hasOutOfLineCode() { return !outOfLineCode_.empty(); }
     bool generateOutOfLineCode();
 
-    size_t numDeferredDoubles() const { return 0; }
-    void linkDeferredDoubles() {}
-
   private:
     void generateInvalidateEpilogue();
 

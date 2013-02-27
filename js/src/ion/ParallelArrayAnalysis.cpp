@@ -141,6 +141,7 @@ class ParallelArrayVisitor : public MInstructionVisitor
     SAFE_OP(PassArg)
     CUSTOM_OP(Call)
     UNSAFE_OP(ApplyArgs)
+    UNSAFE_OP(GetDynamicName)
     UNSAFE_OP(CallDirectEval)
     SAFE_OP(BitNot)
     UNSAFE_OP(TypeOf)
@@ -753,7 +754,7 @@ GetPossibleCallees(JSContext *cx, HandleScript script, jsbytecode *pc,
                 continue;
         }
 
-        if (fun->isCloneAtCallsite()) {
+        if (fun->isInterpreted() && fun->nonLazyScript()->shouldCloneAtCallsite) {
             fun = CloneFunctionAtCallsite(cx, fun, script, pc);
             if (!fun)
                 return false;

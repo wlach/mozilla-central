@@ -798,6 +798,11 @@ let RIL = {
     this.iccInfo = {};
 
     /**
+     * CDMA specific information. ex. CDMA Network ID, CDMA System ID... etc.
+     */
+    this.cdmaHome = null;
+
+    /**
      * Application identification for apps in ICC.
      */
     this.aid = null;
@@ -1463,6 +1468,70 @@ let RIL = {
   selectNetworkAuto: function selectNetworkAuto(options) {
     if (DEBUG) debug("Setting automatic network selection");
     Buf.simpleRequest(REQUEST_SET_NETWORK_SELECTION_AUTOMATIC, options);
+  },
+
+  /**
+   * Open Logical UICC channel (aid) for Secure Element access
+   */
+  iccOpenChannel: function iccOpenChannel(options) {
+    if (DEBUG) {
+      debug("iccOpenChannel: " + JSON.stringify(options));
+    }
+
+    let token = Buf.newParcel(REQUEST_SIM_OPEN_CHANNEL, options);
+    Buf.writeString(options.aid);
+    Buf.sendParcel();
+  },
+
+/**
+   * Exchange APDU data on an open Logical UICC channel
+   */
+  iccExchangeAPDU: function iccExchangeAPDU(options) {
+    if (DEBUG) debug("iccExchangeAPDU: " + JSON.stringify(options));
+
+    var cla = options.apdu.cla;
+    var command = options.apdu.command;
+    var channel = options.channel;
+    var path = options.apdu.path;
+    var data = options.apdu.data;
+    var data2 = options.apdu.data2;
+    if (path == null || path === undefined) {
+      var path = "";
+    }
+    if (data == null || data === undefined) {
+      var data = "";
+    }
+    if (data2 == null || data2 === undefined) {
+      var data2 = "";
+    }
+    var p1 = options.apdu.p1;
+    var p2 = options.apdu.p2;
+    var p3 = options.apdu.p3; // Extra
+
+    Buf.newParcel(REQUEST_SIM_ACCESS_CHANNEL, options);
+    Buf.writeUint32(cla);
+    Buf.writeUint32(command);
+    Buf.writeUint32(channel);
+    Buf.writeString(path); // path
+    Buf.writeUint32(p1);
+    Buf.writeUint32(p2);
+    Buf.writeUint32(p3);
+    Buf.writeString(data); // generic data field.
+    Buf.writeString(data2);
+
+    Buf.sendParcel();
+  },
+
+  /**
+   * Close Logical UICC channel
+   */
+  iccCloseChannel: function iccCloseChannel(options) {
+    if (DEBUG) debug("iccCloseChannel: " + JSON.stringify(options));
+
+    Buf.newParcel(REQUEST_SIM_CLOSE_CHANNEL, options);
+    Buf.writeUint32(1);
+    Buf.writeUint32(options.channel);
+    Buf.sendParcel();
   },
 
   /**
@@ -2714,8 +2783,8 @@ let RIL = {
       return;
     }
 
-    // TODO: Bug 726098, change to use cdmaSubscriptionAppIndex when in CDMA.
-    let index = iccStatus.gsmUmtsSubscriptionAppIndex;
+    let index = this._isCdma ? iccStatus.cdmaSubscriptionAppIndex :
+                               iccStatus.gsmUmtsSubscriptionAppIndex;
     let app = iccStatus.apps[index];
     if (!app) {
       if (DEBUG) {
@@ -2768,10 +2837,14 @@ let RIL = {
       // Other types of ICC we can send Terminal_Profile immediately.
       if (this.appType == CARD_APPTYPE_SIM) {
         ICCRecordHelper.getICCPhase();
-      } else {
+        ICCRecordHelper.fetchICCRecords();
+      } else if (this.appType == CARD_APPTYPE_USIM) {
         this.sendStkTerminalProfile(STK_SUPPORTED_TERMINAL_PROFILE);
+        ICCRecordHelper.fetchICCRecords();
+      } else if (this.appType == CARD_APPTYPE_RUIM) {
+        this.sendStkTerminalProfile(STK_SUPPORTED_TERMINAL_PROFILE);
+        RuimRecordHelper.fetchRuimRecords();
       }
-      ICCRecordHelper.fetchICCRecords();
       this.reportStkServiceIsRunning();
     }
 
@@ -2930,10 +3003,7 @@ let RIL = {
       RIL.getSMSCAddress();
     }
 
-    // TODO: This zombie code branch that will be raised from the dead once
-    // we add explicit CDMA support everywhere (bug 726098).
-    let cdma = false;
-    if (cdma) {
+    if (this._isCdma) {
       let baseStationId = RIL.parseInt(state[4]);
       let baseStationLatitude = RIL.parseInt(state[5]);
       let baseStationLongitude = RIL.parseInt(state[6]);
@@ -4684,6 +4754,42 @@ RIL[REQUEST_SET_FACILITY_LOCK] = function REQUEST_SET_FACILITY_LOCK(length, opti
   this.sendDOMMessage(options);
 };
 RIL[REQUEST_CHANGE_BARRING_PASSWORD] = null;
+RIL[REQUEST_SIM_OPEN_CHANNEL] = function REQUEST_SIM_OPEN_CHANNEL(length, options) {
+  if (options.rilRequestError) {
+    options.error = RIL_ERROR_TO_GECKO_ERROR[options.rilRequestError];
+    this.sendDOMMessage(options);
+    return;
+  }
+
+  options.channel = Buf.readUint32();
+  if (DEBUG) debug("Setting channel number in options: " + options.channel);
+  this.sendDOMMessage(options);
+};
+RIL[REQUEST_SIM_CLOSE_CHANNEL] = function REQUEST_SIM_CLOSE_CHANNEL(length, options) {
+  if (options.rilRequestError) {
+    options.error = RIL_ERROR_TO_GECKO_ERROR[options.rilRequestError];
+    this.sendDOMMessage(options);
+    return;
+  }
+
+  // No return value
+  this.sendDOMMessage(options);
+};
+RIL[REQUEST_SIM_ACCESS_CHANNEL] = function REQUEST_SIM_ACCESS_CHANNEL(length, options) {
+  if (options.rilRequestError) {
+    options.error = RIL_ERROR_TO_GECKO_ERROR[options.rilRequestError];
+    this.sendDOMMessage(options);
+  }
+
+  options.sw1 = Buf.readUint32();
+  options.sw2 = Buf.readUint32();
+  options.simResponse = Buf.readString();
+  if (DEBUG) {
+    debug("Setting return values for RIL[REQUEST_SIM_ACCESS_CHANNEL]: ["
+          + options.sw1 + "," + options.sw2 + ", " + options.simResponse + "]");
+  }
+  this.sendDOMMessage(options);
+};
 RIL[REQUEST_QUERY_NETWORK_SELECTION_MODE] = function REQUEST_QUERY_NETWORK_SELECTION_MODE(length, options) {
   this._receivedNetworkInfo(NETWORK_INFO_NETWORK_SELECTION_MODE);
 
@@ -8442,6 +8548,19 @@ let ICCFileHelper = {
   },
 
   /**
+   * This function handles EFs for RUIM
+   */
+  getRuimEFPath: function getRuimEFPath(fileId) {
+    switch(fileId) {
+      case ICC_EF_CSIM_CDMAHOME:
+      case ICC_EF_CSIM_CST:
+        return EF_PATH_MF_SIM + EF_PATH_DF_CDMA;
+      default:
+        return null;
+    }
+  },
+
+  /**
    * Helper function for getting the pathId for the specific ICC record
    * depeding on which type of ICC card we are using.
    *
@@ -8450,13 +8569,7 @@ let ICCFileHelper = {
    * @return The pathId or null in case of an error or invalid input.
    */
   getEFPath: function getEFPath(fileId) {
-    // TODO: Bug 726098, change to use cdmaSubscriptionAppIndex when in CDMA.
-    let index = RIL.iccStatus.gsmUmtsSubscriptionAppIndex;
-    if (index == -1) {
-      return null;
-    }
-    let app = RIL.iccStatus.apps[index];
-    if (!app) {
+    if (RIL.appType == null) {
       return null;
     }
 
@@ -8465,15 +8578,17 @@ let ICCFileHelper = {
       return path;
     }
 
-    switch (app.app_type) {
+    switch (RIL.appType) {
       case CARD_APPTYPE_SIM:
         return this.getSimEFPath(fileId);
       case CARD_APPTYPE_USIM:
         return this.getUSimEFPath(fileId);
+      case CARD_APPTYPE_RUIM:
+        return this.getRuimEFPath(fileId);
       default:
         return null;
     }
-  },
+  }
 };
 
 /**
@@ -9793,9 +9908,10 @@ let ICCUtilsHelper = {
    * @return true if the service is enabled, false otherwise.
    */
   isICCServiceAvailable: function isICCServiceAvailable(geckoService) {
-    let serviceTable = RIL.iccInfoPrivate.sst;
+    let serviceTable = RIL._isCdma ? RIL.iccInfoPrivate.cst:
+                                     RIL.iccInfoPrivate.sst;
     let index, bitmask;
-    if (RIL.appType == CARD_APPTYPE_SIM) {
+    if (RIL.appType == CARD_APPTYPE_SIM || RIL.appType == CARD_APPTYPE_RUIM) {
       /**
        * Service id is valid in 1..N, and 2 bits are used to code each service.
        *
@@ -9810,14 +9926,19 @@ let ICCUtilsHelper = {
        *
        * @see 3GPP TS 51.011 10.3.7.
        */
-      let simService = GECKO_ICC_SERVICES.sim[geckoService];
+      let simService;
+      if (RIL.appType == CARD_APPTYPE_SIM) {
+        simService = GECKO_ICC_SERVICES.sim[geckoService];
+      } else {
+        simService = GECKO_ICC_SERVICES.ruim[geckoService];
+      }
       if (!simService) {
         return false;
       }
       simService -= 1;
       index = Math.floor(simService / 4);
       bitmask = 2 << ((simService % 4) << 1);
-    } else {
+    } else if (RIL.appType == CARD_APPTYPE_USIM) {
       /**
        * Service id is valid in 1..N, and 1 bit is used to code each service.
        *
@@ -10155,6 +10276,73 @@ let ICCContactHelper = {
       ICCRecordHelper.readIAP(fileId, contact.recordId, gotIapCb, onerror);
     }
   },
+};
+
+let RuimRecordHelper = {
+  fetchRuimRecords: function fetchRuimRecords() {
+    ICCRecordHelper.getICCID();
+    RIL.getIMSI();
+    this.readCST();
+    this.readCDMAHome();
+  },
+
+  /**
+   * Read CDMAHOME for CSIM.
+   * See 3GPP2 C.S0023 Sec. 3.4.8.
+   */
+  readCDMAHome: function readCDMAHome() {
+    function callback(options) {
+      let strLen = Buf.readUint32();
+      let tempOctet = GsmPDUHelper.readHexOctet();
+      cdmaHomeSystemId.push(((GsmPDUHelper.readHexOctet() & 0x7f) << 8) | tempOctet);
+      tempOctet = GsmPDUHelper.readHexOctet();
+      cdmaHomeNetworkId.push(((GsmPDUHelper.readHexOctet() & 0xff) << 8) | tempOctet);
+
+      // Consuming the last octet: band class.
+      Buf.seekIncoming(PDU_HEX_OCTET_SIZE);
+
+      Buf.readStringDelimiter(strLen);
+      if (options.p1 < options.totalRecords) {
+        ICCIOHelper.loadNextRecord(options);
+      } else {
+        if (DEBUG) {
+          debug("CDMAHome system id: " + JSON.stringify(cdmaHomeSystemId));
+          debug("CDMAHome network id: " + JSON.stringify(cdmaHomeNetworkId));
+        }
+        RIL.cdmaHome = {
+          systemId: cdmaHomeSystemId,
+          networkId: cdmaHomeNetworkId
+        };
+      }
+    }
+
+    let cdmaHomeSystemId = [], cdmaHomeNetworkId = [];
+    ICCIOHelper.loadLinearFixedEF({fileId: ICC_EF_CSIM_CDMAHOME,
+                                   callback: callback.bind(this)});
+  },
+
+  /**
+   * Read CDMA Service Table.
+   * See 3GPP2 C.S0023 Sec. 3.4.18
+   */
+  readCST: function readCST() {
+    function callback() {
+      let strLen = Buf.readUint32();
+      // Each octet is encoded into two chars.
+      RIL.iccInfoPrivate.cst = GsmPDUHelper.readHexOctetArray(strLen / 2);
+      Buf.readStringDelimiter(strLen);
+
+      if (DEBUG) {
+        let str = "";
+        for (let i = 0; i < RIL.iccInfoPrivate.cst.length; i++) {
+          str += RIL.iccInfoPrivate.cst[i] + ", ";
+        }
+        debug("CST: " + str);
+      }
+    }
+    ICCIOHelper.loadTransparentEF({fileId: ICC_EF_CSIM_CST,
+                                   callback: callback.bind(this)});
+  }
 };
 
 /**
