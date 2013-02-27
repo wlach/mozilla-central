@@ -4752,6 +4752,8 @@ GenerateFFIExit(ModuleCompiler &m, const ModuleCompiler::ExitDescriptor &exit, u
 
     masm.freeStack(reserveSize);
     masm.ret();
+#else
+    masm.breakpoint();
 #endif
 }
 
@@ -4780,6 +4782,8 @@ GenerateStackOverflowExit(ModuleCompiler &m, Label *throwLabel)
     masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, pf)));
 
     masm.jmp(throwLabel);
+#else
+    masm.breakpoint();
 #endif
 }
 
@@ -4835,6 +4839,8 @@ GenerateOperationCallbackExit(ModuleCompiler &m, Label *throwLabel)
     JS_ASSERT(masm.framePushed() == 0);
     masm.popFlags();              // after this, nothing that sets conditions
     masm.ret();                   // pop resumePC into PC
+#else
+    masm.breakpoint();
 #endif
 }
 
