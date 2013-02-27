@@ -799,7 +799,8 @@ class MTableSwitch
     int32_t low_;
     int32_t high_;
 
-    MTableSwitch(MDefinition *ins, int32_t low, int32_t high)
+    MTableSwitch(MDefinition *ins,
+                 int32_t low, int32_t high)
       : successors_(),
         blocks_(),
         low_(low),
