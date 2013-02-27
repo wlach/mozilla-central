@@ -48,18 +48,17 @@ assertAsmLinkAlwaysFail(code, null, null);
 assertAsmLinkAlwaysFail(code, this, null, null);
 assertAsmLinkAlwaysFail(code, this, null, null);
 assertAsmLinkAlwaysFail(code, this, null, new ArrayBuffer(1));
-assertAsmLinkAlwaysFail(code, this, null, new ArrayBuffer(2));
-assertAsmLinkAlwaysFail(code, this, null, new ArrayBuffer(3));
-assertEq(asmLink(code, this, null, new ArrayBuffer(0))(), undefined);
-assertEq(asmLink(code, this, null, new ArrayBuffer(4))(), undefined);
+assertAsmLinkFail(code, this, null, new ArrayBuffer(100));
+assertAsmLinkFail(code, this, null, new ArrayBuffer(4000));
+assertEq(asmLink(code, this, null, new ArrayBuffer(4096))(), undefined);
+assertEq(asmLink(code, this, null, new ArrayBuffer(2*4096))(), undefined);
 
 assertAsmTypeFail('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) {i=i|0; i = i32[i]|0; return i|0}; return f');
 assertAsmTypeFail('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) {i=i|0; i = i32[i>>1]|0; return i|0}; return f');
 assertAsmTypeFail('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) {i=i|0; i = i32[i>>1]|0; return i|0}; return f');
 var code = asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) {i=i|0; i = i32[i>>2]|0; return i|0}; return f');
-assertAsmLinkAlwaysFail(code, this, null, new ArrayBuffer(100));
-assertEq(code(this, null, new ArrayBuffer(48))(), 0);
-
+assertAsmLinkAlwaysFail(code, this, null, new ArrayBuffer(4095));
+assertEq(code(this, null, new ArrayBuffer(4096))(), 0);
 
 var exp = asmLink(asmCompile(USE_ASM + "return {}"));
 assertEq(Object.keys(exp).length, 0);

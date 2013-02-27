@@ -74,6 +74,9 @@ class AsmJSActivation
     void setResumePC(void *pc) { resumePC_ = pc; }
 };
 
+// The asm.js spec requires that the ArrayBuffer's byteLength be a multiple of 4096.
+static const size_t AsmJSAllocationGranularity = 4096;
+
 // On x64, the internal ArrayBuffer data array is inflated to 4GiB (only the
 // byteLength portion of which is accessible) so that out-of-bounds accesses
 // (made using a uint32 index) are guaranteed to raise a SIGSEGV.

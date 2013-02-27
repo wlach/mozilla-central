@@ -177,10 +177,6 @@ ValidateArrayView(JSContext *cx, AsmJSModule::Global global, HandleValue globalV
     if (!IsTypedArrayConstructor(v, global.viewType()))
         return LinkFail(cx, "bad typed array constructor");
 
-    size_t byteLength = bufferVal.toObject().asArrayBuffer().byteLength();
-    if (byteLength % (1 << TypedArrayShift(global.viewType())) != 0)
-        return LinkFail(cx, "ArrayBuffer length must be a multiple of view element size");
-
     return true;
 }
 
@@ -266,6 +262,9 @@ DynamicallyLinkModule(JSContext *cx, StackFrame *fp, HandleObject moduleObj,
             return LinkFail(cx, "bad ArrayBuffer argument");
 
         heap = &bufferVal.toObject().asArrayBuffer();
+
+        if (!IsPowerOfTwo(heap->byteLength()) || heap->byteLength() < AsmJSAllocationGranularity)
+            return LinkFail(cx, "ArrayBuffer byteLength must be a power of two greater than 4096");
 
         if (!ArrayBufferObject::prepareForAsmJS(cx, heap))
             return LinkFail(cx, "Unable to prepare ArrayBuffer for asm.js use");

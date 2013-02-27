@@ -39,13 +39,6 @@
 
 #include "vm/GlobalObject-inl.h"
 
-/* Includes to get to low-level memory-mapping functionality. */
-#ifdef XP_WIN
-# include "jswin.h"
-#else
-# include <sys/mman.h>
-#endif
-
 using namespace js;
 using namespace js::gc;
 using namespace js::types;
@@ -322,7 +315,12 @@ ArrayBufferObject::uninlineData(JSContext *maybecx)
 }
 
 #ifdef JS_CPU_X64
-//
+# ifdef XP_WIN
+#  include "jswin.h"
+# else
+#  include <sys/mman.h>
+# endif
+
 // To avoid dynamically checking bounds on each load/store, asm.js code relies
 // on the SIGSEGV handler in AsmJSSignalHandlers.cpp. However, this only works
 // if we can guarantee that *any* out-of-bounds access generates a fault. This
@@ -331,26 +329,21 @@ ArrayBufferObject::uninlineData(JSContext *maybecx)
 // making only the range [0, byteLength) accessible, and use a 32-bit unsigned
 // index into this space. (x86 and ARM require different tricks.)
 //
-// Since protection can only occur on page boundaries and since byteLength is
-// not forced to be a multiple of the page size, we must offset the base of the
-// data so that the end of the data lines up with a page boundary. Another
-// complication is that we need to put an ObjectElements struct immediately
+// One complication is that we need to put an ObjectElements struct immediately
 // before the data array (as required by the general JSObject data structure).
-// Instead of trying to pack ObjectElements in to the padding, we simply
-// reserve two extra pages: one before the data array to potentially hold the
-// ObjectElements if there isn't enough padding, one after the data array so
-// that base (with padding) + 4GB is in the reserved range. This looks like:
+// Thus, we must stick a page before the elements to hold ObjectElements.
 //
-//   |<------------------------------ 4GB + 2 pages --------------------------->|
-//          |<--- sizeof --->|<------------------- 4GB ----------------->|
+//   |<------------------------------ 4GB + 1 pages --------------------->|
+//           |<--- sizeof --->|<------------------- 4GB ----------------->|
 //
-//   | slop | ObjectElements | data array | inaccessible reserved memory | slop |
-//                           ^            ^                              ^
-//                           |            \                             /
-//                     obj->elements       required to be page boundaries
+//   | waste | ObjectElements | data array | inaccessible reserved memory |
+//                            ^            ^                              ^
+//                            |            \                             /
+//                      obj->elements       required to be page boundaries
 //
 JS_STATIC_ASSERT(sizeof(ObjectElements) < PageSize);
-static const size_t AsmJSBufferReservedLength = AsmJSBufferProtectedSize + 2 * PageSize;
+JS_STATIC_ASSERT(AsmJSAllocationGranularity == PageSize);
+static const size_t AsmJSMappedSize = PageSize + AsmJSBufferProtectedSize;
 
 bool
 ArrayBufferObject::prepareForAsmJS(JSContext *cx, Handle<ArrayBufferObject*> buffer)
@@ -361,35 +354,27 @@ ArrayBufferObject::prepareForAsmJS(JSContext *cx, Handle<ArrayBufferObject*> buf
     // Get the entire reserved region (with all pages inaccessible).
     void *p;
 #ifdef XP_WIN
-    p = VirtualAlloc(NULL, AsmJSBufferReservedLength, MEM_RESERVE, PAGE_NOACCESS);
+    p = VirtualAlloc(NULL, AsmJSMappedSize, MEM_RESERVE, PAGE_NOACCESS);
     if (!p)
         return false;
 #else
-    p = mmap(NULL, AsmJSBufferReservedLength, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
+    p = mmap(NULL, AsmJSMappedSize, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
     if (p == MAP_FAILED)
         return false;
 #endif
 
-    // Compute the valid region of the reserved memory, aligning the base address
-    // of the elements with 'padding' bytes to ensure that the end of the
-    // elements array lines up exactly with a page boundary.
-    JS_ASSERT(uintptr_t(p) % PageSize == 0);
-    uint8_t *begin = reinterpret_cast<uint8_t*>(p);
-    uint32_t padding = ComputeByteAlignment(buffer->byteLength(), PageSize);
-    size_t validLength = PageSize + padding + buffer->byteLength();
-    JS_ASSERT(validLength % PageSize == 0);
-
     // Enable access to the valid region.
+    JS_ASSERT(buffer->byteLength() % AsmJSAllocationGranularity == 0);
 #ifdef XP_WIN
-    if (!VirtualAlloc(begin, validLength, MEM_COMMIT, PAGE_READWRITE))
+    if (!VirtualAlloc(p, PageSize + buffer->byteLength(), MEM_COMMIT, PAGE_READWRITE))
         return false;
 #else
-    if (mprotect(begin, validLength, PROT_READ | PROT_WRITE))
+    if (mprotect(p, PageSize + buffer->byteLength(), PROT_READ | PROT_WRITE))
         return false;
 #endif
 
     // Copy over the current contents of the typed array.
-    uint8_t *data = begin + PageSize + padding;
+    uint8_t *data = reinterpret_cast<uint8_t*>(p) + PageSize;
     memcpy(data, buffer->dataPointer(), buffer->byteLength());
 
     // Swap the new elements into the ArrayBufferObject.
@@ -409,21 +394,11 @@ void
 ArrayBufferObject::neuterAsmJSArrayBuffer(ArrayBufferObject &buffer)
 {
     JS_ASSERT(buffer.isAsmJSArrayBuffer());
-
-    // TODO: need to actually allow this to be tested from the shell. roughly,
-    // we want to mprotect [buffer.dataPointer(), buffer.byteLength()).
-    // However, this region is not page length.  Instead, shift the
-    // ObjectElements header down so that it lies right before the page boundary
-    // and then mprotect the (now-aligned) region:
-    //   [newDataPointer, oldDataPointer+byteLength)
-    MOZ_CRASH();
-
+    JS_ASSERT(buffer.byteLength() % AsmJSAllocationGranularity == 0);
 #ifdef XP_WIN
-    // Wrong:
     if (!VirtualAlloc(buffer.dataPointer(), buffer.byteLength(), MEM_RESERVE, PAGE_NOACCESS))
         MOZ_CRASH();
 #else
-    // Wrong:
     if (mprotect(buffer.dataPointer(), buffer.byteLength(), PROT_NONE))
         MOZ_CRASH();
 #endif
@@ -435,19 +410,17 @@ ArrayBufferObject::releaseAsmJSArrayBuffer(RawObject obj)
     ArrayBufferObject &buffer = obj->asArrayBuffer();
     JS_ASSERT(buffer.isAsmJSArrayBuffer());
 
-    // See prepareForAsmJS.
-    uint8_t *data = buffer.dataPointer();
-    uint32_t padding = ComputeByteAlignment(buffer.byteLength(), PageSize);
-    uint8_t *begin = data - padding - PageSize;
-    JS_ASSERT(uintptr_t(begin) % PageSize == 0);
-
+    uint8_t *p = buffer.dataPointer() - PageSize ;
+    JS_ASSERT(uintptr_t(p) % PageSize == 0);
 #ifdef XP_WIN
-    VirtualAlloc(begin, AsmJSBufferReservedLength, MEM_RESERVE, PAGE_NOACCESS);
+    VirtualAlloc(p, AsmJSMappedSize, MEM_RESERVE, PAGE_NOACCESS);
 #else
-    munmap(begin, AsmJSBufferReservedLength);
+    munmap(p, AsmJSMappedSize);
 #endif
 }
+
 #else // defined(JS_CPU_X64)
+
 bool
 ArrayBufferObject::prepareForAsmJS(JSContext *cx, Handle<ArrayBufferObject*> buffer)
 {

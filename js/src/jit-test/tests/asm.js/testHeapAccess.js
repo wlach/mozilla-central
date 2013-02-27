@@ -6,94 +6,83 @@ assertAsmTypeFail('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f() { v
 assertAsmTypeFail('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f() { return i32[0>>0]|0 }; return f');
 assertAsmTypeFail('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f() { return i32[0>>1]|0 }; return f');
 assertAsmTypeFail('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f() { return i32[0>>4]|0 }; return f');
-assertEq(asmLink(asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f() { return i32[0]|0 }; return f'), this, null, new ArrayBuffer(8))(), 0);
+assertEq(asmLink(asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f() { return i32[0]|0 }; return f'), this, null, new ArrayBuffer(4096))(), 0);
 
 var code = asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) {i=i|0; i = i32[i>>2]|0; return i|0}; return f');
-assertAsmLinkAlwaysFail(code, this, null, new ArrayBuffer(0xff));
-var f = asmLink(code, this, null, new ArrayBuffer(0xff+1));
+var f = asmLink(code, this, null, new ArrayBuffer(4096));
 assertEq(f(0), 0);
 
 var code = asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) {i=i|0; i32[0] = i; return i8[0]|0}; return f');
-assertAsmLinkAlwaysFail(code, this, null, new ArrayBuffer(4));
-var f = asmLink(code, this, null, new ArrayBuffer(8));
+var f = asmLink(code, this, null, new ArrayBuffer(4096));
 assertEq(f(0),0);
 assertEq(f(0x7f),0x7f);
 assertEq(f(0xff),-1);
 assertEq(f(0x100),0);
 
 var code = asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) {i=i|0; i32[0] = i; return u8[0]|0}; return f');
-assertAsmLinkAlwaysFail(code, this, null, new ArrayBuffer(4));
-var f = asmLink(code, this, null, new ArrayBuffer(8));
+var f = asmLink(code, this, null, new ArrayBuffer(4096));
 assertEq(f(0),0);
 assertEq(f(0x7f),0x7f);
 assertEq(f(0xff),0xff);
 assertEq(f(0x100),0);
 
 var code = asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) {i=i|0; i32[0] = i; return i16[0]|0}; return f');
-assertAsmLinkAlwaysFail(code, this, null, new ArrayBuffer(4));
-var f = asmLink(code, this, null, new ArrayBuffer(8));
+var f = asmLink(code, this, null, new ArrayBuffer(4096));
 assertEq(f(0),0);
 assertEq(f(0x7fff),0x7fff);
 assertEq(f(0xffff),-1);
 assertEq(f(0x10000),0);
 
 var code = asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) {i=i|0; i32[0] = i; return u16[0]|0}; return f');
-assertAsmLinkAlwaysFail(code, this, null, new ArrayBuffer(4));
-var f = asmLink(code, this, null, new ArrayBuffer(8));
+var f = asmLink(code, this, null, new ArrayBuffer(4096));
 assertEq(f(0),0);
 assertEq(f(0x7fff),0x7fff);
 assertEq(f(0xffff),0xffff);
 assertEq(f(0x10000),0);
 
 var code = asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) {i=i|0; i32[0] = i; return i32[0]|0}; return f');
-assertAsmLinkAlwaysFail(code, this, null, new ArrayBuffer(4));
-var f = asmLink(code, this, null, new ArrayBuffer(8));
+var f = asmLink(code, this, null, new ArrayBuffer(4096));
 assertEq(f(0),0);
 assertEq(f(0x7fffffff),0x7fffffff);
 assertEq(f(0xffffffff),-1);
 assertEq(f(0x100000000),0);
 
 var code = asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) {i=i|0; i32[0] = i; return u32[0]|0}; return f');
-assertAsmLinkAlwaysFail(code, this, null, new ArrayBuffer(4));
-var f = asmLink(code, this, null, new ArrayBuffer(8));
+var f = asmLink(code, this, null, new ArrayBuffer(4096));
 assertEq(f(0),0);
 assertEq(f(0x7fffffff),0x7fffffff);
 assertEq(f(0xffffffff),-1);
 assertEq(f(0x100000000),0);
 
 var code = asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) {i=i|0; i32[0] = i; return i8[0]|0}; return f');
-assertAsmLinkAlwaysFail(code, this, null, new ArrayBuffer(4));
-var f = asmLink(code, this, null, new ArrayBuffer(8));
+var f = asmLink(code, this, null, new ArrayBuffer(4096));
 assertEq(f(0),0);
 assertEq(f(0x7f),0x7f);
 assertEq(f(0xff),-1);
 assertEq(f(0x100),0);
 
 var code = asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) {i=i|0; i32[0] = i; return u8[0]|0}; return f');
-assertAsmLinkAlwaysFail(code, this, null, new ArrayBuffer(4));
-var f = asmLink(code, this, null, new ArrayBuffer(8));
+var f = asmLink(code, this, null, new ArrayBuffer(4096));
 assertEq(f(0),0);
 assertEq(f(0x7f),0x7f);
 assertEq(f(0xff),0xff);
 assertEq(f(0x100),0);
 
 var code = asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) {i=i|0; i8[0] = i; return i8[0]|0}; return f');
-assertAsmLinkAlwaysFail(code, this, null, new ArrayBuffer(4));
-var f = asmLink(code, this, null, new ArrayBuffer(8));
+var f = asmLink(code, this, null, new ArrayBuffer(4096));
 assertEq(f(0),0);
 assertEq(f(0x7f),0x7f);
 assertEq(f(0xff),-1);
 assertEq(f(0x100),0);
 
 var code = asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) {i=i|0; i8[0] = i; return u8[0]|0}; return f');
-assertAsmLinkAlwaysFail(code, this, null, new ArrayBuffer(4));
-var f = asmLink(code, this, null, new ArrayBuffer(8));
+var f = asmLink(code, this, null, new ArrayBuffer(4096));
 assertEq(f(0),0);
 assertEq(f(0x7f),0x7f);
 assertEq(f(0xff),0xff);
 assertEq(f(0x100),0);
 
-var i32 = new Int32Array(2);
+var i32 = new Int32Array(4096/4);
 i32[0] = 13;
 i32[1] = 0xfffeeee;
 var f = asmLink(asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) {i=i|0; return i32[((i<<2)+1)>>2]|0 }; return f'), this, null, i32.buffer);
@@ -143,8 +132,7 @@ asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) { i=i|0; 
 asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) { i=i|0; u32[i>>2]; u32[63] } return f');
 
 var code = asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) { i=i|0; u32[64] } return f');
-assertAsmLinkAlwaysFail(code, this, null, new ArrayBuffer(257));
-asmLink(code, this, null, new ArrayBuffer(264));
+asmLink(code, this, null, new ArrayBuffer(4096));
 
 asmLink(asmCompile('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) { i=i|0; u32[12] = i } return f'), this, null, BUF_64KB)(11);
 assertEq(new Int32Array(BUF_64KB)[12], 11);
