@@ -18,7 +18,7 @@ ABIArgGenerator::ABIArgGenerator()
   : 
 #if defined(XP_WIN)
     regIndex_(0),
-    stackOffset_(ShadowSpaceSize),
+    stackOffset_(ShadowStackSpace),
 #else
     intRegIndex_(0),
     floatRegIndex_(0),
