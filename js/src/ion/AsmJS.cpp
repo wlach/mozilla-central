@@ -4212,7 +4212,10 @@ CheckReturn(FunctionCompiler &f, ParseNode *returnStmt)
     if (!(type <= f.func().returnType()))
         return f.fail("All returns must return the same type", expr);
 
-    f.returnExpr(def);
+    if (f.func().returnType().which() == RetType::Void)
+        f.returnVoid();
+    else
+        f.returnExpr(def);
     return true;
 }
 
