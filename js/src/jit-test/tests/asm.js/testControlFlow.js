@@ -155,6 +155,7 @@ assertEq(f(2), 13);
 assertEq(f(3), 12);
 
 assertEq(asmLink(asmCompile(USE_ASM + "function f() { var i=8,sum=0; a:for(; (i|0)<20; i=(i+1)|0) { switch(i&3) { case 0:case 1:sum=(sum+i)|0;break;case 2:sum=(sum+100)|0;continue;default:break a} sum=(sum+10)|0; } sum=(sum+1000)|0; return sum|0 } return f"))(), 1137);
+assertEq(asmLink(asmCompile('g', USE_ASM + "function f() { g:{ return 42 } return 13 } return f"), null)(), 42);
 
 var imp = { ffi:function() { throw "Wrong" } };
 assertEq(asmLink(asmCompile('glob','imp', USE_ASM + "var ffi=imp.ffi; function f() { var i=0; return (i+1)|0; return ffi(i|0)|0 } return f"), null, imp)(), 1);

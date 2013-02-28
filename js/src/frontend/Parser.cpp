@@ -1287,6 +1287,14 @@ Parser<FullParseHandler>::leaveFunction(ParseNode *fn, HandlePropertyName funNam
                 continue;
             }
 
+            /*
+             * If there are no uses of this placeholder (e.g., it was created
+             * for an identifierName that turned out to be a label), there is
+             * nothing left to do.
+             */
+            if (!dn->dn_uses)
+                continue;
+
             Definition *outer_dn = pc->decls().lookupFirst(atom);
 
             /*
