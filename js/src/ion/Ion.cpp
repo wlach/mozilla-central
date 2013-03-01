@@ -952,12 +952,12 @@ OptimizeMIR(MIRGenerator *mir)
     if (js_IonOptions.eaa) {
         EffectiveAddressAnalysis eaa(graph);
         if (!eaa.analyze())
-            return NULL;
+            return false;
         IonSpewPass("Effective Address Analysis");
         AssertExtendedGraphCoherency(graph);
 
         if (mir->shouldCancel("Effective Address Analysis"))
-            return NULL;
+            return false;
     }
 
     if (!EliminateDeadCode(mir, graph))

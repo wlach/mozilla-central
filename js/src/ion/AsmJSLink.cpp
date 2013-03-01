@@ -274,7 +274,7 @@ DynamicallyLinkModule(JSContext *cx, StackFrame *fp, HandleObject moduleObj,
     if (module.byteLength() > 0) {
         globalDataGuard = cx->pod_calloc<uint8_t>(module.byteLength());
         if (!globalDataGuard)
-            return NULL;
+            return false;
     }
     uint8_t *globalData = globalDataGuard.get();
 

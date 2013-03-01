@@ -408,7 +408,7 @@ frontend::CompileFunctionBody(JSContext *cx, HandleFunction fun, CompileOptions 
      * before emitting since we need to know whether to emit JSOP_LINKASMJS.
      */
     if (fn->pn_funbox->useAsm && !CompileAsmJS(cx, parser.tokenStream, fn, script))
-        return NULL;
+        return false;
 
     if (!SetSourceMap(cx, parser.tokenStream, ss, script))
         return false;
