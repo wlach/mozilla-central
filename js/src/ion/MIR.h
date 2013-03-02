@@ -6872,7 +6872,7 @@ class MAsmLoad : public MUnaryInstruction
     static const ArrayBufferView::ViewType FUNC_PTR = ArrayBufferView::TYPE_MAX;
 
   private:
-    MAsmLoad(ArrayBufferView::ViewType vt, Base b, MDefinition *index, Scale scale, uint32_t disp31);
+    MAsmLoad(ArrayBufferView::ViewType vt, Base b, MDefinition *ptr, Scale scale, uint32_t disp31);
 
     ArrayBufferView::ViewType viewType_;
     Base base_;
@@ -6882,24 +6882,17 @@ class MAsmLoad : public MUnaryInstruction
   public:
     INSTRUCTION_HEADER(AsmLoad);
 
-    static MAsmLoad *New(ArrayBufferView::ViewType vt, Base b, MDefinition *index,
+    static MAsmLoad *New(ArrayBufferView::ViewType vt, Base b, MDefinition *ptr,
                          Scale scale = TimesOne, uint32_t disp31 = 0)
     {
-        return new MAsmLoad(vt, b, index, scale, disp31);
+        return new MAsmLoad(vt, b, ptr, scale, disp31);
     }
-
-    void setScale(Scale s) { JS_ASSERT(scale_ == TimesOne); scale_ = s; }
 
     ArrayBufferView::ViewType viewType() const { return viewType_; }
     Base base() const { return base_; }
-    MDefinition *index() const { return getOperand(0); }
+    MDefinition *ptr() const { return getOperand(0); }
     Scale scale() const { return scale_; }
-
-    // x64's protection mechanism relies on all loads being positive offsets
-    // from 'base' which means no negative displacements (the 32-bit
-    // displacement immediate is sign-extended to 64 bits internally).
-    bool tryAddDisplacement(uint32_t d);
-    uint32_t disp31() const { JS_ASSERT(int32_t(disp31_) >= 0); return disp31_; }
+    uint32_t disp31() const { JS_ASSERT(disp31_ < INT32_MAX); return disp31_; }
 };
 
 class MAsmStore : public MBinaryInstruction
@@ -6908,31 +6901,21 @@ class MAsmStore : public MBinaryInstruction
     enum Base { Heap, Global };
 
   private:
-    MAsmStore(ArrayBufferView::ViewType vt, Base b, MDefinition *index, MDefinition *v);
+    MAsmStore(ArrayBufferView::ViewType vt, Base b, MDefinition *ptr, MDefinition *v);
 
     ArrayBufferView::ViewType viewType_;
     Base base_;
-    Scale scale_;
-    uint32_t disp31_;
 
   public:
     INSTRUCTION_HEADER(AsmStore);
 
-    static MAsmStore *New(ArrayBufferView::ViewType vt, Base b, MDefinition *index, MDefinition *v) {
-        return new MAsmStore(vt, b, index, v);
+    static MAsmStore *New(ArrayBufferView::ViewType vt, Base b, MDefinition *ptr, MDefinition *v) {
+        return new MAsmStore(vt, b, ptr, v);
     }
-
 
     ArrayBufferView::ViewType viewType() const { return viewType_; }
     Base base() const { return base_; }
-    MDefinition *index() const { return getOperand(0); }
-
-    void setScale(Scale s) { JS_ASSERT(scale_ == TimesOne); scale_ = s; }
-    Scale scale() const { return scale_; }
-
-    // See MAsmLoad comment.
-    bool tryAddDisplacement(uint32_t d);
-    uint32_t disp31() const { JS_ASSERT(int32_t(disp31_) >= 0); return disp31_; }
+    MDefinition *ptr() const { return getOperand(0); }
 
     MDefinition *value() const { return getOperand(1); }
 };
