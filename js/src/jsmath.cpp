@@ -107,6 +107,16 @@ js_math_abs(JSContext *cx, unsigned argc, Value *vp)
     return JS_TRUE;
 }
 
+double
+js::math_acos_impl(MathCache *cache, double x)
+{
+#if defined(SOLARIS) && defined(__GNUC__)
+    if (x < -1 || 1 < x)
+        return js_NaN;
+#endif
+    return cache->lookup(acos, x);
+}
+
 JSBool
 js::math_acos(JSContext *cx, unsigned argc, Value *vp)
 {
@@ -118,18 +128,22 @@ js::math_acos(JSContext *cx, unsigned argc, Value *vp)
     }
     if (!ToNumber(cx, vp[2], &x))
         return JS_FALSE;
-#if defined(SOLARIS) && defined(__GNUC__)
-    if (x < -1 || 1 < x) {
-        vp->setDouble(js_NaN);
-        return JS_TRUE;
-    }
-#endif
     MathCache *mathCache = cx->runtime->getMathCache(cx);
     if (!mathCache)
         return JS_FALSE;
-    z = mathCache->lookup(acos, x);
+    z = math_acos_impl(mathCache, x);
     vp->setDouble(z);
     return JS_TRUE;
+}
+
+double
+js::math_asin_impl(MathCache *cache, double x)
+{
+#if defined(SOLARIS) && defined(__GNUC__)
+    if (x < -1 || 1 < x)
+        return js_NaN;
+#endif
+    return cache->lookup(asin, x);
 }
 
 JSBool
@@ -143,18 +157,18 @@ js::math_asin(JSContext *cx, unsigned argc, Value *vp)
     }
     if (!ToNumber(cx, vp[2], &x))
         return JS_FALSE;
-#if defined(SOLARIS) && defined(__GNUC__)
-    if (x < -1 || 1 < x) {
-        vp->setDouble(js_NaN);
-        return JS_TRUE;
-    }
-#endif
     MathCache *mathCache = cx->runtime->getMathCache(cx);
     if (!mathCache)
         return JS_FALSE;
-    z = mathCache->lookup(asin, x);
+    z = math_asin_impl(mathCache, x);
     vp->setDouble(z);
     return JS_TRUE;
+}
+
+double
+js::math_atan_impl(MathCache *cache, double x)
+{
+    return cache->lookup(atan, x);
 }
 
 JSBool
@@ -171,7 +185,7 @@ js::math_atan(JSContext *cx, unsigned argc, Value *vp)
     MathCache *mathCache = cx->runtime->getMathCache(cx);
     if (!mathCache)
         return JS_FALSE;
-    z = mathCache->lookup(atan, x);
+    z = math_atan_impl(mathCache, x);
     vp->setDouble(z);
     return JS_TRUE;
 }
@@ -273,18 +287,18 @@ js::math_cos(JSContext *cx, unsigned argc, Value *vp)
     return JS_TRUE;
 }
 
-static double
-math_exp_body(double d)
+double
+js::math_exp_impl(MathCache *cache, double x)
 {
 #ifdef _WIN32
-    if (!MOZ_DOUBLE_IS_NaN(d)) {
-        if (d == js_PositiveInfinity)
+    if (!MOZ_DOUBLE_IS_NaN(x)) {
+        if (x == js_PositiveInfinity)
             return js_PositiveInfinity;
-        if (d == js_NegativeInfinity)
+        if (x == js_NegativeInfinity)
             return 0.0;
     }
 #endif
-    return exp(d);
+    return cache->lookup(exp, x);
 }
 
 JSBool
@@ -301,7 +315,7 @@ js::math_exp(JSContext *cx, unsigned argc, Value *vp)
     MathCache *mathCache = cx->runtime->getMathCache(cx);
     if (!mathCache)
         return JS_FALSE;
-    z = mathCache->lookup(math_exp_body, x);
+    z = math_exp_impl(mathCache, x);
     vp->setNumber(z);
     return JS_TRUE;
 }

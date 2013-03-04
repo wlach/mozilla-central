@@ -234,19 +234,21 @@ JSObject::finalize(js::FreeOp *fop)
 {
     js::Probes::finalizeObject(this);
 
+#ifdef DEBUG
     if (!IsBackgroundFinalized(getAllocKind())) {
         /* Assert we're on the main thread. */
         fop->runtime()->assertValidThread();
-
-        /*
-         * Finalize obj first, in case it needs map and slots. Objects with
-         * finalize hooks are not finalized in the background, as the class is
-         * stored in the object's shape, which may have already been destroyed.
-         */
-        js::Class *clasp = getClass();
-        if (clasp->finalize)
-            clasp->finalize(fop, this);
     }
+#endif
+
+    /*
+     * Finalize obj first, in case it needs map and slots. Objects with
+     * finalize hooks are not finalized in the background, as the class is
+     * stored in the object's shape, which may have already been destroyed.
+     */
+    js::Class *clasp = getClass();
+    if (clasp->finalize)
+        clasp->finalize(fop, this);
 
     finish(fop);
 }
@@ -758,7 +760,7 @@ JSObject::setSingletonType(JSContext *cx, js::HandleObject obj)
     return true;
 }
 
-inline js::types::TypeObject *
+inline js::types::TypeObject*
 JSObject::getType(JSContext *cx)
 {
     JS_ASSERT(cx->compartment == compartment());
@@ -766,7 +768,7 @@ JSObject::getType(JSContext *cx)
         js::RootedObject self(cx, this);
         return makeLazyType(cx, self);
     }
-    return type_;
+    return static_cast<js::types::TypeObject*>(type_);
 }
 
 /* static */ inline bool

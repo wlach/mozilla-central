@@ -396,7 +396,7 @@ pref("dom.ipc.content.nice", 1);
 
 // product URLs
 // The breakpad report server to link to in about:crashes
-pref("breakpad.reportURL", "http://crash-stats.mozilla.com/report/index/");
+pref("breakpad.reportURL", "https://crash-stats.mozilla.com/report/index/");
 pref("app.releaseNotesURL", "http://www.mozilla.com/%LOCALE%/mobile/%VERSION%/releasenotes/");
 pref("app.sync.tutorialURL", "https://support.mozilla.org/kb/sync-firefox-between-desktop-and-mobile");
 pref("app.support.baseURL", "http://support.mozilla.org/1/firefox/%VERSION%/%OS%/%LOCALE%/");
@@ -580,3 +580,18 @@ pref("media.realtime_decoder.enabled", true);
 
 // Mobile manages state by autodetection
 pref("network.manage-offline-status", true);
+
+// Enable HTML fullscreen API in content.
+pref("full-screen-api.enabled", true);
+// But don't require approval when content enters fullscreen; we'll keep our
+// UI/chrome visible still, so there's no need to approve entering fullscreen.
+pref("full-screen-api.approval-required", false);
+// Don't allow fullscreen requests to percolate across content/chrome boundary,
+// so that our chrome/UI remains visible after content enters fullscreen.
+pref("full-screen-api.content-only", true);
+// Don't make top-level widgets fullscreen. This only applies when running in
+// "metrodesktop" mode, not when running in full metro mode. This prevents the
+// window from changing size when we go fullscreen; the content expands to fill
+// the window, the window size doesn't change. This pref has no effect when
+// running in actual Metro mode, as the widget will already be fullscreen then.
+pref("full-screen-api.ignore-widgets", true);

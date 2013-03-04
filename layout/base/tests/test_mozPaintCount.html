@@ -16,8 +16,8 @@
 <pre id="test">
 <script class="testbody" type="text/javascript">
 
-if (navigator.platform.indexOf("Linux") == 0) {
-  SimpleTest.expectAssertions(0, 2);
+if (!navigator.platform.startsWith("Win")) {
+  SimpleTest.expectAssertions(0, 2); // bug 846096
 }
 
 SimpleTest.waitForExplicitFinish();

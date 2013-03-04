@@ -395,6 +395,7 @@ class GeckoInputConnection
         // Do not reset mIMEState here; see comments in notifyIMEEnabled
     }
 
+    @Override
     public void onTextChange(String text, int start, int oldEnd, int newEnd) {
 
         if (mUpdateRequest == null) {
@@ -432,6 +433,7 @@ class GeckoInputConnection
                                 mUpdateExtract);
     }
 
+    @Override
     public void onSelectionChange(int start, int end) {
 
         if (mBatchEditCount > 0) {
@@ -523,6 +525,7 @@ class GeckoInputConnection
         return mEditableClient.getInputConnectionHandler();
     }
 
+    @Override
     public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
         if (mIMEState == IME_STATE_DISABLED) {
             return null;
@@ -653,18 +656,12 @@ class GeckoInputConnection
         return false; // seems to always return false
     }
 
+    @Override
     public boolean onKeyPreIme(int keyCode, KeyEvent event) {
         return false;
     }
 
-    public boolean onKeyDown(int keyCode, KeyEvent event) {
-        return processKeyDown(keyCode, event);
-    }
-
-    private boolean processKeyDown(int keyCode, KeyEvent event) {
-        if (keyCode > KeyEvent.getMaxKeyCode())
-            return false;
-
+    private boolean shouldProcessKey(int keyCode, KeyEvent event) {
         switch (keyCode) {
             case KeyEvent.KEYCODE_MENU:
             case KeyEvent.KEYCODE_BACK:
@@ -672,91 +669,103 @@ class GeckoInputConnection
             case KeyEvent.KEYCODE_VOLUME_DOWN:
             case KeyEvent.KEYCODE_SEARCH:
                 return false;
+        }
+        return true;
+    }
+
+    private boolean shouldSkipKeyListener(int keyCode, KeyEvent event) {
+        if (mIMEState == IME_STATE_DISABLED ||
+            mIMEState == IME_STATE_PLUGIN) {
+            return true;
+        }
+        // Preserve enter and tab keys for the browser
+        if (keyCode == KeyEvent.KEYCODE_ENTER ||
+            keyCode == KeyEvent.KEYCODE_TAB) {
+            return true;
+        }
+        // BaseKeyListener returns false even if it handled these keys for us,
+        // so we skip the key listener entirely and handle these ourselves
+        if (keyCode == KeyEvent.KEYCODE_DEL ||
+            keyCode == KeyEvent.KEYCODE_FORWARD_DEL) {
+            return true;
+        }
+        return false;
+    }
+
+    private KeyEvent translateKey(int keyCode, KeyEvent event) {
+        switch (keyCode) {
             case KeyEvent.KEYCODE_ENTER:
                 if ((event.getFlags() & KeyEvent.FLAG_EDITOR_ACTION) != 0 &&
-                    mIMEActionHint.equalsIgnoreCase("next"))
-                    event = new KeyEvent(event.getAction(), KeyEvent.KEYCODE_TAB);
+                    mIMEActionHint.equalsIgnoreCase("next")) {
+                    return new KeyEvent(event.getAction(), KeyEvent.KEYCODE_TAB);
+                }
                 break;
-            default:
-                break;
         }
-
-        View view = getView();
-        KeyListener keyListener = TextKeyListener.getInstance();
-
-        // KeyListener returns true if it handled the event for us. KeyListener is only
-        // safe to use on the UI thread; therefore we need to pass a proxy Editable to it
-        if (mIMEState == IME_STATE_DISABLED ||
-            mIMEState == IME_STATE_PLUGIN ||
-            keyCode == KeyEvent.KEYCODE_ENTER ||
-            keyCode == KeyEvent.KEYCODE_DEL ||
-            keyCode == KeyEvent.KEYCODE_TAB ||
-            (event.getFlags() & KeyEvent.FLAG_SOFT_KEYBOARD) != 0 ||
-            view == null) {
-            mEditableClient.sendEvent(GeckoEvent.createKeyEvent(event));
-            return true;
-        }
-
-        Handler uiHandler = view.getRootView().getHandler();
-        Handler icHandler = mEditableClient.getInputConnectionHandler();
-        Editable uiEditable = mThreadUtils.getEditableForUiThread(uiHandler, icHandler);
-        if (!keyListener.onKeyDown(view, uiEditable, keyCode, event)) {
-            mEditableClient.sendEvent(GeckoEvent.createKeyEvent(event));
-        }
-        return true;
+        return event;
     }
 
-    public boolean onKeyUp(int keyCode, KeyEvent event) {
-        return processKeyUp(keyCode, event);
-    }
-
-    private boolean processKeyUp(int keyCode, KeyEvent event) {
-        if (keyCode > KeyEvent.getMaxKeyCode())
+    private boolean processKey(int keyCode, KeyEvent event, boolean down) {
+        if (keyCode > KeyEvent.getMaxKeyCode() ||
+            !shouldProcessKey(keyCode, event)) {
             return false;
-
-        switch (keyCode) {
-            case KeyEvent.KEYCODE_BACK:
-            case KeyEvent.KEYCODE_SEARCH:
-            case KeyEvent.KEYCODE_MENU:
-                return false;
-            default:
-                break;
         }
+        event = translateKey(keyCode, event);
+        keyCode = event.getKeyCode();
 
         View view = getView();
-        KeyListener keyListener = TextKeyListener.getInstance();
-
-        // KeyListener returns true if it handled the event for us. KeyListener is only
-        // safe to use on the UI thread; therefore we need to pass a proxy Editable to it
-        if (mIMEState == IME_STATE_DISABLED ||
-            mIMEState == IME_STATE_PLUGIN ||
-            keyCode == KeyEvent.KEYCODE_ENTER ||
-            keyCode == KeyEvent.KEYCODE_DEL ||
-            (event.getFlags() & KeyEvent.FLAG_SOFT_KEYBOARD) != 0 ||
-            view == null) {
+        if (view == null) {
             mEditableClient.sendEvent(GeckoEvent.createKeyEvent(event));
             return true;
         }
 
+        // KeyListener returns true if it handled the event for us. KeyListener is only
+        // safe to use on the UI thread; therefore we need to pass a proxy Editable to it
+        KeyListener keyListener = TextKeyListener.getInstance();
         Handler uiHandler = view.getRootView().getHandler();
         Handler icHandler = mEditableClient.getInputConnectionHandler();
         Editable uiEditable = mThreadUtils.getEditableForUiThread(uiHandler, icHandler);
-        if (!keyListener.onKeyUp(view, uiEditable, keyCode, event)) {
+        boolean skip = shouldSkipKeyListener(keyCode, event);
+
+        if (skip ||
+            (down && !keyListener.onKeyDown(view, uiEditable, keyCode, event)) ||
+            (!down && !keyListener.onKeyUp(view, uiEditable, keyCode, event))) {
             mEditableClient.sendEvent(GeckoEvent.createKeyEvent(event));
+            if (skip && down) {
+                // Usually, the down key listener call above adjusts meta states for us.
+                // However, if we skip that call above, we have to manually adjust meta
+                // states so the meta states remain consistent
+                TextKeyListener.adjustMetaAfterKeypress(uiEditable);
+            }
         }
         return true;
     }
 
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        return processKey(keyCode, event, true);
+    }
+
+    @Override
+    public boolean onKeyUp(int keyCode, KeyEvent event) {
+        return processKey(keyCode, event, false);
+    }
+
+    @Override
     public boolean onKeyMultiple(int keyCode, int repeatCount, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_UNKNOWN) {
+            // KEYCODE_UNKNOWN means the characters are in KeyEvent.getCharacters()
+            return commitText(event.getCharacters(), 1);
+        }
         while ((repeatCount--) != 0) {
-            if (!processKeyDown(keyCode, event) ||
-                !processKeyUp(keyCode, event)) {
+            if (!processKey(keyCode, event, true) ||
+                !processKey(keyCode, event, false)) {
                 return false;
             }
         }
         return true;
     }
 
+    @Override
     public boolean onKeyLongPress(int keyCode, KeyEvent event) {
         View v = getView();
         switch (keyCode) {
@@ -771,11 +780,13 @@ class GeckoInputConnection
         return false;
     }
 
+    @Override
     public boolean isIMEEnabled() {
         // make sure this picks up PASSWORD and PLUGIN states as well
         return mIMEState != IME_STATE_DISABLED;
     }
 
+    @Override
     public void notifyIME(final int type, final int state) {
         switch (type) {
 
@@ -803,6 +814,7 @@ class GeckoInputConnection
         }
     }
 
+    @Override
     public void notifyIMEEnabled(final int state, final String typeHint,
                                  final String modeHint, final String actionHint) {
         // For some input type we will use a widget to display the ui, for those we must not
@@ -843,6 +855,7 @@ class GeckoInputConnection
         }
         restartInput();
         GeckoApp.mAppContext.mMainHandler.postDelayed(new Runnable() {
+            @Override
             public void run() {
                 if (mIMEState == IME_STATE_DISABLED) {
                     hideSoftInput();
@@ -880,6 +893,7 @@ final class DebugGeckoInputConnection
         return (GeckoEditableListener)dgic.mProxy;
     }
 
+    @Override
     public Object invoke(Object proxy, Method method, Object[] args)
             throws Throwable {
 

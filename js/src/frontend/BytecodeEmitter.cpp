@@ -3434,7 +3434,7 @@ ParseNode::getConstantValue(JSContext *cx, bool strictChecks, MutableHandleValue
       case PNK_ARRAY: {
         JS_ASSERT(isOp(JSOP_NEWINIT) && !(pn_xflags & PNX_NONCONST));
 
-        RootedObject obj(cx, NewDenseAllocatedArray(cx, pn_count));
+        RootedObject obj(cx, NewDenseAllocatedArray(cx, pn_count, NULL, MaybeSingletonObject));
         if (!obj)
             return false;
 
@@ -3458,7 +3458,7 @@ ParseNode::getConstantValue(JSContext *cx, bool strictChecks, MutableHandleValue
         JS_ASSERT(isOp(JSOP_NEWINIT) && !(pn_xflags & PNX_NONCONST));
 
         gc::AllocKind kind = GuessObjectGCKind(pn_count);
-        RootedObject obj(cx, NewBuiltinClassInstance(cx, &ObjectClass, kind));
+        RootedObject obj(cx, NewBuiltinClassInstance(cx, &ObjectClass, kind, MaybeSingletonObject));
         if (!obj)
             return false;
 

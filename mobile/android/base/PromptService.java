@@ -67,6 +67,7 @@ public class PromptService implements OnClickListener, OnCancelListener, OnItemC
     private final int mIconTextPadding;
     private final int mIconSize;
     private final int mInputPaddingSize;
+    private final int mMinRowSize;
 
     PromptService() {
         sInflater = LayoutInflater.from(GeckoApp.mAppContext);
@@ -78,6 +79,7 @@ public class PromptService implements OnClickListener, OnCancelListener, OnItemC
         mIconTextPadding = (int) (res.getDimension(R.dimen.prompt_service_icon_text_padding));
         mIconSize = (int) (res.getDimension(R.dimen.prompt_service_icon_size));
         mInputPaddingSize = (int) (res.getDimension(R.dimen.prompt_service_inputs_padding));
+        mMinRowSize = (int) (res.getDimension(R.dimen.prompt_service_min_list_item_height));
 
         GeckoAppShell.getEventDispatcher().registerEventListener("Prompt:Show", this);
     }
@@ -184,6 +186,7 @@ public class PromptService implements OnClickListener, OnCancelListener, OnItemC
 
                 if (mAutofocus) {
                     input.setOnFocusChangeListener(new View.OnFocusChangeListener() {
+                        @Override
                         public void onFocusChange(View v, boolean hasFocus) {
                             if (hasFocus) {
                                 ((InputMethodManager) GeckoApp.mAppContext.getSystemService(Context.INPUT_METHOD_SERVICE)).showSoftInput(v, 0);
@@ -264,9 +267,11 @@ public class PromptService implements OnClickListener, OnCancelListener, OnItemC
     }
 
     // GeckoEventListener implementation
+    @Override
     public void handleMessage(String event, final JSONObject message) {
         // The dialog must be created on the UI thread.
         GeckoAppShell.getMainHandler().post(new Runnable() {
+            @Override
             public void run() {
                 processMessage(message);
             }
@@ -274,6 +279,7 @@ public class PromptService implements OnClickListener, OnCancelListener, OnItemC
     }
 
     // GeckoEventResponder implementation
+    @Override
     public String getResponse() {
         // we only handle one kind of message in handleMessage, and this is the
         // response we provide for that message
@@ -384,6 +390,7 @@ public class PromptService implements OnClickListener, OnCancelListener, OnItemC
         mDialog.show();
     }
 
+    @Override
     public void onClick(DialogInterface aDialog, int aWhich) {
         GeckoApp.assertOnUiThread();
         JSONObject ret = new JSONObject();
@@ -425,11 +432,13 @@ public class PromptService implements OnClickListener, OnCancelListener, OnItemC
         finishDialog(ret.toString());
     }
 
+    @Override
     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
         GeckoApp.assertOnUiThread();
         mSelected[position] = !mSelected[position];
     }
 
+    @Override
     public void onCancel(DialogInterface aDialog) {
         GeckoApp.assertOnUiThread();
         JSONObject ret = new JSONObject();
@@ -685,6 +694,7 @@ public class PromptService implements OnClickListener, OnCancelListener, OnItemC
                 }
 
                 convertView = sInflater.inflate(resourceId, null);
+                convertView.setMinimumHeight(mMinRowSize);
 
                 TextView tv = (TextView) convertView.findViewById(android.R.id.text1);
                 viewHolder = new ViewHolder(tv, tv.getPaddingLeft(), tv.getPaddingRight(),
