@@ -1390,7 +1390,7 @@ class ModuleCompiler
 
         // The AsmJSHeapAccess offsets need to be updated to reflect the
         // "actualOffset" (an ARM distinction).
-        module_->convertHeapAccessesToActaualOffset(masm_);
+        module_->convertHeapAccessesToActualOffset(masm_);
 
         *module = module_.forget();
         return true;

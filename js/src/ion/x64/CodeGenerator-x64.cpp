@@ -419,7 +419,14 @@ CodeGeneratorX64::visitAsmLoad(LAsmLoad *ins)
       case ArrayBufferView::TYPE_FLOAT64: masm.movsd(addr, ToFloatRegister(ins->output())); break;
       case MAsmLoad::FUNC_PTR:            masm.loadPtr(addr, ToRegister(ins->output())); break;
       case ArrayBufferView::TYPE_FLOAT32:
-        masm.loadFloatAsDouble(addr, ToFloatRegister(ins->output()));
+        // Unlike the store case below, include both instructions in the
+        // offsetBefore/offsetAfter range. This is necessary since, after a
+        // faulting float32 load, the destination register will be assigned
+        // float64 NaN so we mustn't do a float-to-double conversion. It is
+        // critical that the load is first since offsetBefore must be the exact
+        // offset of the load.
+        masm.movss(addr, ToFloatRegister(ins->output()));
+        masm.cvtss2sd(ToFloatRegister(ins->output()), ToFloatRegister(ins->output()));
         break;
       default: JS_NOT_REACHED("unexpected array type");
     }
@@ -467,8 +474,7 @@ CodeGeneratorX64::visitAsmStore(LAsmStore *ins)
             // float32 of the xmm register).
             masm.convertDoubleToFloat(ToFloatRegister(ins->value()), ScratchFloatReg);
 
-            // The offsetBefore must point directly at the load operation since
-            // that is what will fault.
+            // The offsetBefore must point directly at the load operation.
             offsetBefore = masm.size();
             masm.movss(ScratchFloatReg, addr);
             break;

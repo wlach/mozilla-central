@@ -448,7 +448,7 @@ class AsmJSModule
             heapAccesses_.infallibleAppend(accesses[i]);
         return true;
     }
-    void convertHeapAccessesToActaualOffset(ion::MacroAssembler &masm) {
+    void convertHeapAccessesToActualOffset(ion::MacroAssembler &masm) {
         for (unsigned i = 0; i < heapAccesses_.length(); i++)
             heapAccesses_[i].setOffset(masm.actualOffset(heapAccesses_[i].offset()));
     }
