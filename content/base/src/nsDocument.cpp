@@ -56,9 +56,9 @@
 #include "nsRange.h"
 #include "nsIDOMText.h"
 #include "nsIDOMComment.h"
-#include "DocumentType.h"
-#include "nsNodeIterator.h"
-#include "nsTreeWalker.h"
+#include "mozilla/dom/DocumentType.h"
+#include "mozilla/dom/NodeIterator.h"
+#include "mozilla/dom/TreeWalker.h"
 
 #include "nsIServiceManager.h"
 
@@ -184,6 +184,7 @@
 #include "mozilla/dom/BindingUtils.h"
 #include "mozilla/dom/DocumentFragment.h"
 #include "mozilla/dom/HTMLBodyElement.h"
+#include "mozilla/dom/NodeFilterBinding.h"
 #include "mozilla/dom/UndoManager.h"
 #include "nsFrame.h"
 #include "nsDOMCaretPosition.h"
@@ -2259,7 +2260,10 @@ nsDocument::StartDocumentLoad(const char* aCommand, nsIChannel* aChannel,
   }
 
   nsAutoCString contentType;
-  if (NS_SUCCEEDED(aChannel->GetContentType(contentType))) {
+  nsCOMPtr<nsIPropertyBag2> bag = do_QueryInterface(aChannel);
+  if ((bag && NS_SUCCEEDED(bag->GetPropertyAsACString(
+                NS_LITERAL_STRING("contentType"), contentType))) ||
+      NS_SUCCEEDED(aChannel->GetContentType(contentType))) {
     // XXX this is only necessary for viewsource:
     nsACString::const_iterator start, end, semicolon;
     contentType.BeginReading(start);
@@ -4745,7 +4749,7 @@ nsDocument::CreateProcessingInstruction(const nsAString& aTarget,
 already_AddRefed<ProcessingInstruction>
 nsIDocument::CreateProcessingInstruction(const nsAString& aTarget,
                                          const nsAString& aData,
-                                         mozilla::ErrorResult& rv) const
+                                         ErrorResult& rv) const
 {
   nsresult res = nsContentUtils::CheckQName(aTarget, false);
   if (NS_FAILED(res)) {
@@ -4822,7 +4826,7 @@ nsDocument::CreateAttributeNS(const nsAString & aNamespaceURI,
 already_AddRefed<nsIDOMAttr>
 nsIDocument::CreateAttributeNS(const nsAString& aNamespaceURI,
                                const nsAString& aQualifiedName,
-                               mozilla::ErrorResult& rv)
+                               ErrorResult& rv)
 {
   WarnOnceAbout(eCreateAttributeNS);
 
@@ -5354,15 +5358,25 @@ nsDocument::CreateNodeIterator(nsIDOMNode *aRoot,
   NS_ENSURE_TRUE(root, NS_ERROR_UNEXPECTED);
 
   ErrorResult rv;
-  *_retval = nsIDocument::CreateNodeIterator(*root, aWhatToShow, aFilter,
+  NodeFilterHolder holder(aFilter);
+  *_retval = nsIDocument::CreateNodeIterator(*root, aWhatToShow, holder,
                                              rv).get();
   return rv.ErrorCode();
 }
 
-already_AddRefed<nsIDOMNodeIterator>
+already_AddRefed<NodeIterator>
 nsIDocument::CreateNodeIterator(nsINode& aRoot, uint32_t aWhatToShow,
-                                nsIDOMNodeFilter* aFilter,
-                                mozilla::ErrorResult& rv) const
+                                NodeFilter* aFilter,
+                                ErrorResult& rv) const
+{
+  NodeFilterHolder holder(aFilter);
+  return CreateNodeIterator(aRoot, aWhatToShow, holder, rv);
+}
+
+already_AddRefed<NodeIterator>
+nsIDocument::CreateNodeIterator(nsINode& aRoot, uint32_t aWhatToShow,
+                                const NodeFilterHolder& aFilter,
+                                ErrorResult& rv) const
 {
   nsINode* root = &aRoot;
   nsresult res = nsContentUtils::CheckSameOrigin(this, root);
@@ -5371,8 +5385,8 @@ nsIDocument::CreateNodeIterator(nsINode& aRoot, uint32_t aWhatToShow,
     return nullptr;
   }
 
-  nsRefPtr<nsNodeIterator> iterator = new nsNodeIterator(root, aWhatToShow,
-                                                         aFilter);
+  nsRefPtr<NodeIterator> iterator = new NodeIterator(root, aWhatToShow,
+                                                     aFilter);
   return iterator.forget();
 }
 
@@ -5393,15 +5407,25 @@ nsDocument::CreateTreeWalker(nsIDOMNode *aRoot,
   NS_ENSURE_TRUE(root, NS_ERROR_DOM_NOT_SUPPORTED_ERR);
 
   ErrorResult rv;
-  *_retval = nsIDocument::CreateTreeWalker(*root, aWhatToShow, aFilter,
+  NodeFilterHolder holder(aFilter);
+  *_retval = nsIDocument::CreateTreeWalker(*root, aWhatToShow, holder,
                                            rv).get();
   return rv.ErrorCode();
 }
 
-already_AddRefed<nsIDOMTreeWalker>
+already_AddRefed<TreeWalker>
 nsIDocument::CreateTreeWalker(nsINode& aRoot, uint32_t aWhatToShow,
-                              nsIDOMNodeFilter* aFilter,
-                              mozilla::ErrorResult& rv) const
+                              NodeFilter* aFilter,
+                              ErrorResult& rv) const
+{
+  NodeFilterHolder holder(aFilter);
+  return CreateTreeWalker(aRoot, aWhatToShow, holder, rv);
+}
+
+already_AddRefed<TreeWalker>
+nsIDocument::CreateTreeWalker(nsINode& aRoot, uint32_t aWhatToShow,
+                              const NodeFilterHolder& aFilter,
+                              ErrorResult& rv) const
 {
   nsINode* root = &aRoot;
   nsresult res = nsContentUtils::CheckSameOrigin(this, root);
@@ -5410,7 +5434,7 @@ nsIDocument::CreateTreeWalker(nsINode& aRoot, uint32_t aWhatToShow,
     return nullptr;
   }
 
-  nsRefPtr<nsTreeWalker> walker = new nsTreeWalker(root, aWhatToShow, aFilter);
+  nsRefPtr<TreeWalker> walker = new TreeWalker(root, aWhatToShow, aFilter);
   return walker.forget();
 }
 
@@ -9226,17 +9250,35 @@ private:
   bool mValue;
 };
 
+static nsIDocument*
+GetFullscreenRootDocument(nsIDocument* aDoc)
+{
+  if (!aDoc) {
+    return nullptr;
+  }
+  nsIDocument* doc = aDoc;
+  nsIDocument* parent;
+  while ((parent = doc->GetParentDocument()) &&
+         (!nsContentUtils::IsFullscreenApiContentOnly() ||
+          !nsContentUtils::IsChromeDoc(parent))) {
+    doc = parent;
+  }
+  return doc;
+}
+
 static void
 SetWindowFullScreen(nsIDocument* aDoc, bool aValue)
 {
   // Maintain list of fullscreen root documents.
-  nsCOMPtr<nsIDocument> root = nsContentUtils::GetRootDocument(aDoc);
+  nsCOMPtr<nsIDocument> root = GetFullscreenRootDocument(aDoc);
   if (aValue) {
     FullscreenRoots::Add(root);
   } else {
     FullscreenRoots::Remove(root);
   }
-  nsContentUtils::AddScriptRunner(new nsSetWindowFullScreen(aDoc, aValue));
+  if (!nsContentUtils::IsFullscreenApiContentOnly()) {
+    nsContentUtils::AddScriptRunner(new nsSetWindowFullScreen(aDoc, aValue));
+  }
 }
 
 class nsCallExitFullscreen : public nsRunnable {
@@ -9429,7 +9471,7 @@ GetFullscreenLeaf(nsIDocument* aDoc)
   }
   // Otherwise we could be either in a non-fullscreen doc tree, or we're
   // below the fullscreen doc. Start the search from the root.
-  nsIDocument* root = nsContentUtils::GetRootDocument(aDoc);
+  nsIDocument* root = GetFullscreenRootDocument(aDoc);
   // Check that the root is actually fullscreen so we don't waste time walking
   // around its descendants.
   if (!root->IsFullScreenDoc()) {
@@ -9444,6 +9486,10 @@ nsDocument::RestorePreviousFullScreenState()
 {
   NS_ASSERTION(!IsFullScreenDoc() || !FullscreenRoots::IsEmpty(),
     "Should have at least 1 fullscreen root when fullscreen!");
+  NS_ASSERTION(!nsContentUtils::IsFullscreenApiContentOnly() ||
+               !nsContentUtils::IsChromeDoc(this),
+               "Should not run RestorePreviousFullScreenState() on "
+               "chrome document when fullscreen is content only");
 
   if (!IsFullScreenDoc() || !GetWindow() || FullscreenRoots::IsEmpty()) {
     return;
@@ -9518,7 +9564,7 @@ nsDocument::RestorePreviousFullScreenState()
         // as necessary.
         nsAutoString origin;
         nsContentUtils::GetUTFOrigin(doc->NodePrincipal(), origin);
-        nsIDocument* root = nsContentUtils::GetRootDocument(doc);
+        nsIDocument* root = GetFullscreenRootDocument(doc);
         nsCOMPtr<nsIObserverService> os = mozilla::services::GetObserverService();
         os->NotifyObservers(root, "fullscreen-origin-change", origin.get());
       }
@@ -9530,7 +9576,7 @@ nsDocument::RestorePreviousFullScreenState()
   if (doc == nullptr) {
     // We moved all documents in this doctree out of fullscreen mode,
     // move the top-level window out of fullscreen mode.
-    NS_ASSERTION(!nsContentUtils::GetRootDocument(this)->IsFullScreenDoc(),
+    NS_ASSERTION(!GetFullscreenRootDocument(this)->IsFullScreenDoc(),
       "Should have cleared all docs' stacks");
     SetWindowFullScreen(this, false);
   }
@@ -9600,7 +9646,10 @@ LogFullScreenDenied(bool aLogFailure, const char* aMessage, nsIDocument* aDoc)
 nsresult
 nsDocument::AddFullscreenApprovedObserver()
 {
-  NS_ASSERTION(!mHasFullscreenApprovedObserver, "Don't add observer twice.");
+  if (mHasFullscreenApprovedObserver ||
+      !Preferences::GetBool("full-screen-api.approval-required")) {
+    return NS_OK;
+  }
 
   nsCOMPtr<nsIObserverService> os = mozilla::services::GetObserverService();
   NS_ENSURE_TRUE(os, NS_ERROR_FAILURE);
@@ -9782,7 +9831,7 @@ nsresult nsDocument::RemoteFrameFullscreenChanged(nsIDOMElement* aFrameElement,
   // it can show a warning or approval UI.
   if (!aOrigin.IsEmpty()) {
     nsCOMPtr<nsIObserverService> os = mozilla::services::GetObserverService();
-    os->NotifyObservers(nsContentUtils::GetRootDocument(this),
+    os->NotifyObservers(GetFullscreenRootDocument(this),
                         "fullscreen-origin-change",
                         PromiseFlatString(aOrigin).get());
   }
@@ -9816,6 +9865,13 @@ nsDocument::RequestFullScreen(Element* aElement,
   }
   if (!GetWindow()) {
     LogFullScreenDenied(true, "FullScreenDeniedLostWindow", this);
+    return;
+  }
+  if (nsContentUtils::IsFullscreenApiContentOnly() &&
+      nsContentUtils::IsChromeDoc(this)) {
+    // Block fullscreen requests in the chrome document when the fullscreen API
+    // is configured for content only.
+    LogFullScreenDenied(true, "FullScreenDeniedContentOnly", this);
     return;
   }
   if (!IsFullScreenEnabled(aWasCallerChrome, true)) {
@@ -9864,7 +9920,7 @@ nsDocument::RequestFullScreen(Element* aElement,
 
   // Remember the root document, so that if a full-screen document is hidden
   // we can reset full-screen state in the remaining visible full-screen documents.
-  nsIDocument* fullScreenRootDoc = nsContentUtils::GetRootDocument(this);
+  nsIDocument* fullScreenRootDoc = GetFullscreenRootDocument(this);
   if (fullScreenRootDoc->IsFullScreenDoc()) {
     // A document is already in fullscreen, unlock the mouse pointer
     // before setting a new document to fullscreen
@@ -9896,10 +9952,10 @@ nsDocument::RequestFullScreen(Element* aElement,
     child->SetFullscreenRoot(fullScreenRootDoc);
     NS_ASSERTION(child->GetFullscreenRoot() == fullScreenRootDoc,
         "Fullscreen root should be set!");
-    nsIDocument* parent = child->GetParentDocument();
-    if (!parent) {
+    if (child == fullScreenRootDoc) {
       break;
     }
+    nsIDocument* parent = child->GetParentDocument();
     Element* element = parent->FindContentForSubDocument(child)->AsElement();
     if (static_cast<nsDocument*>(parent)->FullScreenStackPush(element)) {
       changed.AppendElement(parent);
@@ -9970,7 +10026,7 @@ nsDocument::RequestFullScreen(Element* aElement,
   if (aNotifyOnOriginChange &&
       !nsContentUtils::HaveEqualPrincipals(previousFullscreenDoc, this)) {
     nsCOMPtr<nsIObserverService> os = mozilla::services::GetObserverService();
-    nsIDocument* root = nsContentUtils::GetRootDocument(this);
+    nsIDocument* root = GetFullscreenRootDocument(this);
     nsAutoString origin;
     nsContentUtils::GetUTFOrigin(NodePrincipal(), origin);
     os->NotifyObservers(root, "fullscreen-origin-change", origin.get());
@@ -10017,8 +10073,9 @@ Element*
 nsDocument::GetFullScreenElement()
 {
   Element* element = FullScreenStackTop();
-  NS_ASSERTION(!element || element->IsFullScreenAncestor(),
-    "Should have full-screen styles applied!");
+  NS_ASSERTION(!element ||
+               element->IsFullScreenAncestor(),
+    "Fullscreen element should have fullscreen styles applied");
   return element;
 }
 

@@ -34,50 +34,6 @@ extern PRLogModuleInfo* GetMediaManagerLog();
 #define MM_LOG(msg)
 #endif
 
-class GetUserMediaNotificationEvent: public nsRunnable
-{
-  public:
-    enum GetUserMediaStatus {
-      STARTING,
-      STOPPING
-    };
-    GetUserMediaNotificationEvent(GetUserMediaStatus aStatus)
-    : mStatus(aStatus) {}
-
-    NS_IMETHOD
-    Run()
-    {
-      nsCOMPtr<nsIObserverService> obs = mozilla::services::GetObserverService();
-      if (!obs) {
-        NS_WARNING("Could not get the Observer service for GetUserMedia recording notification.");
-        return NS_ERROR_FAILURE;
-      }
-      if (mStatus) {
-        obs->NotifyObservers(nullptr,
-            "recording-device-events",
-            NS_LITERAL_STRING("starting").get());
-        // Forward recording events to parent process.
-        // The events are gathered in chrome process and used for recording indicator
-        if (XRE_GetProcessType() != GeckoProcessType_Default) {
-          unused << mozilla::dom::ContentChild::GetSingleton()->SendRecordingDeviceEvents(NS_LITERAL_STRING("starting"));
-        }
-      } else {
-        obs->NotifyObservers(nullptr,
-            "recording-device-events",
-            NS_LITERAL_STRING("shutdown").get());
-        // Forward recording events to parent process.
-        // The events are gathered in chrome process and used for recording indicator
-        if (XRE_GetProcessType() != GeckoProcessType_Default) {
-          unused << mozilla::dom::ContentChild::GetSingleton()->SendRecordingDeviceEvents(NS_LITERAL_STRING("shutdown"));
-        }
-      }
-      return NS_OK;
-    }
-
-  protected:
-    GetUserMediaStatus mStatus;
-};
-
 /**
  * This class is an implementation of MediaStreamListener. This is used
  * to Start() and Stop() the underlying MediaEngineSource when MediaStreams
@@ -91,6 +47,7 @@ public:
     uint64_t aWindowID)
     : mMediaThread(aThread)
     , mWindowID(aWindowID)
+    , mStopped(false)
     , mFinished(false)
     , mLock("mozilla::GUMCMSL")
     , mRemoved(false) {}
@@ -106,7 +63,7 @@ public:
     MediaEngineSource* aVideoSource)
   {
     NS_ASSERTION(NS_IsMainThread(), "Only call on main thread");
-    mStream = aStream; // also serves as IsActive();
+    mStream = aStream;
     mAudioSource = aAudioSource;
     mVideoSource = aVideoSource;
     mLastEndTimeAudio = 0;
@@ -115,7 +72,7 @@ public:
     mStream->AddListener(this);
   }
 
-  MediaStream *Stream()
+  MediaStream *Stream() // Can be used to test if Activate was called
   {
     return mStream;
   }
@@ -126,6 +83,23 @@ public:
       return nullptr;
     }
     return mStream->AsSourceStream();
+  }
+
+  // mVideo/AudioSource are set by Activate(), so we assume they're capturing if set
+  bool CapturingVideo()
+  {
+    NS_ASSERTION(NS_IsMainThread(), "Only call on main thread");
+    return mVideoSource && !mStopped;
+  }
+  bool CapturingAudio()
+  {
+    NS_ASSERTION(NS_IsMainThread(), "Only call on main thread");
+    return mAudioSource && !mStopped;
+  }
+
+  void SetStopped()
+  {
+    mStopped = true;
   }
 
   // implement in .cpp to avoid circular dependency with MediaOperationRunnable
@@ -191,6 +165,8 @@ private:
   nsCOMPtr<nsIThread> mMediaThread;
   uint64_t mWindowID;
 
+  bool mStopped; // MainThread only
+
   // Set at Activate on MainThread
 
   // Accessed from MediaStreamGraph thread, MediaManager thread, and MainThread
@@ -205,6 +181,57 @@ private:
   // Accessed from MainThread and MSG thread
   Mutex mLock; // protects mRemoved access from MainThread
   bool mRemoved;
+};
+
+class GetUserMediaNotificationEvent: public nsRunnable
+{
+  public:
+    enum GetUserMediaStatus {
+      STARTING,
+      STOPPING
+    };
+    GetUserMediaNotificationEvent(GetUserMediaCallbackMediaStreamListener* aListener,
+                                  GetUserMediaStatus aStatus)
+    : mListener(aListener), mStatus(aStatus) {}
+
+    GetUserMediaNotificationEvent(GetUserMediaStatus aStatus)
+    : mListener(nullptr), mStatus(aStatus) {}
+
+    NS_IMETHOD
+    Run()
+    {
+      NS_ASSERTION(NS_IsMainThread(), "Only call on main thread");
+      nsCOMPtr<nsIObserverService> obs = mozilla::services::GetObserverService();
+      if (!obs) {
+        NS_WARNING("Could not get the Observer service for GetUserMedia recording notification.");
+        return NS_ERROR_FAILURE;
+      }
+      nsString msg;
+      switch (mStatus) {
+        case STARTING:
+          msg = NS_LITERAL_STRING("starting");
+          break;
+        case STOPPING:
+          msg = NS_LITERAL_STRING("shutdown");
+          if (mListener) {
+            mListener->SetStopped();
+          }
+          break;
+      }
+      obs->NotifyObservers(nullptr,
+                           "recording-device-events",
+                           msg.get());
+      // Forward recording events to parent process.
+      // The events are gathered in chrome process and used for recording indicator
+      if (XRE_GetProcessType() != GeckoProcessType_Default) {
+        unused << mozilla::dom::ContentChild::GetSingleton()->SendRecordingDeviceEvents(msg);
+      }
+      return NS_OK;
+    }
+
+  protected:
+    nsRefPtr<GetUserMediaCallbackMediaStreamListener> mListener; // threadsafe
+    GetUserMediaStatus mStatus;
 };
 
 typedef enum {
@@ -290,10 +317,8 @@ public:
           if (mFinish) {
             source->Finish();
           }
-          // the TrackUnion destination of the port will autofinish
-
           nsRefPtr<GetUserMediaNotificationEvent> event =
-            new GetUserMediaNotificationEvent(GetUserMediaNotificationEvent::STOPPING);
+            new GetUserMediaNotificationEvent(mListener, GetUserMediaNotificationEvent::STOPPING);
 
           NS_DispatchToMainThread(event, NS_DISPATCH_NORMAL);
         }
@@ -424,6 +449,9 @@ private:
   ~MediaManager() {
     delete mBackend;
   }
+
+  nsresult MediaCaptureWindowStateInternal(nsIDOMWindow* aWindow, bool* aVideo,
+                                           bool* aAudio);
 
   // ONLY access from MainThread so we don't need to lock
   WindowTable mActiveWindows;

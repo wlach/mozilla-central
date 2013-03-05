@@ -122,6 +122,12 @@ extern double
 math_cos_impl(MathCache *cache, double x);
 
 extern JSBool
+math_exp(JSContext *cx, unsigned argc, js::Value *vp);
+
+extern double
+math_exp_impl(MathCache *cache, double x);
+
+extern JSBool
 math_tan(JSContext *cx, unsigned argc, js::Value *vp);
 
 extern double
@@ -138,6 +144,24 @@ math_atan(JSContext *cx, unsigned argc, Value *vp);
 
 extern JSBool
 math_atan2(JSContext *cx, unsigned argc, Value *vp);
+
+extern double
+math_atan_impl(MathCache *cache, double x);
+
+extern JSBool
+math_atan(JSContext *cx, unsigned argc, js::Value *vp);
+
+extern double
+math_asin_impl(MathCache *cache, double x);
+
+extern JSBool
+math_asin(JSContext *cx, unsigned argc, js::Value *vp);
+
+extern double
+math_acos_impl(MathCache *cache, double x);
+
+extern JSBool
+math_acos(JSContext *cx, unsigned argc, js::Value *vp);
 
 extern double
 powi(double x, int y);

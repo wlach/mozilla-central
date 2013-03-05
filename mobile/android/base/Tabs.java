@@ -15,13 +15,10 @@ import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.OnAccountsUpdateListener;
 import android.content.ContentResolver;
-import android.content.Intent;
 import android.database.ContentObserver;
 import android.graphics.Color;
 import android.net.Uri;
 import android.util.Log;
-import android.widget.Toast;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -87,6 +84,7 @@ public class Tabs implements GeckoEventListener {
 
         // The listener will run on the background thread (see 2nd argument)
         mAccountManager.addOnAccountsUpdatedListener(mAccountListener = new OnAccountsUpdateListener() {
+            @Override
             public void onAccountsUpdated(Account[] accounts) {
                 persistAllTabs();
             }
@@ -113,6 +111,7 @@ public class Tabs implements GeckoEventListener {
     private void lazyRegisterBookmarkObserver() {
         if (mContentObserver == null) {
             mContentObserver = new ContentObserver(null) {
+                @Override
                 public void onChange(boolean selfChange) {
                     for (Tab tab : mTabs.values()) {
                         tab.updateBookmark();
@@ -160,6 +159,7 @@ public class Tabs implements GeckoEventListener {
 
         mSelectedTab = tab;
         mActivity.runOnUiThread(new Runnable() { 
+            @Override
             public void run() {
                 if (isSelectedTab(tab)) {
                     notifyListeners(tab, TabEvents.SELECTED);
@@ -280,6 +280,7 @@ public class Tabs implements GeckoEventListener {
 
     // GeckoEventListener implementation
 
+    @Override
     public void handleMessage(String event, JSONObject message) {
         try {
             if (event.equals("Session:RestoreEnd")) {
@@ -381,6 +382,7 @@ public class Tabs implements GeckoEventListener {
         while (iterator.hasNext()) {
             final Tab tab = iterator.next();
             GeckoAppShell.getHandler().post(new Runnable() {
+                @Override
                 public void run() {
                     helper.getAndProcessThumbnailFor(tab);
                 }
@@ -436,6 +438,7 @@ public class Tabs implements GeckoEventListener {
 
     public void notifyListeners(final Tab tab, final TabEvents msg, final Object data) {
         mActivity.runOnUiThread(new Runnable() {
+            @Override
             public void run() {
                 onTabChanged(tab, msg, data);
 
@@ -480,6 +483,7 @@ public class Tabs implements GeckoEventListener {
     public void persistAllTabs() {
         final Iterable<Tab> tabs = getTabsInOrder();
         GeckoAppShell.getHandler().post(new Runnable() {
+            @Override
             public void run() {
                 boolean syncIsSetup = SyncAccounts.syncAccountsExist(mActivity);
                 if (syncIsSetup)
