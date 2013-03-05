@@ -278,6 +278,8 @@ class AsmJSModule
     size_t                                functionBytes_;
     size_t                                bytesNeeded_;
 
+    bool                                  linked_;
+
   public:
     AsmJSModule()
       : numGlobalVars_(0),
@@ -286,7 +288,8 @@ class AsmJSModule
         code_(NULL),
         operationCallbackExit_(NULL),
         functionBytes_(0),
-        bytesNeeded_(0)
+        bytesNeeded_(0),
+        linked_(false)
     {}
 
     void trace(JSTracer *trc) {
@@ -474,11 +477,19 @@ class AsmJSModule
     uint8_t *operationCallbackExit() const {
         return operationCallbackExit_;
     }
+
+    void setIsLinked() {
+        JS_ASSERT(!linked_);
+        linked_ = true;
+    }
+    bool isLinked() const {
+        return linked_;
+    }
 };
 
 // The AsmJSModule C++ object is held by a JSObject that takes care of calling
 // 'trace' and the destructor on finalization.
-extern const AsmJSModule &
+extern AsmJSModule &
 AsmJSModuleObjectToModule(JSObject *obj);
 
 }  // namespace js

@@ -2273,29 +2273,23 @@ static Class AsmJSModuleClass = {
     AsmJSModuleObject_trace
 };
 
-static inline AsmJSModule &
-AsmJSModuleObjectToMutableModule(JSObject *obj)
+AsmJSModule &
+js::AsmJSModuleObjectToModule(JSObject *obj)
 {
     JS_ASSERT(obj->getClass() == &AsmJSModuleClass);
     return *(AsmJSModule *)obj->getReservedSlot(ASM_CODE_RESERVED_SLOT).toPrivate();
 }
 
-const AsmJSModule &
-js::AsmJSModuleObjectToModule(JSObject *obj)
-{
-    return AsmJSModuleObjectToMutableModule(obj);
-}
-
 static void
 AsmJSModuleObject_finalize(FreeOp *fop, RawObject obj)
 {
-    fop->delete_(&AsmJSModuleObjectToMutableModule(obj));
+    fop->delete_(&AsmJSModuleObjectToModule(obj));
 }
 
 static void
 AsmJSModuleObject_trace(JSTracer *trc, JSRawObject obj)
 {
-    AsmJSModuleObjectToMutableModule(obj).trace(trc);
+    AsmJSModuleObjectToModule(obj).trace(trc);
 }
 
 static JSObject *

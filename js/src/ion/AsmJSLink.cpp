@@ -242,7 +242,12 @@ static bool
 DynamicallyLinkModule(JSContext *cx, StackFrame *fp, HandleObject moduleObj,
                       MutableHandleObject obj)
 {
-    const AsmJSModule &module = AsmJSModuleObjectToModule(moduleObj);
+    AsmJSModule &module = AsmJSModuleObjectToModule(moduleObj);
+    if (module.isLinked())
+        return LinkFail(cx, "As a temporary limitation, modules cannot be linked more than "
+                            "once. This limitation should be removed in a future release. To "
+                            "work around this, compile a second module (e.g., using the "
+                            "Function constructor).");
 
     RootedValue globalVal(cx, UndefinedValue());
     if (fp->numActualArgs() > 0)
@@ -325,6 +330,7 @@ DynamicallyLinkModule(JSContext *cx, StackFrame *fp, HandleObject moduleObj,
     for (unsigned i = 0; i < module.numFuncPtrTableElems(); i++)
         module.funcPtrTableElemIndexToGlobalDatum(globalData, i) = module.funcPtrTableElem(i);
 
+    module.setIsLinked();
     return true;
 }
 
