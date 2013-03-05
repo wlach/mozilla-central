@@ -1085,9 +1085,14 @@ JSObject::computedSizeOfThisSlotsElements() const
     if (hasDynamicSlots())
         n += numDynamicSlots() * sizeof(js::Value);
 
-    if (hasDynamicElements())
-        n += (js::ObjectElements::VALUES_PER_HEADER + getElementsHeader()->capacity) *
-             sizeof(js::Value);
+    if (hasDynamicElements()) {
+        if (isArrayBuffer()) {
+            n += getElementsHeader()->initializedLength;
+        } else {
+            n += (js::ObjectElements::VALUES_PER_HEADER + getElementsHeader()->capacity) *
+                 sizeof(js::Value);
+        }
+    }
 
     return n;
 }

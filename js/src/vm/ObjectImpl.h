@@ -927,7 +927,7 @@ class ObjectElements
     friend class ObjectImpl;
     friend class ArrayBufferObject;
 
-    /* See Flags enum below. */
+    /* See Flags enum above. */
     uint32_t flags;
 
     /*

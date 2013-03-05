@@ -23,6 +23,11 @@
     "extended_statistics_ok": true,
     "description": "time spent updating accessibility (ms)"
   },
+  "BACKGROUNDFILESAVER_THREAD_COUNT": {
+    "kind": "enumerated",
+    "n_values": 21,
+    "description": "Maximum number of concurrent threads reached during a given download session"
+  },
   "CYCLE_COLLECTOR": {
     "kind": "exponential",
     "high": "10000",
@@ -1599,6 +1604,10 @@
     "n_buckets": 20,
     "extended_statistics_ok": true,
     "description": "Time spent shutting down plugins (ms)"
+  },
+  "PLUGIN_CALLED_DIRECTLY": {
+    "kind": "flag",
+    "description": "A plugin object was successfully invoked as a function"
   },
   "MOZ_SQLITE_OPEN_MS": {
     "kind": "exponential",
