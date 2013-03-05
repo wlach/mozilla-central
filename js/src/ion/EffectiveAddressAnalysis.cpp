@@ -88,45 +88,6 @@ AnalyzeLsh(MBasicBlock *block, MLsh *lsh)
     block->insertAfter(last, eaddr);
 }
 
-template <class T>
-static void
-AnalyzeAsmMemoryOp(T *ins)
-{
-    // While MEffectiveAddress always performs 32-bit arithmetic (mirroring JS
-    // semantics), the effective address computation done by load/store is
-    // word-sized and thus 64-bit on x64. Technically, we could still make this
-    // work by increasing AsmJSBufferProtectedSize and handling the wraparound
-    // case (where the 32-bit index would have wrapped to an in-range index)
-    if (JS_BYTES_PER_WORD != 4 && !GetIonContext()->cx->runtime->asmJSUnsafe)
-        return;
-
-    if (ins->getOperand(0)->isAdd()) {
-        MAdd *add = ins->getOperand(0)->toAdd();
-        JS_ASSERT(add->type() == MIRType_Int32);
-
-        if (add->lhs()->isConstant()) {
-            if (ins->tryAddDisplacement(add->lhs()->toConstant()->value().toInt32()))
-                ins->replaceOperand(0, add->rhs());
-        } else if (add->rhs()->isConstant()) {
-            if (ins->tryAddDisplacement(add->rhs()->toConstant()->value().toInt32()))
-                ins->replaceOperand(0, add->lhs());
-        }
-    }
-
-    if (ins->scale() == TimesOne && ins->getOperand(0)->isLsh()) {
-        MLsh *lsh = ins->getOperand(0)->toLsh();
-        JS_ASSERT(lsh->type() == MIRType_Int32);
-
-        if (lsh->rhs()->isConstant()) {
-            int32_t shift = lsh->rhs()->toConstant()->value().toInt32();
-            if (IsShiftInScaleRange(shift)) {
-                ins->setScale(ShiftToScale(shift));
-                ins->replaceOperand(0, lsh->lhs());
-            }
-        }
-    }
-}
-
 // This analysis converts patterns of the form:
 //   truncate(x + (y << {0,1,2,3}))
 //   truncate(x + (y << {0,1,2,3}) + imm32)
@@ -148,10 +109,6 @@ EffectiveAddressAnalysis::analyze()
         for (MInstructionIterator i = block->begin(); i != block->end(); i++) {
             if (i->isLsh())
                 AnalyzeLsh(*block, i->toLsh());
-            else if (i->isAsmLoad())
-                AnalyzeAsmMemoryOp(i->toAsmLoad());
-            else if (i->isAsmStore())
-                AnalyzeAsmMemoryOp(i->toAsmStore());
         }
     }
 

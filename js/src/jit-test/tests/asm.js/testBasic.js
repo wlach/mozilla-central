@@ -41,6 +41,7 @@ assertAsmLinkAlwaysFail(code, null);
 assertAsmLinkAlwaysFail(code, {});
 assertAsmLinkAlwaysFail(code, {imul:Math.imul});
 assertEq(asmLink(code, {Math:{imul:Math.imul}})(2,3), 6);
+var code = asmCompile('glob', USE_ASM + 'var im=glob.Math.imul; function f(i,j) {i=i|0;j=j|0; return im(i,j)|0} return f');
 assertEq(asmLink(code, this)(8,4), 32);
 
 var code = asmCompile('glob','i','b', USE_ASM + 'var i32=new glob.Int32Array(b); function f(){} return f');
@@ -51,6 +52,7 @@ assertAsmLinkAlwaysFail(code, this, null, new ArrayBuffer(1));
 assertAsmLinkFail(code, this, null, new ArrayBuffer(100));
 assertAsmLinkFail(code, this, null, new ArrayBuffer(4000));
 assertEq(asmLink(code, this, null, new ArrayBuffer(4096))(), undefined);
+var code = asmCompile('glob','i','b', USE_ASM + 'var i32=new glob.Int32Array(b); function f(){} return f');
 assertEq(asmLink(code, this, null, new ArrayBuffer(2*4096))(), undefined);
 
 assertAsmTypeFail('glob', 'imp', 'b', USE_ASM + HEAP_IMPORTS + 'function f(i) {i=i|0; i = i32[i]|0; return i|0}; return f');

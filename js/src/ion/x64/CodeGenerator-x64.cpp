@@ -395,25 +395,17 @@ CodeGeneratorX64::visitCompareVAndBranch(LCompareVAndBranch *lir)
     return true;
 }
 
-template <class T, class U>
-static Operand
-PointerOperand(T *ins, U *mir)
-{
-    Register base;
-    switch (mir->base()) {
-      case U::Heap: base = HeapReg; break;
-      case U::Global: base = GlobalReg; break;
-    }
-
-    Register reg = ToRegister(ins->index());
-    return Operand(base, reg, mir->scale(), mir->disp31());
-}
-
 bool
 CodeGeneratorX64::visitAsmLoad(LAsmLoad *ins)
 {
     const MAsmLoad *mir = ins->mir();
-    Operand addr = PointerOperand(ins, mir);
+
+    Register base;
+    switch (mir->base()) {
+      case MAsmLoad::Heap: base = HeapReg; break;
+      case MAsmLoad::Global: base = GlobalReg; break;
+    }
+    Operand addr(base, ToRegister(ins->index()), mir->scale(), mir->disp31());
 
     uint32_t offsetBefore = masm.size();
 
@@ -440,7 +432,13 @@ bool
 CodeGeneratorX64::visitAsmStore(LAsmStore *ins)
 {
     const MAsmStore *mir = ins->mir();
-    Operand addr = PointerOperand(ins, mir);
+
+    Register base;
+    switch (mir->base()) {
+      case MAsmStore::Heap: base = HeapReg; break;
+      case MAsmStore::Global: base = GlobalReg; break;
+    }
+    Operand addr(base, ToRegister(ins->index()), TimesOne);
 
     uint32_t offsetBefore = masm.size();
 
@@ -481,3 +479,4 @@ CodeGeneratorX64::visitAsmStore(LAsmStore *ins)
     uint32_t offsetAfter = masm.size();
     return gen->noteAsmStore(offsetBefore, offsetAfter);
 }
+

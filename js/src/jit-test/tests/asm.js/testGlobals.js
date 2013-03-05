@@ -30,6 +30,7 @@ assertAsmLinkFail(code, {});
 assertAsmLinkFail(code, {Infinity:NaN});
 assertAsmLinkFail(code, {Infinity:-Infinity});
 assertEq(asmLink(code, {Infinity:Infinity})(), Infinity);
+var code = asmCompile('global', USE_ASM + 'var i=global.Infinity; function f() { return +i } return f');
 assertEq(asmLink(code, this)(), Infinity);
 var code = asmCompile('global', USE_ASM + 'var i=global.NaN; function f() { return +i } return f');
 assertAsmLinkAlwaysFail(code, undefined);
@@ -39,6 +40,7 @@ assertAsmLinkFail(code, {});
 assertAsmLinkFail(code, {Infinity:Infinity});
 assertAsmLinkFail(code, {Infinity:-Infinity});
 assertEq(asmLink(code, {NaN:NaN})(), NaN);
+var code = asmCompile('global', USE_ASM + 'var i=global.NaN; function f() { return +i } return f');
 assertEq(asmLink(code, this)(), NaN);
 
 assertAsmTypeFail('global', 'imp', USE_ASM + "var i=imp; function f() { return i|0 } return f");
