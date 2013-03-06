@@ -1974,22 +1974,6 @@ MAsmUnsignedToDouble::foldsTo(bool useValueNumbers)
     return this;
 }
 
-MAsmLoad::MAsmLoad(ArrayBufferView::ViewType vt, Base b, MDefinition *ptr, Scale scale,
-                   uint32_t disp31)
- : MUnaryInstruction(ptr), viewType_(vt), base_(b), scale_(scale), disp31_(disp31)
-{
-    if (vt == FUNC_PTR)
-        setResultType(MIRType_Pointer);
-    else if (vt == ArrayBufferView::TYPE_FLOAT32 || vt == ArrayBufferView::TYPE_FLOAT64)
-        setResultType(MIRType_Double);
-    else
-        setResultType(MIRType_Int32);
-}
-
-MAsmStore::MAsmStore(ArrayBufferView::ViewType vt, Base b, MDefinition *ptr, MDefinition *v)
- : MBinaryInstruction(ptr, v), viewType_(vt), base_(b)
-{}
-
 MAsmCall *
 MAsmCall::New(Callee callee, const Args &args, MIRType resultType, size_t spIncrement)
 {

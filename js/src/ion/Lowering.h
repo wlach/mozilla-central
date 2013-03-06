@@ -211,8 +211,11 @@ class LIRGenerator : public LIRGeneratorSpecific
     bool visitCallInstanceOf(MCallInstanceOf *ins);
     bool visitFunctionBoundary(MFunctionBoundary *ins);
     bool visitAsmUnsignedToDouble(MAsmUnsignedToDouble *ins);
-    bool visitAsmLoad(MAsmLoad *ins);
-    bool visitAsmStore(MAsmStore *ins);
+    bool visitAsmLoadHeap(MAsmLoadHeap *ins);
+    bool visitAsmStoreHeap(MAsmStoreHeap *ins);
+    bool visitAsmLoadGlobalVar(MAsmLoadGlobalVar *ins);
+    bool visitAsmStoreGlobalVar(MAsmStoreGlobalVar *ins);
+    bool visitAsmLoadFFIFunc(MAsmLoadFFIFunc *ins);
     bool visitAsmParameter(MAsmParameter *ins);
     bool visitAsmReturn(MAsmReturn *ins);
     bool visitAsmVoidReturn(MAsmVoidReturn *ins);

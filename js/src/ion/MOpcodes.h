@@ -154,8 +154,12 @@ namespace ion {
     _(AsmNeg)                                                               \
     _(AsmUDiv)                                                              \
     _(AsmUMod)                                                              \
-    _(AsmLoad)                                                              \
-    _(AsmStore)                                                             \
+    _(AsmLoadHeap)                                                          \
+    _(AsmStoreHeap)                                                         \
+    _(AsmLoadGlobalVar)                                                     \
+    _(AsmStoreGlobalVar)                                                    \
+    _(AsmLoadFuncPtr)                                                       \
+    _(AsmLoadFFIFunc)                                                       \
     _(AsmReturn)                                                            \
     _(AsmParameter)                                                         \
     _(AsmVoidReturn)                                                        \

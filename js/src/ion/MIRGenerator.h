@@ -26,6 +26,16 @@ class MBasicBlock;
 class MIRGraph;
 class MStart;
 
+struct AsmJSGlobalAccess
+{
+    unsigned offset;
+    unsigned globalDataOffset;
+
+    AsmJSGlobalAccess(unsigned offset, unsigned globalDataOffset)
+      : offset(offset), globalDataOffset(globalDataOffset)
+    {}
+};
+
 class MIRGenerator
 {
   public:
@@ -99,18 +109,24 @@ class MIRGenerator
         JS_ASSERT(compilingAsmJS());
         return performsAsmCall_;
     }
-    bool noteAsmLoad(uint32_t offsetBefore, uint32_t offsetAfter, AnyRegister dest) {
+    bool noteAsmLoadHeap(uint32_t offsetBefore, uint32_t offsetAfter, AnyRegister dest) {
         uint32_t opLength = offsetAfter - offsetBefore;
         JS_ASSERT(opLength <= UINT8_MAX);
         return asmHeapAccesses_.append(AsmJSHeapAccess(offsetBefore, opLength, dest));
     }
-    bool noteAsmStore(uint32_t offsetBefore, uint32_t offsetAfter) {
+    bool noteAsmStoreHeap(uint32_t offsetBefore, uint32_t offsetAfter) {
         uint32_t opLength = offsetAfter - offsetBefore;
         JS_ASSERT(opLength <= UINT8_MAX);
         return asmHeapAccesses_.append(AsmJSHeapAccess(offsetBefore, opLength));
     }
     const Vector<AsmJSHeapAccess> &asmHeapAccesses() const {
         return asmHeapAccesses_;
+    }
+    bool noteAsmGlobalAccess(unsigned offset, unsigned globalDataOffset) {
+        return asmGlobalAccesses_.append(AsmJSGlobalAccess(offset, globalDataOffset));
+    }
+    const Vector<AsmJSGlobalAccess> &asmGlobalAccesses() const {
+        return asmGlobalAccesses_;
     }
 
   public:
@@ -128,6 +144,7 @@ class MIRGenerator
     uint32_t maxAsmStackArgBytes_;
     bool performsAsmCall_;
     Vector<AsmJSHeapAccess> asmHeapAccesses_;
+    Vector<AsmJSGlobalAccess> asmGlobalAccesses_;
 };
 
 } // namespace ion

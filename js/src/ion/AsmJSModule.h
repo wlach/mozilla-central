@@ -12,6 +12,8 @@
 #include "ion/IonMacroAssembler.h"
 #include "ion/RegisterSets.h"
 
+#include "jstypedarrayinlines.h"
+
 namespace js {
 
 // The basis of the asm.js type system is the EcmaScript-defined coercions
@@ -167,7 +169,7 @@ class AsmJSModule
         }
     };
 
-    typedef int32_t (*CodePtr)(uint8_t *globalData, uint8_t *heap, uint64_t *args);
+    typedef int32_t (*CodePtr)(uint64_t *args);
 
     typedef Vector<AsmJSCoercion, 0, SystemAllocPolicy> ArgCoercionVector;
 
@@ -205,9 +207,9 @@ class AsmJSModule
         }
 
         void trace(JSTracer *trc) {
-            MarkObject(trc, &fun_, "asm export name");
+            MarkObject(trc, &fun_, "asm.js export name");
             if (maybeFieldName_)
-                MarkString(trc, &maybeFieldName_, "asm export field");
+                MarkString(trc, &maybeFieldName_, "asm.js export field");
         }
 
       public:
@@ -258,7 +260,6 @@ class AsmJSModule
 
   private:
     typedef Vector<ExportedFunction, 0, SystemAllocPolicy> ExportedFunctionVector;
-    typedef Vector<uint8_t*, 0, SystemAllocPolicy> FuncPtrTableElemVector;
     typedef Vector<Global, 0, SystemAllocPolicy> GlobalVector;
     typedef Vector<Exit, 0, SystemAllocPolicy> ExitVector;
     typedef Vector<ion::AsmJSHeapAccess, 0, SystemAllocPolicy> HeapAccessVector;
@@ -266,29 +267,38 @@ class AsmJSModule
     GlobalVector                          globals_;
     ExitVector                            exits_;
     ExportedFunctionVector                exports_;
-    FuncPtrTableElemVector                funcPtrTableElems_;
     HeapAccessVector                      heapAccesses_;
     uint32_t                              numGlobalVars_;
     uint32_t                              numFFIs_;
+    uint32_t                              numFuncPtrTableElems_;
     bool                                  hasArrayView_;
 
     ScopedReleasePtr<JSC::ExecutablePool> codePool_;
     uint8_t *                             code_;
     uint8_t *                             operationCallbackExit_;
     size_t                                functionBytes_;
-    size_t                                bytesNeeded_;
+    size_t                                codeBytes_;
+    size_t                                totalBytes_;
 
     bool                                  linked_;
+    HeapPtr<ArrayBufferObject>            maybeHeap_;
+
+    uint8_t *globalData() const {
+        JS_ASSERT(code_);
+        return code_ + codeBytes_;
+    }
 
   public:
     AsmJSModule()
       : numGlobalVars_(0),
         numFFIs_(0),
+        numFuncPtrTableElems_(0),
         hasArrayView_(false),
         code_(NULL),
         operationCallbackExit_(NULL),
         functionBytes_(0),
-        bytesNeeded_(0),
+        codeBytes_(0),
+        totalBytes_(0),
         linked_(false)
     {}
 
@@ -297,9 +307,17 @@ class AsmJSModule
             globals_[i].trace(trc);
         for (unsigned i = 0; i < exports_.length(); i++)
             exports_[i].trace(trc);
+        for (unsigned i = 0; i < exits_.length(); i++) {
+            if (exitIndexToGlobalDatum(i).fun)
+                MarkObject(trc, &exitIndexToGlobalDatum(i).fun, "asm.js imported function");
+        }
+        if (maybeHeap_)
+            MarkObject(trc, &maybeHeap_, "asm.js heap");
     }
 
     bool addGlobalVarInitConstant(const Value &v, uint32_t *globalIndex) {
+        if (numGlobalVars_ == UINT32_MAX)
+            return false;
         Global g(Global::Variable);
         g.u.var.initKind_ = Global::InitConstant;
         g.u.var.init.constant_ = v;
@@ -314,10 +332,15 @@ class AsmJSModule
         g.name_ = fieldName;
         return globals_.append(g);
     }
-    bool addFuncPtrTableElems(uint32_t numElems) {
-        return funcPtrTableElems_.growBy(numElems);
+    bool incrementNumFuncPtrTableElems(uint32_t numElems) {
+        if (UINT32_MAX - numFuncPtrTableElems_ < numElems)
+            return false;
+        numFuncPtrTableElems_ += numElems;
+        return true;
     }
     bool addFFI(PropertyName *field, uint32_t *ffiIndex) {
+        if (numFFIs_ == UINT32_MAX)
+            return false;
         Global g(Global::FFI);
         g.u.ffiIndex_ = *ffiIndex = numFFIs_++;
         g.name_ = field;
@@ -368,6 +391,9 @@ class AsmJSModule
     unsigned numFFIs() const {
         return numFFIs_;
     }
+    unsigned numGlobalVars() const {
+        return numGlobalVars_;
+    }
     unsigned numGlobals() const {
         return globals_.length();
     }
@@ -375,13 +401,7 @@ class AsmJSModule
         return globals_[i];
     }
     unsigned numFuncPtrTableElems() const {
-        return funcPtrTableElems_.length();
-    }
-    uint8_t *funcPtrTableElem(unsigned i) const {
-        return funcPtrTableElems_[i];
-    }
-    void setFuncPtrTableElem(unsigned i, uint8_t *addr) {
-        funcPtrTableElems_[i] = addr;
+        return numFuncPtrTableElems_;
     }
     unsigned numExits() const {
         return exits_.length();
@@ -393,42 +413,66 @@ class AsmJSModule
         return exits_[i];
     }
 
-    // The order in the globalData is [globals, func-ptr table elements, exits].
-    // Put the exit array at the end since it grows during the second pass of
-    // module compilation which would otherwise invalidate global/func-ptr
-    // offsets.
+    // An Exit holds bookkeeping information about an exit; the ExitDatum
+    // struct overlays the actual runtime data stored in the global data
+    // section.
     struct ExitDatum
     {
         uint8_t *exit;
         HeapPtrFunction fun;
     };
-    uint32_t byteLength() const {
-        return numGlobalVars_ * sizeof(uint64_t) +
-               funcPtrTableElems_.length() * sizeof(void*) +
+
+    // Global data section
+    //
+    // The global data section is placed after the executable code (i.e., at
+    // offset codeBytes_) in the module's linear allocation. The global data
+    // are laid out in this order:
+    //   0. a pointer/descriptor for the heap that was linked to the module
+    //   1. global variable state (elements are sizeof(uint64_t))
+    //   2. function-pointer table elements (elements are sizeof(void*))
+    //   3. exits (elements are sizeof(ExitDatum))
+    //
+    // NB: The list of exits is extended while emitting function bodies and
+    // thus exits must be at the end of the list to avoid invalidating indices.
+    size_t globalDataBytes() const {
+        return sizeof(void*) +
+               numGlobalVars_ * sizeof(uint64_t) +
+               numFuncPtrTableElems_ * sizeof(void*) +
                exits_.length() * sizeof(ExitDatum);
     }
-    int32_t globalVarIndexToGlobalDataOffset(unsigned i) const {
+    unsigned heapOffset() const {
+        return 0;
+    }
+  private:
+    uint8_t *&heapDatum() const {
+        return *(uint8_t**)(globalData() + heapOffset());
+    }
+  public:
+    unsigned globalVarIndexToGlobalDataOffset(unsigned i) const {
         JS_ASSERT(i < numGlobalVars_);
-        return i * sizeof(uint64_t);
+        return sizeof(void*) +
+               i * sizeof(uint64_t);
     }
-    void *globalVarIndexToGlobalDatum(uint8_t *globalData, unsigned i) const {
-        return (void *)(globalData + globalVarIndexToGlobalDataOffset(i));
+    void *globalVarIndexToGlobalDatum(unsigned i) const {
+        return (void *)(globalData() + globalVarIndexToGlobalDataOffset(i));
     }
-    int32_t funcPtrTableElemIndexToGlobalDataOffset(unsigned i) const {
-        return numGlobalVars_ * sizeof(uint64_t) +
+    unsigned funcPtrIndexToGlobalDataOffset(unsigned i) const {
+        return sizeof(void*) +
+               numGlobalVars_ * sizeof(uint64_t) +
                i * sizeof(void*);
     }
-    uint8_t *&funcPtrTableElemIndexToGlobalDatum(uint8_t *globalData, unsigned i) const {
-        return *(uint8_t **)(globalData + funcPtrTableElemIndexToGlobalDataOffset(i));
+    void *&funcPtrIndexToGlobalDatum(unsigned i) const {
+        return *(void **)(globalData() + funcPtrIndexToGlobalDataOffset(i));
     }
-    int32_t exitIndexToGlobalDataOffset(unsigned exitIndex) const {
+    unsigned exitIndexToGlobalDataOffset(unsigned exitIndex) const {
         JS_ASSERT(exitIndex < exits_.length());
-        return numGlobalVars_ * sizeof(uint64_t) +
-               funcPtrTableElems_.length() * sizeof(void*) +
+        return sizeof(void*) +
+               numGlobalVars_ * sizeof(uint64_t) +
+               numFuncPtrTableElems_ * sizeof(void*) +
                exitIndex * sizeof(ExitDatum);
     }
-    ExitDatum &exitIndexToGlobalDatum(uint8_t *globalData, unsigned exitIndex) const {
-        return *(ExitDatum *)(globalData + exitIndexToGlobalDataOffset(exitIndex));
+    ExitDatum &exitIndexToGlobalDatum(unsigned exitIndex) const {
+        return *(ExitDatum *)(globalData() + exitIndexToGlobalDataOffset(exitIndex));
     }
 
     void setFunctionBytes(size_t functionBytes) {
@@ -459,11 +503,12 @@ class AsmJSModule
         return heapAccesses_[i];
     }
 
-    void takeOwnershipOfCodePool(JSC::ExecutablePool *pool, uint8_t *code, size_t bytesNeeded) {
+    void takeOwnership(JSC::ExecutablePool *pool, uint8_t *code, size_t codeBytes, size_t totalBytes) {
         JS_ASSERT(uintptr_t(code) % gc::PageSize == 0);
         codePool_ = pool;
         code_ = code;
-        bytesNeeded_ = bytesNeeded;
+        codeBytes_ = codeBytes;
+        totalBytes_ = totalBytes;
     }
     uint8_t *functionCode() const {
         JS_ASSERT(code_);
@@ -478,12 +523,19 @@ class AsmJSModule
         return operationCallbackExit_;
     }
 
-    void setIsLinked() {
+    void setIsLinked(Handle<ArrayBufferObject*> maybeHeap) {
         JS_ASSERT(!linked_);
         linked_ = true;
+        maybeHeap_ = maybeHeap;
+        JS_ASSERT_IF(maybeHeap_, maybeHeap_->isAsmJSArrayBuffer());
+        heapDatum() = maybeHeap_ ? maybeHeap_->dataPointer() : NULL;
     }
     bool isLinked() const {
         return linked_;
+    }
+    uint8_t *maybeHeap() const {
+        JS_ASSERT(linked_);
+        return heapDatum();
     }
 };
 

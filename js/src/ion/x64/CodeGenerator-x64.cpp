@@ -396,19 +396,13 @@ CodeGeneratorX64::visitCompareVAndBranch(LCompareVAndBranch *lir)
 }
 
 bool
-CodeGeneratorX64::visitAsmLoad(LAsmLoad *ins)
+CodeGeneratorX64::visitAsmLoadHeap(LAsmLoadHeap *ins)
 {
-    const MAsmLoad *mir = ins->mir();
-
-    Register base;
-    switch (mir->base()) {
-      case MAsmLoad::Heap: base = HeapReg; break;
-      case MAsmLoad::Global: base = GlobalReg; break;
-    }
-    Operand addr(base, ToRegister(ins->index()), mir->scale(), mir->disp31());
+    const MAsmLoadHeap *mir = ins->mir();
 
     uint32_t offsetBefore = masm.size();
 
+    Operand addr(HeapReg, ToRegister(ins->index()), TimesOne);
     switch (mir->viewType()) {
       case ArrayBufferView::TYPE_INT8:    masm.movxbl(addr, ToRegister(ins->output())); break;
       case ArrayBufferView::TYPE_UINT8:   masm.movzbl(addr, ToRegister(ins->output())); break;
@@ -417,7 +411,6 @@ CodeGeneratorX64::visitAsmLoad(LAsmLoad *ins)
       case ArrayBufferView::TYPE_INT32:   masm.movl(addr, ToRegister(ins->output())); break;
       case ArrayBufferView::TYPE_UINT32:  masm.movl(addr, ToRegister(ins->output())); break;
       case ArrayBufferView::TYPE_FLOAT64: masm.movsd(addr, ToFloatRegister(ins->output())); break;
-      case MAsmLoad::FUNC_PTR:            masm.loadPtr(addr, ToRegister(ins->output())); break;
       case ArrayBufferView::TYPE_FLOAT32:
         // Unlike the store case below, include both instructions in the
         // offsetBefore/offsetAfter range. This is necessary since, after a
@@ -432,23 +425,17 @@ CodeGeneratorX64::visitAsmLoad(LAsmLoad *ins)
     }
 
     uint32_t offsetAfter = masm.size();
-    return gen->noteAsmLoad(offsetBefore, offsetAfter, ToAnyRegister(ins->output()));
+    return gen->noteAsmLoadHeap(offsetBefore, offsetAfter, ToAnyRegister(ins->output()));
 }
 
 bool
-CodeGeneratorX64::visitAsmStore(LAsmStore *ins)
+CodeGeneratorX64::visitAsmStoreHeap(LAsmStoreHeap *ins)
 {
-    const MAsmStore *mir = ins->mir();
-
-    Register base;
-    switch (mir->base()) {
-      case MAsmStore::Heap: base = HeapReg; break;
-      case MAsmStore::Global: base = GlobalReg; break;
-    }
-    Operand addr(base, ToRegister(ins->index()), TimesOne);
+    const MAsmStoreHeap *mir = ins->mir();
 
     uint32_t offsetBefore = masm.size();
 
+    Operand addr(HeapReg, ToRegister(ins->index()), TimesOne);
     if (ins->value()->isConstant()) {
         switch (mir->viewType()) {
           case ArrayBufferView::TYPE_INT8:    masm.movb(Imm32(ToInt32(ins->value())), addr); break;
@@ -483,6 +470,59 @@ CodeGeneratorX64::visitAsmStore(LAsmStore *ins)
     }
 
     uint32_t offsetAfter = masm.size();
-    return gen->noteAsmStore(offsetBefore, offsetAfter);
+    return gen->noteAsmStoreHeap(offsetBefore, offsetAfter);
+}
+
+bool
+CodeGeneratorX64::visitAsmLoadGlobalVar(LAsmLoadGlobalVar *ins)
+{
+    const MAsmLoadGlobalVar *mir = ins->mir();
+
+    CodeOffsetLabel label;
+    if (mir->type() == MIRType_Int32)
+        label = masm.loadRipRelativeInt32(ToRegister(ins->output()));
+    else
+        label = masm.loadRipRelativeDouble(ToFloatRegister(ins->output()));
+
+    return gen->noteAsmGlobalAccess(label.offset(), mir->globalDataOffset());
+}
+
+bool
+CodeGeneratorX64::visitAsmStoreGlobalVar(LAsmStoreGlobalVar *ins)
+{
+    const MAsmStoreGlobalVar *mir = ins->mir();
+
+    CodeOffsetLabel label;
+    if (mir->value()->type() == MIRType_Int32)
+        label = masm.storeRipRelativeInt32(ToRegister(ins->value()));
+    else
+        label = masm.storeRipRelativeDouble(ToFloatRegister(ins->value()));
+
+    return gen->noteAsmGlobalAccess(label.offset(), mir->globalDataOffset());
+}
+
+bool
+CodeGeneratorX64::visitAsmLoadFuncPtr(LAsmLoadFuncPtr *ins)
+{
+    const MAsmLoadFuncPtr *mir = ins->mir();
+
+    Register index = ToRegister(ins->index());
+    Register tmp = ToRegister(ins->temp());
+    Register out = ToRegister(ins->output());
+
+    CodeOffsetLabel label = masm.leaRipRelative(tmp);
+    masm.loadPtr(Operand(tmp, index, TimesEight, 0), out);
+
+    return gen->noteAsmGlobalAccess(label.offset(), mir->globalDataOffset());
+}
+
+bool
+CodeGeneratorX64::visitAsmLoadFFIFunc(LAsmLoadFFIFunc *ins)
+{
+    const MAsmLoadFFIFunc *mir = ins->mir();
+
+    CodeOffsetLabel label = masm.loadRipRelativeInt64(ToRegister(ins->output()));
+
+    return gen->noteAsmGlobalAccess(label.offset(), mir->globalDataOffset());
 }
 

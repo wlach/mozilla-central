@@ -50,18 +50,16 @@ class AsmJSActivation
     JSContext *cx_;
     const AsmJSModule &module_;
     unsigned entryIndex_;
-    uint8_t *heap_;
     AsmJSActivation *prev_;
     void *errorRejoinSP_;
     SPSProfiler *profiler_;
     void *resumePC_;
 
   public:
-    AsmJSActivation(JSContext *cx, const AsmJSModule &module, unsigned entryIndex, uint8_t *heap);
+    AsmJSActivation(JSContext *cx, const AsmJSModule &module, unsigned entryIndex);
     ~AsmJSActivation();
 
     const AsmJSModule &module() const { return module_; }
-    uint8_t *heap() const { return heap_; }
 
     // Read by JIT code:
     static unsigned offsetOfContext() { return offsetof(AsmJSActivation, cx_); }

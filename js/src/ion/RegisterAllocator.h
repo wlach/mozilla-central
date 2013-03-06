@@ -309,12 +309,10 @@ class RegisterAllocator
     {
         if (FramePointer != InvalidReg && lir->mir()->instrumentedProfiling())
             allRegisters_.take(AnyRegister(FramePointer));
-        if (mir->compilingAsmJS()) {
 #ifdef JS_CPU_X64
-            allRegisters_.take(AnyRegister(GlobalReg));
+        if (mir->compilingAsmJS())
             allRegisters_.take(AnyRegister(HeapReg));
 #endif
-        }
     }
 
   protected:

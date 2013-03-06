@@ -72,7 +72,6 @@ static const Register JSReturnReg_Data = JSReturnReg;
 
 static const Register ReturnReg = rax;
 static const Register ScratchReg = r11;
-static const Register GlobalReg = r14;
 static const Register HeapReg = r15;
 static const FloatRegister ReturnFloatReg = xmm0;
 static const FloatRegister ScratchFloatReg = xmm15;
@@ -538,6 +537,25 @@ class Assembler : public AssemblerX86Shared
           default:
             JS_NOT_REACHED("unexepcted operand kind");
         }
+    }
+
+    CodeOffsetLabel loadRipRelativeInt32(const Register &dest) {
+        return CodeOffsetLabel(masm.movl_ripr(dest.code()).offset());
+    }
+    CodeOffsetLabel loadRipRelativeInt64(const Register &dest) {
+        return CodeOffsetLabel(masm.movq_ripr(dest.code()).offset());
+    }
+    CodeOffsetLabel loadRipRelativeDouble(const FloatRegister &dest) {
+        return CodeOffsetLabel(masm.movsd_ripr(dest.code()).offset());
+    }
+    CodeOffsetLabel storeRipRelativeInt32(const Register &dest) {
+        return CodeOffsetLabel(masm.movl_rrip(dest.code()).offset());
+    }
+    CodeOffsetLabel storeRipRelativeDouble(const FloatRegister &dest) {
+        return CodeOffsetLabel(masm.movsd_rrip(dest.code()).offset());
+    }
+    CodeOffsetLabel leaRipRelative(const Register &dest) {
+        return CodeOffsetLabel(masm.leaq_rip(dest.code()).offset());
     }
 
     // The below cmpq methods switch the lhs and rhs when it invokes the

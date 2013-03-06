@@ -1022,6 +1022,7 @@ class ModuleCompiler
     typedef HashMap<PropertyName*, AsmJSMathBuiltin> MathNameMap;
     typedef HashMap<PropertyName*, Global> GlobalMap;
     typedef Vector<Func> FuncVector;
+    typedef Vector<AsmJSGlobalAccess> GlobalAccessVector;
 
     Maybe<AutoAssertNoGC>          noGC_;
 
@@ -1043,6 +1044,8 @@ class ModuleCompiler
     FuncPtrTableVector             funcPtrTables_;
     ExitMap                        exits_;
     MathNameMap                    standardLibraryMathNames_;
+
+    GlobalAccessVector             globalAccesses_;
 
     Label                          stackOverflowLabel_;
     Label                          operationCallbackLabel_;
@@ -1078,6 +1081,7 @@ class ModuleCompiler
         funcPtrTables_(cx),
         exits_(cx),
         standardLibraryMathNames_(cx),
+        globalAccesses_(cx),
         errorString_(NULL),
         errorNode_(NULL),
         tokenStream_(ts),
@@ -1227,14 +1231,14 @@ class ModuleCompiler
             return false;
         return functions_.append(func);
     }
-    bool addFuncPtrTable(PropertyName *varName, MoveRef<FuncPtrVector> funcPtrTableElems) {
+    bool addFuncPtrTable(PropertyName *varName, MoveRef<FuncPtrVector> funcPtrs) {
         JS_ASSERT(currentPass_ == 1);
         Global g(Global::FuncPtrTable);
         g.u.funcPtrTableIndex_ = funcPtrTables_.length();
         if (!globals_.putNew(varName, g))
             return false;
-        FuncPtrTable table(funcPtrTableElems, module_->numFuncPtrTableElems());
-        if (!module_->addFuncPtrTableElems(table.numElems()))
+        FuncPtrTable table(funcPtrs, module_->numFuncPtrTableElems());
+        if (!module_->incrementNumFuncPtrTableElems(table.numElems()))
             return false;
         return funcPtrTables_.append(Move(table));
     }
@@ -1271,8 +1275,18 @@ class ModuleCompiler
         g.u.constant_ = constant;
         return globals_.putNew(varName, g);
     }
-    bool addHeapAccesses(const Vector<AsmJSHeapAccess> &accesses) {
-        return module_->addHeapAccesses(accesses);
+    bool collectAccesses(MIRGenerator &gen) {
+        if (!module_->addHeapAccesses(gen.asmHeapAccesses()))
+            return false;
+
+        for (unsigned i = 0; i < gen.asmGlobalAccesses().length(); i++) {
+            if (!globalAccesses_.append(gen.asmGlobalAccesses()[i]))
+                return false;
+        }
+        return true;
+    }
+    bool addGlobalAccess(AsmJSGlobalAccess access) {
+        return globalAccesses_.append(access);
     }
     bool addExportedFunction(const Func *func, PropertyName *maybeFieldName) {
         JS_ASSERT(currentPass_ == 1);
@@ -1333,30 +1347,33 @@ class ModuleCompiler
         JS_ASSERT(currentPass_ == 3);
         currentPass_ = -1;
 
-        // Perform any final patching on the buffer before the final copy.
+        // Finish the code section.
         masm_.finish();
         if (masm_.oom())
             return false;
 
-        // Include extra space for the AlignBytes call below.
-        size_t allocBytes = masm_.bytesNeeded() + gc::PageSize;
+        // The global data section sits immediately after the executable (and
+        // other) data allocated by the MacroAssembler. Round up bytesNeeded so
+        // that doubles/pointers stay aligned.
+        size_t codeBytes = AlignBytes(masm_.bytesNeeded(), sizeof(double));
+        size_t totalBytes = codeBytes + module_->globalDataBytes();
 
-        // Allocate the executable memory.
+        // The code must be page aligned, so include extra space so that we can
+        // AlignBytes the allocation result below.
+        size_t allocedBytes = totalBytes + gc::PageSize;
+
+        // Allocate the slab of memory.
         JSC::ExecutableAllocator *execAlloc = cx_->compartment->ionCompartment()->execAlloc();
         JSC::ExecutablePool *pool;
-        uint8_t *bytes = (uint8_t*)execAlloc->alloc(allocBytes, &pool, JSC::ASMJS_CODE);
-        if (!bytes)
+        uint8_t *unalignedBytes = (uint8_t*)execAlloc->alloc(allocedBytes, &pool, JSC::ASMJS_CODE);
+        if (!unalignedBytes)
             return false;
+        uint8_t *code = (uint8_t*)AlignBytes((uintptr_t)unalignedBytes, gc::PageSize);
 
-        // Ensure that the beginning of function code is PageSize-aligned.
-        // This is required so that TriggerOperationCallbackForAsmJSCode can
-        // mprotect all (and only) the function code.
-        uint8_t *code = (uint8_t*)AlignBytes((uintptr_t)bytes, gc::PageSize);
+        // The ExecutablePool owns the memory and must be released by the AsmJSModule.
+        module_->takeOwnership(pool, code, codeBytes, totalBytes);
 
-        // The ExecutablePool owns the memory and must be released with the AsmJSModule.
-        module_->takeOwnershipOfCodePool(pool, code, masm_.bytesNeeded());
-
-        // Copy the buffer into the executable memory (c.f. IonCode::copyFrom).
+        // Copy the buffer into executable memory (c.f. IonCode::copyFrom).
         masm_.executableCopy(code);
         masm_.processCodeLabels(code);
         JS_ASSERT(masm_.jumpRelocationTableBytes() == 0);
@@ -1364,15 +1381,18 @@ class ModuleCompiler
         JS_ASSERT(masm_.preBarrierTableBytes() == 0);
         JS_ASSERT(!masm_.hasEnteredExitFrame());
 
-        // Patch anything in the AsmJSModule that needs an absolute address:
+        // Patch everything that needs an absolute address:
 
         // Entry points
         for (unsigned i = 0; i < module_->numExportedFunctions(); i++)
             module_->exportedFunction(i).patch(code);
 
         // Exit points
-        for (unsigned i = 0; i < module_->numExits(); i++)
+        for (unsigned i = 0; i < module_->numExits(); i++) {
             module_->exit(i).patch(code);
+            module_->exitIndexToGlobalDatum(i).exit = module_->exit(i).code();
+            module_->exitIndexToGlobalDatum(i).fun = NULL;
+        }
         module_->setOperationCallbackExit(code + masm_.actualOffset(operationCallbackLabel_.offset()));
 
         // Function-pointer table entries
@@ -1382,11 +1402,17 @@ class ModuleCompiler
             JS_ASSERT(elemIndex == table.baseIndex());
             for (unsigned j = 0; j < table.numElems(); j++) {
                 uint8_t *funcPtr = code + masm_.actualOffset(table.elem(j).codeLabel()->offset());
-                module_->setFuncPtrTableElem(elemIndex++, funcPtr);
+                module_->funcPtrIndexToGlobalDatum(elemIndex++) = funcPtr;
             }
             JS_ASSERT(elemIndex == table.baseIndex() + table.numElems());
         }
         JS_ASSERT(elemIndex == module_->numFuncPtrTableElems());
+
+        // Global accesses in function bodies
+        for (unsigned i = 0; i < globalAccesses_.length(); i++) {
+            AsmJSGlobalAccess access = globalAccesses_[i];
+            masm_.patchAsmGlobalAccess(access.offset, code, codeBytes, access.globalDataOffset);
+        }
 
         // The AsmJSHeapAccess offsets need to be updated to reflect the
         // "actualOffset" (an ARM distinction).
@@ -1518,6 +1544,7 @@ class FunctionCompiler
 
     JSContext *            cx() const { return m_.cx(); }
     ModuleCompiler &       m() const { return m_; }
+    const AsmJSModule &    module() const { return m_.module(); }
     ModuleCompiler::Func & func() const { return func_; }
     MIRGraph &             mirGraph() { return mirGraph_; }
     MIRGenerator &         mirGen() { return mirGen_; }
@@ -1653,7 +1680,7 @@ class FunctionCompiler
     {
         if (!curBlock_)
             return NULL;
-        MAsmLoad *load = MAsmLoad::New(vt, MAsmLoad::Heap, ptr);
+        MAsmLoadHeap *load = MAsmLoadHeap::New(vt, ptr);
         curBlock_->add(load);
         return load;
     }
@@ -1662,21 +1689,16 @@ class FunctionCompiler
     {
         if (!curBlock_)
             return;
-        curBlock_->add(MAsmStore::New(vt, MAsmStore::Heap, ptr, v));
+        curBlock_->add(MAsmStoreHeap::New(vt, ptr, v));
     }
 
     MDefinition *loadGlobalVar(const ModuleCompiler::Global &global)
     {
         if (!curBlock_)
             return NULL;
-        ArrayBufferView::ViewType vt;
-        switch (global.varType().which()) {
-          case VarType::Int: vt = ArrayBufferView::TYPE_INT32; break;
-          case VarType::Double: vt = ArrayBufferView::TYPE_FLOAT64; break;
-        }
-        int32_t disp = m_.module().globalVarIndexToGlobalDataOffset(global.varIndex());
-        MDefinition *index = constant(Int32Value(disp));
-        MAsmLoad *load = MAsmLoad::New(vt, MAsmLoad::Global, index);
+        MIRType type = global.varType().toMIRType();
+        unsigned globalDataOffset = module().globalVarIndexToGlobalDataOffset(global.varIndex());
+        MAsmLoadGlobalVar *load = MAsmLoadGlobalVar::New(type, globalDataOffset);
         curBlock_->add(load);
         return load;
     }
@@ -1685,14 +1707,8 @@ class FunctionCompiler
     {
         if (!curBlock_)
             return;
-        ArrayBufferView::ViewType vt;
-        switch (global.varType().which()) {
-          case VarType::Int: vt = ArrayBufferView::TYPE_INT32; break;
-          case VarType::Double: vt = ArrayBufferView::TYPE_FLOAT64; break;
-        }
-        int32_t disp = m_.module().globalVarIndexToGlobalDataOffset(global.varIndex());
-        MDefinition *index = constant(Int32Value(disp));
-        curBlock_->add(MAsmStore::New(vt, MAsmStore::Global, index, v));
+        unsigned globalDataOffset = module().globalVarIndexToGlobalDataOffset(global.varIndex());
+        curBlock_->add(MAsmStoreGlobalVar::New(globalDataOffset, v));
     }
 
     /***************************************************************** Calls */
@@ -1830,11 +1846,10 @@ class FunctionCompiler
 
         MConstant *mask = MConstant::New(Int32Value(funcPtrTable.mask()));
         curBlock_->add(mask);
-        MBitAnd *masked = MBitAnd::NewAsm(index, mask);
-        curBlock_->add(masked);
-        int32_t disp = m_.module().funcPtrTableElemIndexToGlobalDataOffset(funcPtrTable.baseIndex());
-        Scale scale = ScaleFromElemWidth(sizeof(void*));
-        MAsmLoad *ptrFun = MAsmLoad::New(MAsmLoad::FUNC_PTR, MAsmLoad::Global, masked, scale, disp);
+        MBitAnd *maskedIndex = MBitAnd::NewAsm(index, mask);
+        curBlock_->add(maskedIndex);
+        unsigned globalDataOffset = module().funcPtrIndexToGlobalDataOffset(funcPtrTable.baseIndex());
+        MAsmLoadFuncPtr *ptrFun = MAsmLoadFuncPtr::New(globalDataOffset, maskedIndex);
         curBlock_->add(ptrFun);
 
         MIRType returnType = funcPtrTable.sig().returnType().toMIRType();
@@ -1849,9 +1864,9 @@ class FunctionCompiler
         }
 
         JS_STATIC_ASSERT(offsetof(AsmJSModule::ExitDatum, exit) == 0);
-        int32_t offset = m_.module().exitIndexToGlobalDataOffset(exitIndex);
-        MDefinition *index = constant(Int32Value(offset));
-        MAsmLoad *ptrFun = MAsmLoad::New(MAsmLoad::FUNC_PTR, MAsmLoad::Global, index);
+        unsigned globalDataOffset = module().exitIndexToGlobalDataOffset(exitIndex);
+
+        MAsmLoadFFIFunc *ptrFun = MAsmLoadFFIFunc::New(globalDataOffset);
         curBlock_->add(ptrFun);
 
         return call(MAsmCall::Callee(ptrFun), args, returnType, def);
@@ -2797,7 +2812,7 @@ CheckFuncPtrTable(ModuleCompiler &m, ParseNode *var)
     if (!IsPowerOfTwo(length))
         return m.fail("Function-pointer table's length must be a power of 2", arrayLiteral);
 
-    ModuleCompiler::FuncPtrVector funcPtrTableElems(m.cx());
+    ModuleCompiler::FuncPtrVector funcPtrs(m.cx());
     const ModuleCompiler::Func *firstFunction = NULL;
 
     for (ParseNode *elem = ListHead(arrayLiteral); elem; elem = NextNode(elem)) {
@@ -2816,11 +2831,11 @@ CheckFuncPtrTable(ModuleCompiler &m, ParseNode *var)
             firstFunction = func;
         }
 
-        if (!funcPtrTableElems.append(func))
+        if (!funcPtrs.append(func))
             return false;
     }
 
-    return m.addFuncPtrTable(name, Move(funcPtrTableElems));
+    return m.addFuncPtrTable(name, Move(funcPtrs));
 }
 
 static bool
@@ -4354,7 +4369,7 @@ CheckFunctionBody(ModuleCompiler &m, ModuleCompiler::Func &func)
     if (!codegen)
         return false;
 
-    if (!m.addHeapAccesses(f.mirGen().asmHeapAccesses()))
+    if (!m.collectAccesses(f.mirGen()))
         return false;
 
     // Unlike regular IonMonkey which links and generates a new IonCode for
@@ -4447,12 +4462,10 @@ GenerateEntry(ModuleCompiler &m, const AsmJSModule::ExportedFunction &exportedFu
     LoadAsmJSActivationIntoRegister(masm, ScratchReg);
     masm.movq(StackPointer, Operand(ScratchReg, AsmJSActivation::offsetOfErrorRejoinSP()));
 
-    // Move the parameters into non-argument registers since we are about to
-    // clobber these registers with the contents of argv.
+    // Move 'argv' into a non-argument register since we are about to
+    // clobber argument registers.
     Register argv = r13;
-    masm.movq(IntArgReg0, HeapReg);    // buffer
-    masm.movq(IntArgReg1, GlobalReg);  // globalData
-    masm.movq(IntArgReg2, argv);       // argv
+    masm.movq(IntArgReg0, argv);
 
     // Remember argv so that we can load argv[0] after the call.
     JS_ASSERT(masm.framePushed() % StackAlignment == 0);
@@ -4490,6 +4503,15 @@ GenerateEntry(ModuleCompiler &m, const AsmJSModule::ExportedFunction &exportedFu
         }
     }
 
+    // Install the heap pointer into the globally-pinned HeapReg. The heap
+    // pointer is stored in the global data section and is patched at dynamic
+    // link time.
+    CodeOffsetLabel label = masm.loadRipRelativeInt64(HeapReg);
+    m.addGlobalAccess(AsmJSGlobalAccess(label.offset(), m.module().heapOffset()));
+
+    // Call the real function. It will return here unless there is an error, in
+    // which case the throw stub (GenerateThrowExit) will pop the stack to the
+    // the rejoinSP (stored above), restore non-volatile registers, and return.
     AssertStackAlignment(masm);
     masm.call(func.codeLabel());
 
@@ -4718,7 +4740,9 @@ GenerateFFIExit(ModuleCompiler &m, const ModuleCompiler::ExitDescriptor &exit, u
     LoadJSContextIntoRegister(masm, IntArgReg0);
 
     // argument 1: exitDatum
-    masm.lea(Operand(GlobalReg, m.module().exitIndexToGlobalDataOffset(exitIndex)), IntArgReg1);
+    CodeOffsetLabel label = masm.leaRipRelative(IntArgReg1);
+    unsigned globalDataOffset = m.module().exitIndexToGlobalDataOffset(exitIndex);
+    m.addGlobalAccess(AsmJSGlobalAccess(label.offset(), globalDataOffset));
 
     // argument 2: argc
     masm.mov(Imm32(exit.argTypes().length()), IntArgReg2);

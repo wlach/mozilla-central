@@ -52,8 +52,12 @@ class CodeGeneratorX64 : public CodeGeneratorX86Shared
     bool visitCompareBAndBranch(LCompareBAndBranch *lir);
     bool visitCompareV(LCompareV *lir);
     bool visitCompareVAndBranch(LCompareVAndBranch *lir);
-    bool visitAsmLoad(LAsmLoad *ins);
-    bool visitAsmStore(LAsmStore *ins);
+    bool visitAsmLoadHeap(LAsmLoadHeap *ins);
+    bool visitAsmStoreHeap(LAsmStoreHeap *ins);
+    bool visitAsmLoadGlobalVar(LAsmLoadGlobalVar *ins);
+    bool visitAsmStoreGlobalVar(LAsmStoreGlobalVar *ins);
+    bool visitAsmLoadFuncPtr(LAsmLoadFuncPtr *ins);
+    bool visitAsmLoadFFIFunc(LAsmLoadFFIFunc *ins);
 };
 
 typedef CodeGeneratorX64 CodeGeneratorSpecific;

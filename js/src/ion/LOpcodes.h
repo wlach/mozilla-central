@@ -205,8 +205,11 @@
     _(InterruptCheck)               \
     _(ParCheckInterrupt)            \
     _(FunctionBoundary)             \
-    _(AsmLoad)                      \
-    _(AsmStore)                     \
+    _(AsmLoadHeap)                  \
+    _(AsmStoreHeap)                 \
+    _(AsmLoadGlobalVar)             \
+    _(AsmStoreGlobalVar)            \
+    _(AsmLoadFFIFunc)               \
     _(AsmParameter)                 \
     _(AsmReturn)                    \
     _(AsmVoidReturn)                \

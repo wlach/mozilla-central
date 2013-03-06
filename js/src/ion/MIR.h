@@ -6899,59 +6899,131 @@ class MAsmUMod : public MBinaryInstruction
     }
 };
 
-class MAsmLoad : public MUnaryInstruction
+class MAsmLoadHeap : public MUnaryInstruction
 {
-  public:
-    enum Base { Heap, Global };
-    static const ArrayBufferView::ViewType FUNC_PTR = ArrayBufferView::TYPE_MAX;
-
-  private:
-    MAsmLoad(ArrayBufferView::ViewType vt, Base b, MDefinition *ptr, Scale scale, uint32_t disp31);
+    MAsmLoadHeap(ArrayBufferView::ViewType vt, MDefinition *ptr)
+      : MUnaryInstruction(ptr), viewType_(vt)
+    {
+        if (vt == ArrayBufferView::TYPE_FLOAT32 || vt == ArrayBufferView::TYPE_FLOAT64)
+            setResultType(MIRType_Double);
+        else
+            setResultType(MIRType_Int32);
+    }
 
     ArrayBufferView::ViewType viewType_;
-    Base base_;
-    Scale scale_;
-    uint32_t disp31_;
 
   public:
-    INSTRUCTION_HEADER(AsmLoad);
+    INSTRUCTION_HEADER(AsmLoadHeap);
 
-    static MAsmLoad *New(ArrayBufferView::ViewType vt, Base b, MDefinition *ptr,
-                         Scale scale = TimesOne, uint32_t disp31 = 0)
-    {
-        return new MAsmLoad(vt, b, ptr, scale, disp31);
+    static MAsmLoadHeap *New(ArrayBufferView::ViewType vt, MDefinition *ptr) {
+        return new MAsmLoadHeap(vt, ptr);
     }
 
     ArrayBufferView::ViewType viewType() const { return viewType_; }
-    Base base() const { return base_; }
     MDefinition *ptr() const { return getOperand(0); }
-    Scale scale() const { return scale_; }
-    uint32_t disp31() const { JS_ASSERT(disp31_ < INT32_MAX); return disp31_; }
 };
 
-class MAsmStore : public MBinaryInstruction
+class MAsmStoreHeap : public MBinaryInstruction
 {
-  public:
-    enum Base { Heap, Global };
-
-  private:
-    MAsmStore(ArrayBufferView::ViewType vt, Base b, MDefinition *ptr, MDefinition *v);
+    MAsmStoreHeap(ArrayBufferView::ViewType vt, MDefinition *ptr, MDefinition *v)
+      : MBinaryInstruction(ptr, v), viewType_(vt)
+    {}
 
     ArrayBufferView::ViewType viewType_;
-    Base base_;
 
   public:
-    INSTRUCTION_HEADER(AsmStore);
+    INSTRUCTION_HEADER(AsmStoreHeap);
 
-    static MAsmStore *New(ArrayBufferView::ViewType vt, Base b, MDefinition *ptr, MDefinition *v) {
-        return new MAsmStore(vt, b, ptr, v);
+    static MAsmStoreHeap *New(ArrayBufferView::ViewType vt, MDefinition *ptr, MDefinition *v) {
+        return new MAsmStoreHeap(vt, ptr, v);
     }
 
     ArrayBufferView::ViewType viewType() const { return viewType_; }
-    Base base() const { return base_; }
     MDefinition *ptr() const { return getOperand(0); }
-
     MDefinition *value() const { return getOperand(1); }
+};
+
+class MAsmLoadGlobalVar : public MNullaryInstruction
+{
+    MAsmLoadGlobalVar(MIRType type, unsigned globalDataOffset)
+      : globalDataOffset_(globalDataOffset)
+    {
+        JS_ASSERT(type == MIRType_Int32 || type == MIRType_Double);
+        setResultType(type);
+    }
+
+    unsigned globalDataOffset_;
+
+  public:
+    INSTRUCTION_HEADER(AsmLoadGlobalVar);
+
+    static MAsmLoadGlobalVar *New(MIRType type, unsigned globalDataOffset) {
+        return new MAsmLoadGlobalVar(type, globalDataOffset);
+    }
+
+    unsigned globalDataOffset() const { return globalDataOffset_; }
+};
+
+class MAsmStoreGlobalVar : public MUnaryInstruction
+{
+    MAsmStoreGlobalVar(unsigned globalDataOffset, MDefinition *v)
+      : MUnaryInstruction(v), globalDataOffset_(globalDataOffset)
+    {
+        JS_ASSERT(v->type() == MIRType_Int32 || v->type() == MIRType_Double);
+    }
+
+    unsigned globalDataOffset_;
+
+  public:
+    INSTRUCTION_HEADER(AsmStoreGlobalVar);
+
+    static MAsmStoreGlobalVar *New(unsigned globalDataOffset, MDefinition *v) {
+        return new MAsmStoreGlobalVar(globalDataOffset, v);
+    }
+
+    unsigned globalDataOffset() const { return globalDataOffset_; }
+    MDefinition *value() const { return getOperand(0); }
+};
+
+class MAsmLoadFuncPtr : public MUnaryInstruction
+{
+    MAsmLoadFuncPtr(unsigned globalDataOffset, MDefinition *index)
+      : MUnaryInstruction(index), globalDataOffset_(globalDataOffset)
+    {
+        setResultType(MIRType_Pointer);
+    }
+
+    unsigned globalDataOffset_;
+
+  public:
+    INSTRUCTION_HEADER(AsmLoadFuncPtr);
+
+    static MAsmLoadFuncPtr *New(unsigned globalDataOffset, MDefinition *index) {
+        return new MAsmLoadFuncPtr(globalDataOffset, index);
+    }
+
+    unsigned globalDataOffset() const { return globalDataOffset_; }
+    MDefinition *index() const { return getOperand(0); }
+};
+
+class MAsmLoadFFIFunc : public MNullaryInstruction
+{
+    MAsmLoadFFIFunc(unsigned globalDataOffset)
+      : globalDataOffset_(globalDataOffset)
+    {
+        setResultType(MIRType_Pointer);
+    }
+
+    unsigned globalDataOffset_;
+
+  public:
+    INSTRUCTION_HEADER(AsmLoadFFIFunc);
+
+    static MAsmLoadFFIFunc *New(unsigned globalDataOffset) {
+        return new MAsmLoadFFIFunc(globalDataOffset);
+    }
+
+    unsigned globalDataOffset() const { return globalDataOffset_; }
 };
 
 class MAsmParameter : public MNullaryInstruction

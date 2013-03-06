@@ -17,90 +17,6 @@
 using namespace js;
 using namespace mozilla;
 
-extern Class AsmLinkedModuleClass;
-
-static const unsigned ASM_LINKED_MODULE_MODULE_SLOT = 0;
-static const unsigned ASM_LINKED_MODULE_GLOBAL_DATA_SLOT = 1;
-static const unsigned ASM_LINKED_MODULE_HEAP_SLOT = 2;
-static const unsigned ASM_LINKED_MODULE_NUM_RESERVED_SLOTS = 3;
-
-static const AsmJSModule &
-AsmLinkedModuleToModule(JSObject *obj)
-{
-    JS_ASSERT(obj->getClass() == &AsmLinkedModuleClass);
-    JSObject *moduleObj = &obj->getReservedSlot(ASM_LINKED_MODULE_MODULE_SLOT).toObject();
-    return AsmJSModuleObjectToModule(moduleObj);
-}
-
-static uint8_t *
-AsmLinkedModuleToGlobalData(JSObject *obj)
-{
-    JS_ASSERT(obj->getClass() == &AsmLinkedModuleClass);
-    return (uint8_t *)obj->getReservedSlot(ASM_LINKED_MODULE_GLOBAL_DATA_SLOT).toPrivate();
-}
-
-static uint8_t *
-AsmLinkedModuleToHeapOrNull(JSObject *obj)
-{
-    JS_ASSERT(obj->getClass() == &AsmLinkedModuleClass);
-    if (JSObject *bufObj = obj->getReservedSlot(ASM_LINKED_MODULE_HEAP_SLOT).toObjectOrNull()) {
-        ArrayBufferObject &buf = bufObj->asArrayBuffer();
-        JS_ASSERT(buf.isAsmJSArrayBuffer());
-        return buf.dataPointer();
-    }
-    return NULL;
-}
-
-static void
-AsmLinkedModuleObject_finalize(FreeOp *fop, RawObject obj)
-{
-    fop->free_(AsmLinkedModuleToGlobalData(obj));
-}
-
-static void
-AsmLinkedModuleObject_trace(JSTracer *trc, JSRawObject obj)
-{
-    const AsmJSModule &module = AsmLinkedModuleToModule(obj);
-    uint8_t *globalData = AsmLinkedModuleToGlobalData(obj);
-    for (unsigned i = 0; i < module.numExits(); i++) {
-        AsmJSModule::ExitDatum &e = module.exitIndexToGlobalDatum(globalData, i);
-        if (e.fun)
-            MarkObject(trc, &e.fun, "AsmFFIGlobalDatum.fun");
-    }
-}
-
-Class AsmLinkedModuleClass = {
-    "AsmLinkedModuleClass",
-    JSCLASS_IS_ANONYMOUS | JSCLASS_HAS_RESERVED_SLOTS(ASM_LINKED_MODULE_NUM_RESERVED_SLOTS),
-    JS_PropertyStub,         /* addProperty */
-    JS_PropertyStub,         /* delProperty */
-    JS_PropertyStub,         /* getProperty */
-    JS_StrictPropertyStub,   /* setProperty */
-    JS_EnumerateStub,
-    JS_ResolveStub,
-    NULL,                    /* convert     */
-    AsmLinkedModuleObject_finalize,
-    NULL,                    /* checkAccess */
-    NULL,                    /* call        */
-    NULL,                    /* hasInstance */
-    NULL,                    /* construct   */
-    AsmLinkedModuleObject_trace
-};
-
-static JSObject *
-NewAsmLinkedModuleObject(JSContext *cx, HandleObject module, ScopedJSDeletePtr<uint8_t> &globalData,
-                        Handle<ArrayBufferObject*> heap)
-{
-    JSObject *obj = NewObjectWithGivenProto(cx, &AsmLinkedModuleClass, NULL, NULL);
-    if (!obj)
-        return NULL;
-
-    obj->setReservedSlot(ASM_LINKED_MODULE_MODULE_SLOT, ObjectValue(*module));
-    obj->setReservedSlot(ASM_LINKED_MODULE_GLOBAL_DATA_SLOT, PrivateValue(globalData.forget()));
-    obj->setReservedSlot(ASM_LINKED_MODULE_HEAP_SLOT, ObjectOrNullValue(heap));
-    return obj;
-}
-
 static bool
 LinkFail(JSContext *cx, const char *str)
 {
@@ -111,11 +27,11 @@ LinkFail(JSContext *cx, const char *str)
 
 static bool
 ValidateGlobalVariable(JSContext *cx, const AsmJSModule &module, AsmJSModule::Global global,
-                       HandleValue importVal, uint8_t *globalData)
+                       HandleValue importVal)
 {
     JS_ASSERT(global.which() == AsmJSModule::Global::Variable);
 
-    void *datum = module.globalVarIndexToGlobalDatum(globalData, global.varIndex());
+    void *datum = module.globalVarIndexToGlobalDatum(global.varIndex());
 
     switch (global.varInitKind()) {
       case AsmJSModule::Global::InitConstant: {
@@ -239,8 +155,7 @@ ValidateGlobalConstant(JSContext *cx, AsmJSModule::Global global, HandleValue gl
 }
 
 static bool
-DynamicallyLinkModule(JSContext *cx, StackFrame *fp, HandleObject moduleObj,
-                      MutableHandleObject obj)
+DynamicallyLinkModule(JSContext *cx, StackFrame *fp, HandleObject moduleObj)
 {
     AsmJSModule &module = AsmJSModuleObjectToModule(moduleObj);
     if (module.isLinked())
@@ -275,14 +190,6 @@ DynamicallyLinkModule(JSContext *cx, StackFrame *fp, HandleObject moduleObj,
             return LinkFail(cx, "Unable to prepare ArrayBuffer for asm.js use");
     }
 
-    ScopedJSDeletePtr<uint8_t> globalDataGuard;
-    if (module.byteLength() > 0) {
-        globalDataGuard = cx->pod_calloc<uint8_t>(module.byteLength());
-        if (!globalDataGuard)
-            return false;
-    }
-    uint8_t *globalData = globalDataGuard.get();
-
     AutoObjectVector ffis(cx);
     if (!ffis.resize(module.numFFIs()))
         return false;
@@ -291,7 +198,7 @@ DynamicallyLinkModule(JSContext *cx, StackFrame *fp, HandleObject moduleObj,
         AsmJSModule::Global global = module.global(i);
         switch (global.which()) {
           case AsmJSModule::Global::Variable:
-            if (!ValidateGlobalVariable(cx, module, global, importVal, globalData))
+            if (!ValidateGlobalVariable(cx, module, global, importVal))
                 return false;
             break;
           case AsmJSModule::Global::FFI:
@@ -313,33 +220,17 @@ DynamicallyLinkModule(JSContext *cx, StackFrame *fp, HandleObject moduleObj,
         }
     }
 
-    obj.set(NewAsmLinkedModuleObject(cx, moduleObj, globalDataGuard, heap));
-    if (!obj)
-        return false;
+    for (unsigned i = 0; i < module.numExits(); i++)
+        module.exitIndexToGlobalDatum(i).fun = ffis[module.exit(i).ffiIndex()]->toFunction();
 
-    // Initialize after linked module object creation so that GC-thing pointers
-    // in globalData do not become stale.
-
-    for (unsigned i = 0; i < module.numExits(); i++) {
-        AsmJSModule::ExitDatum &datum = module.exitIndexToGlobalDatum(globalData, i);
-        const AsmJSModule::Exit &exit = module.exit(i);
-        datum.exit = exit.code();
-        datum.fun = ffis[exit.ffiIndex()]->toFunction();
-    }
-
-    for (unsigned i = 0; i < module.numFuncPtrTableElems(); i++)
-        module.funcPtrTableElemIndexToGlobalDatum(globalData, i) = module.funcPtrTableElem(i);
-
-    module.setIsLinked();
+    module.setIsLinked(heap);
     return true;
 }
 
-AsmJSActivation::AsmJSActivation(JSContext *cx, const AsmJSModule &module, unsigned entryIndex,
-                                 uint8_t *heap)
+AsmJSActivation::AsmJSActivation(JSContext *cx, const AsmJSModule &module, unsigned entryIndex)
   : cx_(cx),
     module_(module),
     entryIndex_(entryIndex),
-    heap_(heap),
     errorRejoinSP_(NULL),
     profiler_(NULL),
     resumePC_(NULL)
@@ -369,7 +260,7 @@ AsmJSActivation::~AsmJSActivation()
     cx_->runtime->mainThread.asmJSActivationStack_ = prev_;
 }
 
-static const unsigned ASM_LINKED_MODULE_SLOT = 0;
+static const unsigned ASM_MODULE_SLOT = 0;
 static const unsigned ASM_EXPORT_INDEX_SLOT = 1;
 
 static JSBool
@@ -379,19 +270,15 @@ CallAsmJS(JSContext *cx, unsigned argc, Value *vp)
     RootedFunction callee(cx, callArgs.callee().toFunction());
 
     // An asm.js function stores, in its extended slots:
-    //  - a pointer to the linked module from which it was returned
+    //  - a pointer to the module from which it was returned
     //  - its index in the ordered list of exported functions
-    RootedObject linkedModule(cx, &callee->getExtendedSlot(ASM_LINKED_MODULE_SLOT).toObject());
-    unsigned exportIndex = callee->getExtendedSlot(ASM_EXPORT_INDEX_SLOT).toInt32();
-
-    // A linked module links a heap (ArrayBuffer) and globalData to a module
-    const AsmJSModule &module = AsmLinkedModuleToModule(linkedModule);
-    uint8_t *heap =             AsmLinkedModuleToHeapOrNull(linkedModule);
-    uint8_t *globalData =       AsmLinkedModuleToGlobalData(linkedModule);
+    RootedObject moduleObj(cx, &callee->getExtendedSlot(ASM_MODULE_SLOT).toObject());
+    const AsmJSModule &module = AsmJSModuleObjectToModule(moduleObj);
 
     // An exported function points to the code as well as the exported
     // function's signature, which implies the dynamic coercions performed on
     // the arguments.
+    unsigned exportIndex = callee->getExtendedSlot(ASM_EXPORT_INDEX_SLOT).toInt32();
     const AsmJSModule::ExportedFunction &func = module.exportedFunction(exportIndex);
 
     // The calling convention for an external call into asm.js is to pass an
@@ -421,10 +308,13 @@ CallAsmJS(JSContext *cx, unsigned argc, Value *vp)
         }
     }
 
-    AsmJSActivation activation(cx, module, exportIndex, heap);
+    {
+        AsmJSActivation activation(cx, module, exportIndex);
 
-    if (!func.code()(heap, globalData, coercedArgs.begin()))
-        return false;
+        // Call into generated code.
+        if (!func.code()(coercedArgs.begin()))
+            return false;
+    }
 
     switch (func.returnType()) {
       case AsmJSModule::Return_Void:
@@ -443,7 +333,7 @@ CallAsmJS(JSContext *cx, unsigned argc, Value *vp)
 
 static JSFunction *
 NewExportedFunction(JSContext *cx, const AsmJSModule::ExportedFunction &func,
-                    HandleObject linkedModule, unsigned exportIndex)
+                    HandleObject moduleObj, unsigned exportIndex)
 {
     RootedPropertyName name(cx, func.name());
     JSFunction *fun = NewFunction(cx, NullPtr(), CallAsmJS, func.numArgs(),
@@ -452,7 +342,7 @@ NewExportedFunction(JSContext *cx, const AsmJSModule::ExportedFunction &func,
     if (!fun)
         return NULL;
 
-    fun->setExtendedSlot(ASM_LINKED_MODULE_SLOT, ObjectValue(*linkedModule));
+    fun->setExtendedSlot(ASM_MODULE_SLOT, ObjectValue(*moduleObj));
     fun->setExtendedSlot(ASM_EXPORT_INDEX_SLOT, Int32Value(exportIndex));
     return fun;
 }
@@ -463,8 +353,7 @@ js::LinkAsmJS(JSContext *cx, StackFrame *fp, MutableHandleValue rval)
     RootedObject moduleObj(cx, fp->fun()->nonLazyScript()->asmJS);
     const AsmJSModule &module = AsmJSModuleObjectToModule(moduleObj);
 
-    RootedObject linkedModule(cx);
-    if (!DynamicallyLinkModule(cx, fp, moduleObj, &linkedModule))
+    if (!DynamicallyLinkModule(cx, fp, moduleObj))
         return !cx->isExceptionPending();
 
     // Uncomment this to validate asm.js tests against non-asm.js
@@ -473,7 +362,7 @@ js::LinkAsmJS(JSContext *cx, StackFrame *fp, MutableHandleValue rval)
     if (module.numExportedFunctions() == 1) {
         const AsmJSModule::ExportedFunction &func = module.exportedFunction(0);
         if (!func.maybeFieldName()) {
-            RootedFunction fun(cx, NewExportedFunction(cx, func, linkedModule, 0));
+            RootedFunction fun(cx, NewExportedFunction(cx, func, moduleObj, 0));
             if (!fun)
                 return false;
 
@@ -490,7 +379,7 @@ js::LinkAsmJS(JSContext *cx, StackFrame *fp, MutableHandleValue rval)
     for (unsigned i = 0; i < module.numExportedFunctions(); i++) {
         const AsmJSModule::ExportedFunction &func = module.exportedFunction(i);
 
-        RootedFunction fun(cx, NewExportedFunction(cx, func, linkedModule, i));
+        RootedFunction fun(cx, NewExportedFunction(cx, func, moduleObj, i));
         if (!fun)
             return false;
 

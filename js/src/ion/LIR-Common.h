@@ -4015,37 +4015,70 @@ class LFunctionBoundary : public LInstructionHelper<0, 0, 1>
     }
 };
 
-class LAsmLoad : public LInstructionHelper<1, 1, 0>
+class LAsmLoadHeap : public LInstructionHelper<1, 1, 0>
 {
   public:
-    LIR_HEADER(AsmLoad);
-    LAsmLoad(const LAllocation &ptr) {
+    LIR_HEADER(AsmLoadHeap);
+    LAsmLoadHeap(const LAllocation &ptr) {
         setOperand(0, ptr);
     }
-    const MAsmLoad *mir() const {
-        return mir_->toAsmLoad();
+    const MAsmLoadHeap *mir() const {
+        return mir_->toAsmLoadHeap();
     }
     const LAllocation *index() {
         return getOperand(0);
     }
 };
 
-class LAsmStore : public LInstructionHelper<0, 2, 0>
+class LAsmStoreHeap : public LInstructionHelper<0, 2, 0>
 {
   public:
-    LIR_HEADER(AsmStore);
-    LAsmStore(const LAllocation &ptr, const LAllocation &value) {
+    LIR_HEADER(AsmStoreHeap);
+    LAsmStoreHeap(const LAllocation &ptr, const LAllocation &value) {
         setOperand(0, ptr);
         setOperand(1, value);
     }
-    const MAsmStore *mir() const {
-        return mir_->toAsmStore();
+    const MAsmStoreHeap *mir() const {
+        return mir_->toAsmStoreHeap();
     }
     const LAllocation *index() {
         return getOperand(0);
     }
     const LAllocation *value() {
         return getOperand(1);
+    }
+};
+
+class LAsmLoadGlobalVar : public LInstructionHelper<1, 0, 0>
+{
+  public:
+    LIR_HEADER(AsmLoadGlobalVar);
+    const MAsmLoadGlobalVar *mir() const {
+        return mir_->toAsmLoadGlobalVar();
+    }
+};
+
+class LAsmStoreGlobalVar : public LInstructionHelper<0, 1, 0>
+{
+  public:
+    LIR_HEADER(AsmStoreGlobalVar);
+    LAsmStoreGlobalVar(const LAllocation &value) {
+        setOperand(0, value);
+    }
+    const MAsmStoreGlobalVar *mir() const {
+        return mir_->toAsmStoreGlobalVar();
+    }
+    const LAllocation *value() {
+        return getOperand(0);
+    }
+};
+
+class LAsmLoadFFIFunc : public LInstructionHelper<1, 0, 0>
+{
+  public:
+    LIR_HEADER(AsmLoadFFIFunc);
+    const MAsmLoadFFIFunc *mir() const {
+        return mir_->toAsmLoadFFIFunc();
     }
 };
 

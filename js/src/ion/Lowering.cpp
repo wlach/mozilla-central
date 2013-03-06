@@ -2413,32 +2413,50 @@ LIRGenerator::visitAsmUnsignedToDouble(MAsmUnsignedToDouble *ins)
 }
 
 bool
-LIRGenerator::visitAsmLoad(MAsmLoad *ins)
+LIRGenerator::visitAsmLoadHeap(MAsmLoadHeap *ins)
 {
-    LAsmLoad *lir = new LAsmLoad(useRegisterAtStart(ins->ptr()));
+    LAsmLoadHeap *lir = new LAsmLoadHeap(useRegisterAtStart(ins->ptr()));
     return define(lir, ins);
 }
 
 bool
-LIRGenerator::visitAsmStore(MAsmStore *ins)
+LIRGenerator::visitAsmStoreHeap(MAsmStoreHeap *ins)
 {
-    LAsmStore *lir;
+    LAsmStoreHeap *lir;
     switch (ins->viewType()) {
       case ArrayBufferView::TYPE_INT8: case ArrayBufferView::TYPE_UINT8:
       case ArrayBufferView::TYPE_INT16: case ArrayBufferView::TYPE_UINT16:
       case ArrayBufferView::TYPE_INT32: case ArrayBufferView::TYPE_UINT32:
-        lir = new LAsmStore(useRegisterAtStart(ins->ptr()),
-                             useRegisterOrConstantAtStart(ins->value()));
+        lir = new LAsmStoreHeap(useRegisterAtStart(ins->ptr()),
+                                useRegisterOrConstantAtStart(ins->value()));
         break;
       case ArrayBufferView::TYPE_FLOAT32:
       case ArrayBufferView::TYPE_FLOAT64:
-        lir = new LAsmStore(useRegisterAtStart(ins->ptr()),
-                            useRegisterAtStart(ins->value()));
+        lir = new LAsmStoreHeap(useRegisterAtStart(ins->ptr()),
+                                useRegisterAtStart(ins->value()));
         break;
       default: JS_NOT_REACHED("unexpected array type");
     }
 
     return add(lir, ins);
+}
+
+bool
+LIRGenerator::visitAsmLoadGlobalVar(MAsmLoadGlobalVar *ins)
+{
+    return define(new LAsmLoadGlobalVar, ins);
+}
+
+bool
+LIRGenerator::visitAsmStoreGlobalVar(MAsmStoreGlobalVar *ins)
+{
+    return add(new LAsmStoreGlobalVar(useRegisterAtStart(ins->value())), ins);
+}
+
+bool
+LIRGenerator::visitAsmLoadFFIFunc(MAsmLoadFFIFunc *ins)
+{
+    return define(new LAsmLoadFFIFunc, ins);
 }
 
 bool
