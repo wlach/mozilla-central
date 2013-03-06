@@ -54,3 +54,4 @@ assertEq(asmLink(asmCompile('global', 'imp', USE_ASM + "var i=imp.i|0; function 
 assertEq(asmLink(asmCompile('global', 'imp', USE_ASM + "var i=imp.i|0; function f() { return i|0 } return f")(null, {i:1.4})), 1);
 assertEq(asmLink(asmCompile('global', 'imp', USE_ASM + "var i=+imp.i; function f() { return +i } return f")(null, {i:42})), 42);
 assertEq(asmLink(asmCompile('global', 'imp', USE_ASM + "var i=+imp.i; function f() { return +i } return f")(this, {i:1.4})), 1.4);
+assertEq(asmLink(asmCompile(USE_ASM + "var g=0; function f() { var i=42; while (1) { break; } g = i; return g|0 } return f"))(), 42);

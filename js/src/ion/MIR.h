@@ -6968,9 +6968,7 @@ class MAsmStoreGlobalVar : public MUnaryInstruction
 {
     MAsmStoreGlobalVar(unsigned globalDataOffset, MDefinition *v)
       : MUnaryInstruction(v), globalDataOffset_(globalDataOffset)
-    {
-        JS_ASSERT(v->type() == MIRType_Int32 || v->type() == MIRType_Double);
-    }
+    {}
 
     unsigned globalDataOffset_;
 

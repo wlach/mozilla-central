@@ -149,6 +149,6 @@ LIRGeneratorX64::visitStoreTypedArrayElement(MStoreTypedArrayElement *ins)
 bool
 LIRGeneratorX64::visitAsmLoadFuncPtr(MAsmLoadFuncPtr *ins)
 {
-    return define(new LAsmLoadFuncPtr(useRegisterAtStart(ins->index()), temp()), ins);
+    return define(new LAsmLoadFuncPtr(useRegister(ins->index()), temp()), ins);
 }
 

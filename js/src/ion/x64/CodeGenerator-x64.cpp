@@ -492,8 +492,11 @@ CodeGeneratorX64::visitAsmStoreGlobalVar(LAsmStoreGlobalVar *ins)
 {
     const MAsmStoreGlobalVar *mir = ins->mir();
 
+    MIRType type = mir->value()->type();
+    JS_ASSERT(type == MIRType_Int32 || type == MIRType_Double);
+
     CodeOffsetLabel label;
-    if (mir->value()->type() == MIRType_Int32)
+    if (type == MIRType_Int32)
         label = masm.storeRipRelativeInt32(ToRegister(ins->value()));
     else
         label = masm.storeRipRelativeDouble(ToFloatRegister(ins->value()));
