@@ -168,6 +168,10 @@ class Maybe
         return constructed ? &Maybe::nonNull : NULL;
     }
 
+    bool operator!() const {
+        return !constructed;
+    }
+
     void construct() {
       MOZ_ASSERT(!constructed);
       ::new (storage.addr()) T();
