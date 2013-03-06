@@ -3219,11 +3219,8 @@ CheckInternalCall(FunctionCompiler &f, ParseNode *callNode, const ModuleCompiler
     if (!CheckCallArgs(f, callNode, Use::NoCoercion, &args))
         return false;
 
-    if (args.length() != callee.numArgs()) {
-        fprintf(stderr, "has %d\n", args.length());
-        fprintf(stderr, "given %d\n", callee.numArgs());
+    if (args.length() != callee.numArgs())
         return f.fail("Wrong number of arguments", callNode);
-    }
 
     for (unsigned i = 0; i < args.length(); i++) {
         if (!(args.type(i) <= callee.argType(i)))
