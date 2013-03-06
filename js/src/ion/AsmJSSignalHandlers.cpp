@@ -238,8 +238,9 @@ HandleException(PEXCEPTION_POINTERS exception)
 #ifdef JS_CPU_X64
     // This isn't necessary, but, since we can, include this extra layer of
     // checking to make sure we aren't covering up a real bug.
-    if (faultingAddress < activation->heap() ||
-        faultingAddress >= activation->heap() + AsmJSBufferProtectedSize)
+    if (!module.maybeHeap() ||
+        faultingAddress < module.maybeHeap() ||
+        faultingAddress >= module.maybeHeap() + AsmJSBufferProtectedSize)
     {
         return false;
     }
