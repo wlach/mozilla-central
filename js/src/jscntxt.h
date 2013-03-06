@@ -238,7 +238,7 @@ struct EvalCacheHashPolicy
     typedef EvalCacheLookup Lookup;
 
     static HashNumber hash(const Lookup &l);
-    static bool match(UnrootedScript script, const EvalCacheLookup &l);
+    static bool match(RawScript script, const EvalCacheLookup &l);
 };
 
 typedef HashSet<RawScript, EvalCacheHashPolicy, SystemAllocPolicy> EvalCache;

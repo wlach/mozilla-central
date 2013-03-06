@@ -244,7 +244,7 @@ MarkChildren(JSTracer *trc, JSObject *obj);
  * JS_TraceShapeCycleCollectorChildren.
  */
 void
-MarkCycleCollectorChildren(JSTracer *trc, UnrootedShape shape);
+MarkCycleCollectorChildren(JSTracer *trc, RawShape shape);
 
 void
 PushArena(GCMarker *gcmarker, ArenaHeader *aheader);

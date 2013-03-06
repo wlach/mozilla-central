@@ -1658,7 +1658,7 @@ LIRGenerator::visitTypeBarrier(MTypeBarrier *ins)
         return false;
     if (!assignSnapshot(barrier, ins->bailoutKind()))
         return false;
-    return defineAs(barrier, ins, ins->input()) && add(barrier);
+    return redefine(ins, ins->input()) && add(barrier, ins);
 }
 
 bool
@@ -1670,18 +1670,6 @@ LIRGenerator::visitMonitorTypes(MMonitorTypes *ins)
     if (!useBox(lir, LMonitorTypes::Input, ins->input()))
         return false;
     return assignSnapshot(lir, Bailout_Monitor) && add(lir, ins);
-}
-
-bool
-LIRGenerator::visitExcludeType(MExcludeType *ins)
-{
-    LExcludeType *filter = new LExcludeType(temp());
-    if (!useBox(filter, LExcludeType::Input, ins->input()))
-        return false;
-    if (!assignSnapshot(filter, ins->bailoutKind()))
-        return false;
-    filter->setMir(ins);
-    return add(filter);
 }
 
 bool
