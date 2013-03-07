@@ -1099,8 +1099,19 @@ JSObject::sizeOfExcludingThis(JSMallocSizeOfFun mallocSizeOf, JS::ObjectsExtraSi
     if (hasDynamicSlots())
         sizes->slots = mallocSizeOf(slots);
 
-    if (hasDynamicElements())
-        sizes->elements = mallocSizeOf(getElementsHeader());
+    if (hasDynamicElements()) {
+        js::ObjectElements *elements = getElementsHeader();
+#if defined (JS_CPU_X64)
+        // On x64, ArrayBufferObject::prepareForAsmJS switches the
+        // ArrayBufferObject to use mmap'd storage. This is not included in the
+        // total 'explicit' figure and thus we must not include it here.
+        // TODO: include it somewhere else.
+        if (JS_LIKELY(!elements->isAsmJSArrayBuffer()))
+            sizes->elements = mallocSizeOf(elements);
+#else
+        sizes->elements = mallocSizeOf(elements);
+#endif
+    }
 
     // Other things may be measured in the future if DMD indicates it is worthwhile.
     // Note that sizes->private_ is measured elsewhere.
