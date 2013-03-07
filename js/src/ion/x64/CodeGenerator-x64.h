@@ -58,6 +58,8 @@ class CodeGeneratorX64 : public CodeGeneratorX86Shared
     bool visitAsmStoreGlobalVar(LAsmStoreGlobalVar *ins);
     bool visitAsmLoadFuncPtr(LAsmLoadFuncPtr *ins);
     bool visitAsmLoadFFIFunc(LAsmLoadFFIFunc *ins);
+
+    void postAsmCall(LAsmCall *lir) {}
 };
 
 typedef CodeGeneratorX64 CodeGeneratorSpecific;

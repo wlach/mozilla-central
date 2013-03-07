@@ -4000,10 +4000,10 @@ class LAsmLoadHeap : public LInstructionHelper<1, 1, 0>
     LAsmLoadHeap(const LAllocation &ptr) {
         setOperand(0, ptr);
     }
-    const MAsmLoadHeap *mir() const {
+    MAsmLoadHeap *mir() const {
         return mir_->toAsmLoadHeap();
     }
-    const LAllocation *index() {
+    const LAllocation *ptr() {
         return getOperand(0);
     }
 };
@@ -4016,10 +4016,10 @@ class LAsmStoreHeap : public LInstructionHelper<0, 2, 0>
         setOperand(0, ptr);
         setOperand(1, value);
     }
-    const MAsmStoreHeap *mir() const {
+    MAsmStoreHeap *mir() const {
         return mir_->toAsmStoreHeap();
     }
-    const LAllocation *index() {
+    const LAllocation *ptr() {
         return getOperand(0);
     }
     const LAllocation *value() {
@@ -4031,7 +4031,7 @@ class LAsmLoadGlobalVar : public LInstructionHelper<1, 0, 0>
 {
   public:
     LIR_HEADER(AsmLoadGlobalVar);
-    const MAsmLoadGlobalVar *mir() const {
+    MAsmLoadGlobalVar *mir() const {
         return mir_->toAsmLoadGlobalVar();
     }
 };
@@ -4043,7 +4043,7 @@ class LAsmStoreGlobalVar : public LInstructionHelper<0, 1, 0>
     LAsmStoreGlobalVar(const LAllocation &value) {
         setOperand(0, value);
     }
-    const MAsmStoreGlobalVar *mir() const {
+    MAsmStoreGlobalVar *mir() const {
         return mir_->toAsmStoreGlobalVar();
     }
     const LAllocation *value() {
@@ -4055,7 +4055,7 @@ class LAsmLoadFFIFunc : public LInstructionHelper<1, 0, 0>
 {
   public:
     LIR_HEADER(AsmLoadFFIFunc);
-    const MAsmLoadFFIFunc *mir() const {
+    MAsmLoadFFIFunc *mir() const {
         return mir_->toAsmLoadFFIFunc();
     }
 };

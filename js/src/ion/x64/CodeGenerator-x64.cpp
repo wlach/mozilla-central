@@ -398,32 +398,27 @@ CodeGeneratorX64::visitCompareVAndBranch(LCompareVAndBranch *lir)
 bool
 CodeGeneratorX64::visitAsmLoadHeap(LAsmLoadHeap *ins)
 {
-    const MAsmLoadHeap *mir = ins->mir();
+    MAsmLoadHeap *mir = ins->mir();
+    Operand srcAddr(HeapReg, ToRegister(ins->ptr()), TimesOne);
 
-    uint32_t offsetBefore = masm.size();
-
-    Operand addr(HeapReg, ToRegister(ins->index()), TimesOne);
-    switch (mir->viewType()) {
-      case ArrayBufferView::TYPE_INT8:    masm.movxbl(addr, ToRegister(ins->output())); break;
-      case ArrayBufferView::TYPE_UINT8:   masm.movzbl(addr, ToRegister(ins->output())); break;
-      case ArrayBufferView::TYPE_INT16:   masm.movxwl(addr, ToRegister(ins->output())); break;
-      case ArrayBufferView::TYPE_UINT16:  masm.movzwl(addr, ToRegister(ins->output())); break;
-      case ArrayBufferView::TYPE_INT32:   masm.movl(addr, ToRegister(ins->output())); break;
-      case ArrayBufferView::TYPE_UINT32:  masm.movl(addr, ToRegister(ins->output())); break;
-      case ArrayBufferView::TYPE_FLOAT64: masm.movsd(addr, ToFloatRegister(ins->output())); break;
-      case ArrayBufferView::TYPE_FLOAT32:
-        // Unlike the store case below, include both instructions in the
-        // offsetBefore/offsetAfter range. This is necessary since, after a
-        // faulting float32 load, the destination register will be assigned
-        // float64 NaN so we mustn't do a float-to-double conversion. It is
-        // critical that the load is first since offsetBefore must be the exact
-        // offset of the load.
-        masm.movss(addr, ToFloatRegister(ins->output()));
-        masm.cvtss2sd(ToFloatRegister(ins->output()), ToFloatRegister(ins->output()));
-        break;
-      default: JS_NOT_REACHED("unexpected array type");
+    if (mir->viewType() == ArrayBufferView::TYPE_FLOAT32) {
+        // Float loads require two instructions: a load and a float-to-double
+        // conversion. Unlike the AsmStoreHeap case below, include both
+        // instructions in the offsetBefore/offsetAfter range. This is necessary
+        // since, after a faulting float32 load, the destination register will
+        // be assigned float64 NaN so we mustn't do a float-to-double
+        // conversion. It is critical that the load is first since offsetBefore
+        // must be the exact offset of the load.
+        uint32_t offsetBefore = masm.size();
+        FloatRegister r = ToFloatRegister(ins->output());
+        masm.movss(srcAddr, r);
+        masm.cvtss2sd(r, r);
+        uint32_t offsetAfter = masm.size();
+        return gen->noteAsmLoadHeap(offsetBefore, offsetAfter, ToAnyRegister(ins->output()));
     }
 
+    uint32_t offsetBefore = masm.size();
+    emitAsmLoadHeap(srcAddr, ins->output(), mir->viewType());
     uint32_t offsetAfter = masm.size();
     return gen->noteAsmLoadHeap(offsetBefore, offsetAfter, ToAnyRegister(ins->output()));
 }
@@ -431,44 +426,23 @@ CodeGeneratorX64::visitAsmLoadHeap(LAsmLoadHeap *ins)
 bool
 CodeGeneratorX64::visitAsmStoreHeap(LAsmStoreHeap *ins)
 {
-    const MAsmStoreHeap *mir = ins->mir();
+    MAsmStoreHeap *mir = ins->mir();
+    Operand dstAddr(HeapReg, ToRegister(ins->ptr()), TimesOne);
 
-    uint32_t offsetBefore = masm.size();
-
-    Operand addr(HeapReg, ToRegister(ins->index()), TimesOne);
-    if (ins->value()->isConstant()) {
-        switch (mir->viewType()) {
-          case ArrayBufferView::TYPE_INT8:    masm.movb(Imm32(ToInt32(ins->value())), addr); break;
-          case ArrayBufferView::TYPE_UINT8:   masm.movb(Imm32(ToInt32(ins->value())), addr); break;
-          case ArrayBufferView::TYPE_INT16:   masm.movw(Imm32(ToInt32(ins->value())), addr); break;
-          case ArrayBufferView::TYPE_UINT16:  masm.movw(Imm32(ToInt32(ins->value())), addr); break;
-          case ArrayBufferView::TYPE_INT32:   masm.movl(Imm32(ToInt32(ins->value())), addr); break;
-          case ArrayBufferView::TYPE_UINT32:  masm.movl(Imm32(ToInt32(ins->value())), addr); break;
-          default: JS_NOT_REACHED("unexpected array type");
-        }
-    } else {
-        switch (mir->viewType()) {
-          case ArrayBufferView::TYPE_INT8:    masm.movb(ToRegister(ins->value()), addr); break;
-          case ArrayBufferView::TYPE_UINT8:   masm.movb(ToRegister(ins->value()), addr); break;
-          case ArrayBufferView::TYPE_INT16:   masm.movw(ToRegister(ins->value()), addr); break;
-          case ArrayBufferView::TYPE_UINT16:  masm.movw(ToRegister(ins->value()), addr); break;
-          case ArrayBufferView::TYPE_INT32:   masm.movl(ToRegister(ins->value()), addr); break;
-          case ArrayBufferView::TYPE_UINT32:  masm.movl(ToRegister(ins->value()), addr); break;
-          case ArrayBufferView::TYPE_FLOAT64: masm.movsd(ToFloatRegister(ins->value()), addr); break;
-          case ArrayBufferView::TYPE_FLOAT32:
-            // Although we are storing to a float32, the input register holds a
-            // float64 which must be explicitly converted (we cannot simply alias the low
-            // float32 of the xmm register).
-            masm.convertDoubleToFloat(ToFloatRegister(ins->value()), ScratchFloatReg);
-
-            // The offsetBefore must point directly at the load operation.
-            offsetBefore = masm.size();
-            masm.movss(ScratchFloatReg, addr);
-            break;
-          default: JS_NOT_REACHED("unexpected array type");
-        }
+    if (mir->viewType() == ArrayBufferView::TYPE_FLOAT32) {
+        // Although we are storing to a float32, the input register holds a
+        // float64 which must be explicitly converted (we cannot simply alias the low
+        // float32 of the xmm register). Make sure that offsetBefore points to
+        // the store, not the conversion op since it is the load that will fault.
+        masm.convertDoubleToFloat(ToFloatRegister(ins->value()), ScratchFloatReg);
+        uint32_t offsetBefore = masm.size();
+        masm.movss(ScratchFloatReg, dstAddr);
+        uint32_t offsetAfter = masm.size();
+        return gen->noteAsmStoreHeap(offsetBefore, offsetAfter);
     }
 
+    uint32_t offsetBefore = masm.size();
+    emitAsmStoreHeap(dstAddr, ins->value(), mir->viewType());
     uint32_t offsetAfter = masm.size();
     return gen->noteAsmStoreHeap(offsetBefore, offsetAfter);
 }
@@ -476,7 +450,7 @@ CodeGeneratorX64::visitAsmStoreHeap(LAsmStoreHeap *ins)
 bool
 CodeGeneratorX64::visitAsmLoadGlobalVar(LAsmLoadGlobalVar *ins)
 {
-    const MAsmLoadGlobalVar *mir = ins->mir();
+    MAsmLoadGlobalVar *mir = ins->mir();
 
     CodeOffsetLabel label;
     if (mir->type() == MIRType_Int32)
@@ -490,7 +464,7 @@ CodeGeneratorX64::visitAsmLoadGlobalVar(LAsmLoadGlobalVar *ins)
 bool
 CodeGeneratorX64::visitAsmStoreGlobalVar(LAsmStoreGlobalVar *ins)
 {
-    const MAsmStoreGlobalVar *mir = ins->mir();
+    MAsmStoreGlobalVar *mir = ins->mir();
 
     MIRType type = mir->value()->type();
     JS_ASSERT(type == MIRType_Int32 || type == MIRType_Double);
@@ -507,7 +481,7 @@ CodeGeneratorX64::visitAsmStoreGlobalVar(LAsmStoreGlobalVar *ins)
 bool
 CodeGeneratorX64::visitAsmLoadFuncPtr(LAsmLoadFuncPtr *ins)
 {
-    const MAsmLoadFuncPtr *mir = ins->mir();
+    MAsmLoadFuncPtr *mir = ins->mir();
 
     Register index = ToRegister(ins->index());
     Register tmp = ToRegister(ins->temp());
@@ -522,7 +496,7 @@ CodeGeneratorX64::visitAsmLoadFuncPtr(LAsmLoadFuncPtr *ins)
 bool
 CodeGeneratorX64::visitAsmLoadFFIFunc(LAsmLoadFFIFunc *ins)
 {
-    const MAsmLoadFFIFunc *mir = ins->mir();
+    MAsmLoadFFIFunc *mir = ins->mir();
 
     CodeOffsetLabel label = masm.loadRipRelativeInt64(ToRegister(ins->output()));
 

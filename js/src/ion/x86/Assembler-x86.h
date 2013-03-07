@@ -48,6 +48,8 @@ static const Register ReturnReg = eax;
 static const FloatRegister ReturnFloatReg = xmm0;
 static const FloatRegister ScratchFloatReg = xmm7;
 
+static const JSC::X86Registers::SegmentRegister HeapSegReg = JSC::X86Registers::ES;
+
 static const Register ArgumentsRectifierReg = esi;
 static const Register CallTempReg0 = edi;
 static const Register CallTempReg1 = eax;
@@ -72,8 +74,7 @@ class ABIArgGenerator
     ABIArg &current() { return current_; }
     uint32_t stackBytesConsumedSoFar() const { return stackOffset_; }
 
-    static const Register NonArgReturnReg0;
-    static const Register NonArgReturnReg1;
+    static const Register NonArgReturnReg;
 };
 
 static const Register OsrFrameReg = edx;
@@ -274,6 +275,14 @@ class Assembler : public AssemblerX86Shared
         push(Imm32(word.value));
         return masm.currentOffset();
     }
+    CodeOffsetLabel movlWithPatch(void *addr, const Register &dest) {
+        masm.movl_mr(addr, dest.code());
+        return masm.currentOffset();
+    }
+
+    void emitSegmentPrefix(JSC::X86Registers::SegmentRegister seg) {
+        masm.emitSegmentPrefix(seg);
+    }
 
     void movl(const ImmGCPtr &ptr, const Register &dest) {
         masm.movl_i32r(ptr.value, dest.code());
@@ -324,6 +333,12 @@ class Assembler : public AssemblerX86Shared
     }
     void mov(const Register &src, const Register &dest) {
         movl(src, dest);
+    }
+    void movSeg(const Register &src, JSC::X86Assembler::SegmentRegister seg) {
+        masm.movw_rseg(src.code(), seg);
+    }
+    void movSeg(JSC::X86Assembler::SegmentRegister seg, const Register &dest) {
+        masm.movw_segr(seg, dest.code());
     }
     void lea(const Operand &src, const Register &dest) {
         return leal(src, dest);

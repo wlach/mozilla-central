@@ -428,14 +428,22 @@ class AsmJSModule
     // offset codeBytes_) in the module's linear allocation. The global data
     // are laid out in this order:
     //   0. a pointer/descriptor for the heap that was linked to the module
-    //   1. global variable state (elements are sizeof(uint64_t))
-    //   2. function-pointer table elements (elements are sizeof(void*))
-    //   3. exits (elements are sizeof(ExitDatum))
+    //   1. on x86, a uint32_t holding the heap's segment selector
+    //   2. global variable state (elements are sizeof(uint64_t))
+    //   3. function-pointer table elements (elements are sizeof(void*))
+    //   4. exits (elements are sizeof(ExitDatum))
     //
     // NB: The list of exits is extended while emitting function bodies and
     // thus exits must be at the end of the list to avoid invalidating indices.
+    unsigned heapPointerAndSelectorSize() const {
+#if defined(JS_CPU_X86)
+        return sizeof(void*) + sizeof(uint32_t);
+#else
+        return sizeof(void*);
+#endif
+    }
     size_t globalDataBytes() const {
-        return sizeof(void*) +
+        return heapPointerAndSelectorSize() +
                numGlobalVars_ * sizeof(uint64_t) +
                numFuncPtrTableElems_ * sizeof(void*) +
                exits_.length() * sizeof(ExitDatum);
@@ -448,16 +456,26 @@ class AsmJSModule
         return *(uint8_t**)(globalData() + heapOffset());
     }
   public:
+#if defined(JS_CPU_X86)
+    unsigned heapSelectorOffset() const {
+        return sizeof(void*);
+    }
+  private:
+    uint32_t &heapSelectorDatum() const {
+        return *(uint32_t*)(globalData() + sizeof(void*));
+    }
+  public:
+#endif
     unsigned globalVarIndexToGlobalDataOffset(unsigned i) const {
         JS_ASSERT(i < numGlobalVars_);
-        return sizeof(void*) +
+        return heapPointerAndSelectorSize() +
                i * sizeof(uint64_t);
     }
     void *globalVarIndexToGlobalDatum(unsigned i) const {
         return (void *)(globalData() + globalVarIndexToGlobalDataOffset(i));
     }
     unsigned funcPtrIndexToGlobalDataOffset(unsigned i) const {
-        return sizeof(void*) +
+        return heapPointerAndSelectorSize() +
                numGlobalVars_ * sizeof(uint64_t) +
                i * sizeof(void*);
     }
@@ -466,7 +484,7 @@ class AsmJSModule
     }
     unsigned exitIndexToGlobalDataOffset(unsigned exitIndex) const {
         JS_ASSERT(exitIndex < exits_.length());
-        return sizeof(void*) +
+        return heapPointerAndSelectorSize() +
                numGlobalVars_ * sizeof(uint64_t) +
                numFuncPtrTableElems_ * sizeof(void*) +
                exitIndex * sizeof(ExitDatum);
@@ -527,8 +545,13 @@ class AsmJSModule
         JS_ASSERT(!linked_);
         linked_ = true;
         maybeHeap_ = maybeHeap;
-        JS_ASSERT_IF(maybeHeap_, maybeHeap_->isAsmJSArrayBuffer());
-        heapDatum() = maybeHeap_ ? maybeHeap_->dataPointer() : NULL;
+        if (maybeHeap_) {
+            JS_ASSERT(maybeHeap_->isAsmJSArrayBuffer());
+            heapDatum() = maybeHeap_->dataPointer();
+#if defined(JS_CPU_X86)
+            heapSelectorDatum() = maybeHeap_->getElementsHeader()->asmJSSegmentSelector();
+#endif
+        }
     }
     bool isLinked() const {
         return linked_;

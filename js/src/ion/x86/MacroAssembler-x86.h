@@ -479,6 +479,9 @@ class MacroAssemblerX86 : public MacroAssemblerX86Shared
     void loadPtr(const Address &address, Register dest) {
         movl(Operand(address), dest);
     }
+    void loadPtr(const Operand &src, Register dest) {
+        movl(src, dest);
+    }
     void loadPtr(const BaseIndex &src, Register dest) {
         movl(Operand(src), dest);
     }
@@ -803,6 +806,16 @@ class MacroAssemblerX86 : public MacroAssemblerX86Shared
         push(Imm32(MakeFrameDescriptor(0, IonFrame_Osr)));
         call(code);
         addl(Imm32(sizeof(uintptr_t) * 2), esp);
+    }
+
+    // See CodeGeneratorX86 calls to noteAsmGlobalAccess.
+    void patchAsmGlobalAccess(unsigned offset, uint8_t *code, unsigned codeBytes,
+                              unsigned globalDataOffset)
+    {
+        uint8_t *nextInsn = code + offset;
+        JS_ASSERT(nextInsn <= code + codeBytes);
+        uint8_t *target = code + codeBytes + globalDataOffset;
+        ((int32_t *)nextInsn)[-1] = uintptr_t(target);
     }
 };
 

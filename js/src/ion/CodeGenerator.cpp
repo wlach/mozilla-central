@@ -5781,6 +5781,7 @@ CodeGenerator::visitAsmCall(LAsmCall *ins)
     if (mir->spIncrement())
         masm.reserveStack(mir->spIncrement());
 
+    postAsmCall(ins);
     return true;
 }
 

@@ -398,3 +398,72 @@ CodeGeneratorX86::visitCompareVAndBranch(LCompareVAndBranch *lir)
 
     return true;
 }
+
+bool
+CodeGeneratorX86::visitAsmLoadHeap(LAsmLoadHeap *ins)
+{
+    const MAsmLoadHeap *mir = ins->mir();
+    Operand srcAddr(Address(ToRegister(ins->ptr()), 0));
+
+    if (mir->viewType() == ArrayBufferView::TYPE_FLOAT32) {
+        // Float loads require two instructions: a load and a float-to-double
+        // conversion. Unlike the AsmStoreHeap case below, include both
+        // instructions in the offsetBefore/offsetAfter range. This is necessary
+        // since, after a faulting float32 load, the destination register will
+        // be assigned float64 NaN so we mustn't do a float-to-double
+        // conversion. It is critical that the load is first since offsetBefore
+        // must be the exact offset of the load.
+        uint32_t offsetBefore = masm.size();
+        FloatRegister r = ToFloatRegister(ins->output());
+        masm.emitSegmentPrefix(HeapSegReg);
+        masm.movss(srcAddr, r);
+        masm.cvtss2sd(r, r);
+        uint32_t offsetAfter = masm.size();
+        return gen->noteAsmLoadHeap(offsetBefore, offsetAfter, ToAnyRegister(ins->output()));
+    }
+
+    uint32_t offsetBefore = masm.size();
+    masm.emitSegmentPrefix(HeapSegReg);
+    emitAsmLoadHeap(srcAddr, ins->output(), mir->viewType());
+    uint32_t offsetAfter = masm.size();
+    return gen->noteAsmLoadHeap(offsetBefore, offsetAfter, ToAnyRegister(ins->output()));
+}
+
+bool
+CodeGeneratorX86::visitAsmStoreHeap(LAsmStoreHeap *ins)
+{
+    MAsmStoreHeap *mir = ins->mir();
+    Operand dstAddr(Address(ToRegister(ins->ptr()), 0));
+
+    if (mir->viewType() == ArrayBufferView::TYPE_FLOAT32) {
+        // Although we are storing to a float32, the input register holds a
+        // float64 which must be explicitly converted (we cannot simply alias the low
+        // float32 of the xmm register). Make sure that offsetBefore points to
+        // the store, not the conversion op since it is the load that will fault.
+        masm.convertDoubleToFloat(ToFloatRegister(ins->value()), ScratchFloatReg);
+        uint32_t offsetBefore = masm.size();
+        masm.emitSegmentPrefix(HeapSegReg);
+        masm.movss(ScratchFloatReg, dstAddr);
+        uint32_t offsetAfter = masm.size();
+        return gen->noteAsmStoreHeap(offsetBefore, offsetAfter);
+    }
+
+    uint32_t offsetBefore = masm.size();
+    masm.emitSegmentPrefix(HeapSegReg);
+    emitAsmStoreHeap(dstAddr, ins->value(), mir->viewType());
+    uint32_t offsetAfter = masm.size();
+    return gen->noteAsmStoreHeap(offsetBefore, offsetAfter);
+}
+
+void
+CodeGeneratorX86::postAsmCall(LAsmCall *lir)
+{
+    MAsmCall *mir = lir->mir();
+    if (mir->type() != MIRType_Double || mir->callee().which() != MAsmCall::Callee::Builtin)
+        return;
+
+    masm.reserveStack(sizeof(double));
+    masm.fstp(Operand(esp, 0));
+    masm.movsd(Operand(esp, 0), ReturnFloatReg);
+    masm.freeStack(sizeof(double));
+}

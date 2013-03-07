@@ -1011,14 +1011,10 @@ JSObject::finish(js::FreeOp *fop)
         fop->free_(slots);
     if (hasDynamicElements()) {
         js::ObjectElements *elements = getElementsHeader();
-#ifdef JS_CPU_X64
         if (JS_UNLIKELY(elements->isAsmJSArrayBuffer()))
-            js::ArrayBufferObject::releaseAsmJSArrayBuffer(this);
+            js::ArrayBufferObject::releaseAsmJSArrayBuffer(fop, this);
         else
             fop->free_(elements);
-#else
-        fop->free_(elements);
-#endif
     }
 }
 

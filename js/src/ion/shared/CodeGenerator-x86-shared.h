@@ -72,6 +72,9 @@ class CodeGeneratorX86Shared : public CodeGeneratorShared
 
     bool emitTableSwitchDispatch(MTableSwitch *mir, const Register &index, const Register &base);
 
+    void emitAsmLoadHeap(Operand addr, const LDefinition *dest, ArrayBufferView::ViewType viewType);
+    void emitAsmStoreHeap(Operand dstAddr, const LAllocation *value, ArrayBufferView::ViewType viewType);
+
   public:
     CodeGeneratorX86Shared(MIRGenerator *gen, LIRGraph *graph, MacroAssembler *masm);
 

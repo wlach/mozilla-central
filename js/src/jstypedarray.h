@@ -167,7 +167,7 @@ class ArrayBufferObject : public JSObject
     inline bool isAsmJSArrayBuffer() const;
     static bool prepareForAsmJS(JSContext *cx, Handle<ArrayBufferObject*> buffer);
     static void neuterAsmJSArrayBuffer(ArrayBufferObject &buffer);
-    static void releaseAsmJSArrayBuffer(RawObject obj);
+    static void releaseAsmJSArrayBuffer(FreeOp *fop, RawObject obj);
 };
 
 /*

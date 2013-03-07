@@ -346,7 +346,11 @@ SetRegisterToCoercedUndefined(mcontext_t &context, AnyRegister reg)
 #  endif
 }
 # elif defined(XP_MACOSX)
+#if defined(JS_CPU_X86)
+static const int SignalCode = SIGSEGV;
+#elif defined(JS_CPU_X64)
 static const int SignalCode = SIGBUS;
+#endif
 
 static uint8_t **
 ContextToPC(mcontext_t context)
@@ -484,7 +488,7 @@ HandleSignal(int signum, siginfo_t *info, void *ctx)
 static struct sigaction sPrevHandler;
 
 static void
-AsmJSMemoryFaultHandler(int signum, siginfo_t *info, void *context)
+AsmJSFaultHandler(int signum, siginfo_t *info, void *context)
 {
     if (HandleSignal(signum, info, context))
         return;
@@ -520,7 +524,7 @@ js::EnsureAsmJSSignalHandlersInstalled()
         return false;
 #else
     struct sigaction sigAction;
-    sigAction.sa_sigaction = &AsmJSMemoryFaultHandler;
+    sigAction.sa_sigaction = &AsmJSFaultHandler;
     sigemptyset(&sigAction.sa_mask);
     sigAction.sa_flags = SA_SIGINFO;
     if (sigaction(SignalCode, &sigAction, &sPrevHandler))
@@ -538,7 +542,7 @@ js::EnsureAsmJSSignalHandlersInstalled()
 // loops, this poses non-trivial overhead. For asm.js, we can do better: when
 // another thread triggers the operation callback, we simply mprotect all of
 // the innermost asm.js module activation's code. This will trigger a SIGSEGV,
-// taking us into AsmJSMemoryFaultHandler. From there, we can manually redirect
+// taking us into AsmJSFaultHandler. From there, we can manually redirect
 // execution to call js_HandleExecutionInterrupt. The memory is un-protected
 // from the signal handler after control flow is redirected.
 void

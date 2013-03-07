@@ -74,7 +74,7 @@ class LAsmLoadFuncPtr : public LInstructionHelper<1, 1, 1>
         setOperand(0, index);
         setTemp(0, temp);
     }
-    const MAsmLoadFuncPtr *mir() const {
+    MAsmLoadFuncPtr *mir() const {
         return mir_->toAsmLoadFuncPtr();
     }
     const LAllocation *index() {

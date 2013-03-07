@@ -39,6 +39,16 @@
 
 #include "vm/GlobalObject-inl.h"
 
+# ifdef XP_WIN
+#  include "jswin.h"
+# else
+#  include <sys/mman.h>
+#  if defined(XP_MACOSX)
+#   include <architecture/i386/table.h>
+#   include <i386/user_ldt.h>
+#  endif
+# endif
+
 using namespace js;
 using namespace js::gc;
 using namespace js::types;
@@ -315,12 +325,6 @@ ArrayBufferObject::uninlineData(JSContext *maybecx)
 }
 
 #ifdef JS_CPU_X64
-# ifdef XP_WIN
-#  include "jswin.h"
-# else
-#  include <sys/mman.h>
-# endif
-
 // To avoid dynamically checking bounds on each load/store, asm.js code relies
 // on the SIGSEGV handler in AsmJSSignalHandlers.cpp. However, this only works
 // if we can guarantee that *any* out-of-bounds access generates a fault. This
@@ -391,21 +395,7 @@ ArrayBufferObject::prepareForAsmJS(JSContext *cx, Handle<ArrayBufferObject*> buf
 }
 
 void
-ArrayBufferObject::neuterAsmJSArrayBuffer(ArrayBufferObject &buffer)
-{
-    JS_ASSERT(buffer.isAsmJSArrayBuffer());
-    JS_ASSERT(buffer.byteLength() % AsmJSAllocationGranularity == 0);
-#ifdef XP_WIN
-    if (!VirtualAlloc(buffer.dataPointer(), buffer.byteLength(), MEM_RESERVE, PAGE_NOACCESS))
-        MOZ_CRASH();
-#else
-    if (mprotect(buffer.dataPointer(), buffer.byteLength(), PROT_NONE))
-        MOZ_CRASH();
-#endif
-}
-
-void
-ArrayBufferObject::releaseAsmJSArrayBuffer(RawObject obj)
+ArrayBufferObject::releaseAsmJSArrayBuffer(FreeOp *fop, RawObject obj)
 {
     ArrayBufferObject &buffer = obj->asArrayBuffer();
     JS_ASSERT(buffer.isAsmJSArrayBuffer());
@@ -419,22 +409,139 @@ ArrayBufferObject::releaseAsmJSArrayBuffer(RawObject obj)
 #endif
 }
 
-#else // defined(JS_CPU_X64)
+#elif defined(JS_CPU_X86)
+// To avoid dynamically checking bounds on each load/store, asm.js code relies
+// on the SIGSEGV handler in AsmJSSignalHandlers.cpp. However, this only works
+// if we can guarantee that *any* out-of-bounds access generates a fault. This
+// isn't generally true since an out-of-bounds access could land on other
+// Mozilla data. To overcome this on x86, we use the segmentation feature of the
+// processor: segmentation allows us to cheaply specify a base and limit for
+// loads and stores. For the asm.js buffer we set the base to be the base of the
+// typed array and the limit to be buffer.byteLength.
+//
+// To use segmentation, there are two steps: first a "segment descriptor" must
+// be registered with the OS which inserts it into the process's Local
+// Descriptor Table. The OS returns the index of this selector in the LDT table.
+// This index gets munged with a few bits to produce a 16-bit "segment selector"
+// (see SegmentIndexToSelector). This selector is then stored into a fixed
+// "segment registers" on entry to asm.js code. Finally, individual loads/stores
+// specify this fixed segment register to opt request. The resulting linear
+// address will either be in the [base, limit) range or fault.
+JS_STATIC_ASSERT(AsmJSAllocationGranularity == 4096);
+JS_STATIC_ASSERT(PageSize == 4096);
+
+static uint16_t
+SegmentIndexToSelector(int index)
+{
+    // There are only 8192 entries in the LDT.
+    JS_ASSERT(index >= 0);
+    JS_ASSERT(index < UINT16_MAX);
+
+    // See Vol 3, Sec 3.4.2 in the Intel developer's manual
+    return (index << 3) | 4 /* LDT */ | 3 /* Ring 3 */;
+}
+
+static int
+SegmentSelectorToIndex(uint16_t selector)
+{
+    // See Vol 3, Sec 3.4.2 in the Intel developer's manual
+    return selector >> 3;
+}
 
 bool
 ArrayBufferObject::prepareForAsmJS(JSContext *cx, Handle<ArrayBufferObject*> buffer)
 {
+    if (buffer->isAsmJSArrayBuffer())
+        return true;
+
+    if (!buffer->uninlineData(cx))
+        return false;
+
+    ldt_entry_t d;
+    PodZero(&d);
+    d.data.type = DESC_DATA_WRITE;
+    d.data.dpl = 3;                    // Ring 3: unprivileged
+    d.data.present = 1;                // Memory is mapped
+    d.data.stksz = 1;                  // 32-bit mode
+    d.data.granular = DESC_GRAN_PAGE;  // The limit is multiplied by 4KiB
+
+    // The 32 bits of the base address are broken up between 3 fields:
+    uint32_t base = uint32_t(buffer->dataPointer());
+    d.data.base00 = uint16_t(base);
+    d.data.base16 = uint8_t(base >> 16);
+    d.data.base24 = uint8_t(base >> 24);
+
+    // The 20 bits of the limit are broken up between 2 fields. Because the
+    // limit is specified with page granularity (see DESC_GRAN_PAGE above) and
+    // the ArrayBuffer's byteLength is a multiple of 4096, we can express the
+    // full range.
+    JS_ASSERT(buffer->byteLength() >= 4096);
+    JS_ASSERT(buffer->byteLength() % 4096 == 0);
+    uint32_t limit = buffer->byteLength() / 4096 - 1;
+    d.data.limit00 = uint16_t(limit);
+    JS_ASSERT(limit >> 16 <= 0xf);
+    d.data.limit16 = limit >> 16;
+
+    // Add this descriptor to the process's LDT.
+    int selector = i386_set_ldt(LDT_AUTO_ALLOC, &d, 1);
+    if (selector == -1)
+        return false;
+
+    ObjectElements *header = buffer->getElementsHeader();
+    header->setIsAsmJSArrayBuffer();
+    header->setAsmJSSegmentSelector(SegmentIndexToSelector(selector));
     return true;
 }
 
 void
-ArrayBufferObject::neuterAsmJSArrayBuffer(ArrayBufferObject &buffer)
-{}
+ArrayBufferObject::releaseAsmJSArrayBuffer(FreeOp *fop, RawObject obj)
+{
+    ArrayBufferObject &buffer = obj->asArrayBuffer();
+    JS_ASSERT(buffer.isAsmJSArrayBuffer());
+
+    ObjectElements *header = buffer.getElementsHeader();
+
+    // Release the LDT entry
+    unsigned selector = SegmentSelectorToIndex(header->asmJSSegmentSelector());
+    i386_set_ldt(selector, NULL, 1);
+
+    fop->free_(header);
+}
+
+#else
+bool
+ArrayBufferObject::prepareForAsmJS(JSContext *cx, Handle<ArrayBufferObject*> buffer)
+{
+    if (!buffer->uninlineData(cx))
+        return false;
+
+    buffer->getElementsHeader()->setIsAsmJSArrayBuffer();
+    return true;
+}
 
 void
-ArrayBufferObject::releaseAsmJSArrayBuffer(RawObject obj)
-{}
+ArrayBufferObject::releaseAsmJSArrayBuffer(FreeOp *fop, RawObject obj)
+{
+    fop->free_(obj->asArrayBuffer().getElementsHeader());
+}
+
 #endif
+
+// Protect all the pages so that any read/write will generate a fault which the
+// AsmJSMemoryFaultHandler will turn into the expected result value.
+void
+ArrayBufferObject::neuterAsmJSArrayBuffer(ArrayBufferObject &buffer)
+{
+    JS_ASSERT(buffer.isAsmJSArrayBuffer());
+    JS_ASSERT(buffer.byteLength() % AsmJSAllocationGranularity == 0);
+#ifdef XP_WIN
+    if (!VirtualAlloc(buffer.dataPointer(), buffer.byteLength(), MEM_RESERVE, PAGE_NOACCESS))
+        MOZ_CRASH();
+#else
+    if (mprotect(buffer.dataPointer(), buffer.byteLength(), PROT_NONE))
+        MOZ_CRASH();
+#endif
+}
 
 #ifdef JSGC_GENERATIONAL
 class WeakObjectSlotRef : public js::gc::BufferableRef
@@ -618,10 +725,8 @@ ArrayBufferObject::stealContents(JSContext *cx, JSObject *obj, void **contents,
         *contents = newheader;
         *data = reinterpret_cast<uint8_t *>(newheader + 1);
 
-#ifdef JS_CPU_X64
         if (buffer.isAsmJSArrayBuffer())
             ArrayBufferObject::neuterAsmJSArrayBuffer(buffer);
-#endif
     }
 
     // Neuter the donor ArrayBuffer and all views of it

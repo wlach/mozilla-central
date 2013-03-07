@@ -24,8 +24,7 @@ ABIArgGenerator::next(MIRType type)
     return current_;
 }
 
-const Register ABIArgGenerator::NonArgReturnReg0 = ebx;
-const Register ABIArgGenerator::NonArgReturnReg1 = ebp;
+const Register ABIArgGenerator::NonArgReturnReg = ebx;
 
 void
 Assembler::executableCopy(uint8_t *buffer)

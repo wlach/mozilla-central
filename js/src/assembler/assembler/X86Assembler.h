@@ -90,6 +90,15 @@ namespace X86Registers {
        ,invalid_xmm
     } XMMRegisterID;
 
+    typedef enum {
+        ES = 0,
+        CS = 1,
+        SS = 2,
+        DS = 3,
+        FS = 4,
+        GS = 5
+    } SegmentRegister;
+
     static const char* nameFPReg(XMMRegisterID fpreg)
     {
         static const char* xmmnames[16]
@@ -134,12 +143,20 @@ namespace X86Registers {
 #       endif
     }
 
+    static const char* nameSegReg(SegmentRegister seg)
+    {
+        static const char* segnames[6]
+          = { "es", "cs", "ss", "ds", "fs", "gs" };
+        return segnames[seg];
+    }
+
 } /* namespace X86Registers */
 
 
 class X86Assembler : public GenericAssembler {
 public:
     typedef X86Registers::RegisterID RegisterID;
+    typedef X86Registers::SegmentRegister SegmentRegister;
     typedef X86Registers::XMMRegisterID XMMRegisterID;
     typedef XMMRegisterID FPRegisterID;
 
@@ -191,14 +208,18 @@ private:
         OP_2BYTE_ESCAPE                 = 0x0F,
         OP_AND_EvGv                     = 0x21,
         OP_AND_GvEv                     = 0x23,
+        PRE_OVERRIDE_ES                 = 0x26,
         OP_SUB_EvGv                     = 0x29,
         OP_SUB_GvEv                     = 0x2B,
         PRE_PREDICT_BRANCH_NOT_TAKEN    = 0x2E,
+        PRE_OVERRIDE_CS                 = 0x2E,
         OP_XOR_EvGv                     = 0x31,
         OP_XOR_GvEv                     = 0x33,
+        PRE_OVERRIDE_SS                 = 0x36,
         OP_CMP_EvGv                     = 0x39,
         OP_CMP_GvEv                     = 0x3B,
         OP_CMP_EAXIv                    = 0x3D,
+        PRE_OVERRIDE_DS                 = 0x3E,
 #if WTF_CPU_X86_64
         PRE_REX                         = 0x40,
 #endif
@@ -211,6 +232,8 @@ private:
 #if WTF_CPU_X86_64
         OP_MOVSXD_GvEv                  = 0x63,
 #endif
+        PRE_OVERRIDE_FS                 = 0x64,
+        PRE_OVERRIDE_GS                 = 0x65,
         PRE_OPERAND_SIZE                = 0x66,
         PRE_SSE_66                      = 0x66,
         OP_PUSH_Iz                      = 0x68,
@@ -224,7 +247,9 @@ private:
         OP_MOV_EbGv                     = 0x88,
         OP_MOV_EvGv                     = 0x89,
         OP_MOV_GvEv                     = 0x8B,
+        OP_MOV_GETSEG                   = 0x8C,
         OP_LEA                          = 0x8D,
+        OP_MOV_SETSEG                   = 0x8E,
         OP_GROUP1A_Ev                   = 0x8F,
         OP_NOP                          = 0x90,
         OP_PUSHFLAGS                    = 0x9C,
@@ -1369,6 +1394,20 @@ public:
 
     // Various move ops:
 
+    void emitSegmentPrefix(SegmentRegister seg)
+    {
+        spew("%s:              ",
+             nameSegReg(seg));
+        switch (seg) {
+          case X86Registers::ES: m_formatter.prefix(PRE_OVERRIDE_ES); break;
+          case X86Registers::CS: m_formatter.prefix(PRE_OVERRIDE_CS); break;
+          case X86Registers::SS: m_formatter.prefix(PRE_OVERRIDE_SS); break;
+          case X86Registers::DS: m_formatter.prefix(PRE_OVERRIDE_DS); break;
+          case X86Registers::FS: m_formatter.prefix(PRE_OVERRIDE_FS); break;
+          case X86Registers::GS: m_formatter.prefix(PRE_OVERRIDE_GS); break;
+        }
+    }
+
     void cdq()
     {
         spew("cdq              ");
@@ -1396,6 +1435,20 @@ public:
         spew("movl       %s, %s",
              nameIReg(4,src), nameIReg(4,dst));
         m_formatter.oneByteOp(OP_MOV_EvGv, src, dst);
+    }
+
+    void movw_rseg(RegisterID src, SegmentRegister seg)
+    {
+        spew("movw       %s, %s",
+             nameIReg(2,src), nameSegReg(seg));
+        m_formatter.oneByteOp(OP_MOV_SETSEG, src, seg);
+    }
+
+    void movw_segr(SegmentRegister seg, RegisterID dst)
+    {
+        spew("movw       %s, %s",
+             nameSegReg(seg), nameIReg(dst));
+        m_formatter.oneByteOp(OP_MOV_GETSEG, seg, dst);
     }
 
     void movw_rm(RegisterID src, int offset, RegisterID base)
@@ -2802,6 +2855,14 @@ private:
             emitRexIfNeeded(reg, 0, rm);
             m_buffer.putByteUnchecked(opcode);
             registerModRM(reg, rm);
+        }
+
+        void oneByteOp(OneByteOpcodeID opcode, RegisterID reg, SegmentRegister seg)
+        {
+            m_buffer.ensureSpace(maxInstructionSize);
+            emitRexIfNeeded(reg, 0, 0);
+            m_buffer.putByteUnchecked(opcode);
+            registerModRM(seg, reg);
         }
 
         void oneByteOp(OneByteOpcodeID opcode, int reg, RegisterID base, int offset)

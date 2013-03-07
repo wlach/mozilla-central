@@ -49,6 +49,10 @@ class CodeGeneratorX86 : public CodeGeneratorX86Shared
     bool visitCompareBAndBranch(LCompareBAndBranch *lir);
     bool visitCompareV(LCompareV *lir);
     bool visitCompareVAndBranch(LCompareVAndBranch *lir);
+    bool visitAsmLoadHeap(LAsmLoadHeap *ins);
+    bool visitAsmStoreHeap(LAsmStoreHeap *ins);
+
+    void postAsmCall(LAsmCall *lir);
 };
 
 typedef CodeGeneratorX86 CodeGeneratorSpecific;
