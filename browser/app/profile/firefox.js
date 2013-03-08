@@ -1146,6 +1146,9 @@ pref("devtools.editor.expandtab", true);
 //   indenting and bracket recognition.
 pref("devtools.editor.component", "orion");
 
+// Enable the Font Inspector
+pref("devtools.fontinspector.enabled", true);
+
 // Whether the character encoding menu is under the main Firefox button. This
 // preference is a string so that localizers can alter it.
 pref("browser.menu.showCharacterEncoding", "chrome://browser/locale/browser.properties");
@@ -1219,3 +1222,6 @@ pref("social.sidebar.unload_timeout_ms", 10000);
 pref("social.toast-notifications.enabled", true);
 
 pref("dom.identity.enabled", false);
+
+// Override the Gecko-default value of false for Firefox.
+pref("plain_text.wrap_long_lines", true);

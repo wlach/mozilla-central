@@ -119,8 +119,6 @@ template <typename CopyArgs>
 ArgumentsObject::create(JSContext *cx, HandleScript script, HandleFunction callee, unsigned numActuals,
                         CopyArgs &copy)
 {
-    AssertCanGC();
-
     RootedObject proto(cx, callee->global().getOrCreateObjectPrototype(cx));
     if (!proto)
         return NULL;
@@ -160,7 +158,8 @@ ArgumentsObject::create(JSContext *cx, HandleScript script, HandleFunction calle
     data->deletedBits = reinterpret_cast<size_t *>(dstEnd);
     ClearAllBitArrayElements(data->deletedBits, numDeletedWords);
 
-    RawObject obj = JSObject::create(cx, FINALIZE_KIND, gc::DefaultHeap, shape, type, NULL);
+    RawObject obj = JSObject::create(cx, FINALIZE_KIND, GetInitialHeap(GenericObject, clasp),
+                                     shape, type, NULL);
     if (!obj) {
         js_free(data);
         return NULL;
@@ -515,7 +514,7 @@ Class js::NormalArgumentsObjectClass = {
     "Arguments",
     JSCLASS_NEW_RESOLVE | JSCLASS_IMPLEMENTS_BARRIERS |
     JSCLASS_HAS_RESERVED_SLOTS(NormalArgumentsObject::RESERVED_SLOTS) |
-    JSCLASS_HAS_CACHED_PROTO(JSProto_Object),
+    JSCLASS_HAS_CACHED_PROTO(JSProto_Object) | JSCLASS_BACKGROUND_FINALIZE,
     JS_PropertyStub,         /* addProperty */
     args_delProperty,
     JS_PropertyStub,         /* getProperty */
@@ -546,7 +545,7 @@ Class js::StrictArgumentsObjectClass = {
     "Arguments",
     JSCLASS_NEW_RESOLVE | JSCLASS_IMPLEMENTS_BARRIERS |
     JSCLASS_HAS_RESERVED_SLOTS(StrictArgumentsObject::RESERVED_SLOTS) |
-    JSCLASS_HAS_CACHED_PROTO(JSProto_Object),
+    JSCLASS_HAS_CACHED_PROTO(JSProto_Object) | JSCLASS_BACKGROUND_FINALIZE,
     JS_PropertyStub,         /* addProperty */
     args_delProperty,
     JS_PropertyStub,         /* getProperty */

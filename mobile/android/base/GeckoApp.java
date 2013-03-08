@@ -6,20 +6,19 @@
 package org.mozilla.gecko;
 
 import org.mozilla.gecko.background.announcements.AnnouncementsBroadcastService;
-import org.mozilla.gecko.db.BrowserDB;
 import org.mozilla.gecko.db.BrowserContract;
+import org.mozilla.gecko.db.BrowserDB;
 import org.mozilla.gecko.gfx.Layer;
 import org.mozilla.gecko.gfx.LayerView;
 import org.mozilla.gecko.gfx.PanZoomController;
 import org.mozilla.gecko.gfx.PluginLayer;
 import org.mozilla.gecko.gfx.PointUtils;
-import org.mozilla.gecko.mozglue.GeckoLoader;
-import org.mozilla.gecko.util.UiAsyncTask;
+import org.mozilla.gecko.updater.UpdateService;
+import org.mozilla.gecko.updater.UpdateServiceHelper;
 import org.mozilla.gecko.util.GeckoBackgroundThread;
 import org.mozilla.gecko.util.GeckoEventListener;
 import org.mozilla.gecko.util.GeckoEventResponder;
-import org.mozilla.gecko.updater.UpdateServiceHelper;
-import org.mozilla.gecko.updater.UpdateService;
+import org.mozilla.gecko.util.UiAsyncTask;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -82,7 +81,6 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.widget.AbsoluteLayout;
 import android.widget.FrameLayout;
-import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.RelativeLayout;
 import android.widget.SimpleAdapter;
@@ -103,7 +101,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -1340,6 +1337,11 @@ abstract public class GeckoApp
     {
         GeckoAppShell.registerGlobalExceptionHandler();
 
+        // Enable Android Strict Mode for developers' local builds (the "default" channel).
+        if ("default".equals(GeckoAppInfo.getUpdateChannel())) {
+            enableStrictMode();
+        }
+
         // The clock starts...now. Better hurry!
         mJavaUiStartupTimer = new Telemetry.Timer("FENNEC_STARTUP_TIME_JAVAUI");
         mGeckoReadyStartupTimer = new Telemetry.Timer("FENNEC_STARTUP_TIME_GECKOREADY");
@@ -1358,12 +1360,6 @@ abstract public class GeckoApp
             return;
         }
 
-        // StrictMode is set by defaults resource flag |enableStrictMode|.
-        if (getResources().getBoolean(R.bool.enableStrictMode)) {
-            enableStrictMode();
-        }
-
-        GeckoLoader.loadMozGlue(this);
         if (sGeckoThread != null) {
             // this happens when the GeckoApp activity is destroyed by android
             // without killing the entire application (see bug 769269)
@@ -1767,11 +1763,12 @@ abstract public class GeckoApp
      * Enable Android StrictMode checks (for supported OS versions).
      * http://developer.android.com/reference/android/os/StrictMode.html
      */
-    private void enableStrictMode()
-    {
+    private void enableStrictMode() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.GINGERBREAD) {
             return;
         }
+
+        Log.d(LOGTAG, "Enabling Android StrictMode");
 
         StrictMode.setThreadPolicy(new StrictMode.ThreadPolicy.Builder()
                                   .detectAll()

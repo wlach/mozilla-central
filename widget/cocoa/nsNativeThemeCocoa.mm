@@ -169,8 +169,8 @@ extern "C" {
 
   int32_t stepsPerSecond = mIsIndeterminate ? 60 : 30;
   int32_t milliSecondsPerStep = 1000 / stepsPerSecond;
-  tdi.trackInfo.progress.phase = PR_IntervalToMilliseconds(PR_IntervalNow()) /
-                                 milliSecondsPerStep % 32;
+  tdi.trackInfo.progress.phase = uint8_t(PR_IntervalToMilliseconds(PR_IntervalNow()) /
+                                         milliSecondsPerStep);
 
   HIThemeDrawTrack(&tdi, NULL, cgContext, kHIThemeOrientationNormal);
 }
@@ -2061,7 +2061,8 @@ nsNativeThemeCocoa::DrawWidgetBackground(nsRenderingContext* aContext,
 
     case NS_THEME_BUTTON:
       if (IsDefaultButton(aFrame)) {
-        if (!QueueAnimatedContentForRefresh(aFrame->GetContent(), 10)) {
+        if (!IsDisabled(aFrame, eventState) && FrameIsInActiveWindow(aFrame) &&
+            !QueueAnimatedContentForRefresh(aFrame->GetContent(), 10)) {
           NS_WARNING("Unable to animate button!");
         }
         DrawButton(cgContext, kThemePushButton, macRect, true,

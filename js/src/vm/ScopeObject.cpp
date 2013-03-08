@@ -146,7 +146,8 @@ CallObject::create(JSContext *cx, HandleShape shape, HandleTypeObject type, Heap
     JS_ASSERT(CanBeFinalizedInBackground(kind, &CallClass));
     kind = gc::GetBackgroundAllocKind(kind);
 
-    JSObject *obj = JSObject::create(cx, kind, gc::DefaultHeap, shape, type, slots);
+    JSObject *obj = JSObject::create(cx, kind, GetInitialHeap(GenericObject, &CallClass),
+                                     shape, type, slots);
     if (!obj)
         return NULL;
     return &obj->asCall();
@@ -201,8 +202,6 @@ CallObject::create(JSContext *cx, HandleScript script, HandleObject enclosing, H
 CallObject *
 CallObject::createForFunction(JSContext *cx, HandleObject enclosing, HandleFunction callee)
 {
-    AssertCanGC();
-
     RootedObject scopeChain(cx, enclosing);
     JS_ASSERT(scopeChain);
 
@@ -223,7 +222,6 @@ CallObject::createForFunction(JSContext *cx, HandleObject enclosing, HandleFunct
 CallObject *
 CallObject::createForFunction(JSContext *cx, AbstractFramePtr frame)
 {
-    AssertCanGC();
     JS_ASSERT(frame.isNonEvalFunctionFrame());
     assertSameCompartment(cx, frame);
 
@@ -244,7 +242,6 @@ CallObject::createForFunction(JSContext *cx, AbstractFramePtr frame)
 CallObject *
 CallObject::createForStrictEval(JSContext *cx, AbstractFramePtr frame)
 {
-    AssertCanGC();
     JS_ASSERT(frame.isStrictEvalFrame());
     JS_ASSERT_IF(frame.isStackFrame(), cx->fp() == frame.asStackFrame());
     JS_ASSERT_IF(frame.isStackFrame(), cx->regs().pc == frame.script()->code);
@@ -658,7 +655,6 @@ ClonedBlockObject::create(JSContext *cx, Handle<StaticBlockObject *> block, Abst
 void
 ClonedBlockObject::copyUnaliasedValues(AbstractFramePtr frame)
 {
-    AutoAssertNoGC nogc;
     StaticBlockObject &block = staticBlock();
     unsigned base = frame.script()->nfixed + block.stackDepth();
     for (unsigned i = 0; i < slotCount(); ++i) {
@@ -1013,7 +1009,6 @@ ScopeIter::operator++()
 void
 ScopeIter::settle()
 {
-    AutoAssertNoGC nogc;
     /*
      * Given an iterator state (cur_, block_), figure out which (potentially
      * optimized) scope the iterator should report. Thus, the result is a pair
@@ -1233,7 +1228,6 @@ class DebugScopeProxy : public BaseProxyHandler
             if (!shape)
                 return false;
 
-            AutoAssertNoGC nogc;
             unsigned i = shape->shortid();
             if (block->staticBlock().isAliased(i))
                 return false;
@@ -1292,7 +1286,6 @@ class DebugScopeProxy : public BaseProxyHandler
     static bool checkForMissingArguments(JSContext *cx, jsid id, ScopeObject &scope,
                                          ArgumentsObject **maybeArgsObj)
     {
-        AssertCanGC();
         *maybeArgsObj = NULL;
 
         if (!isArguments(cx, id) || !isFunctionScope(scope))

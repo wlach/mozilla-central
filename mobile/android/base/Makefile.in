@@ -15,7 +15,10 @@ DIST_FILES = package-name.txt
 include $(topsrcdir)/mobile/android/base/android-services-files.mk
 
 MOZGLUE_JAVA_FILES := \
+  mozglue/ByteBufferInputStream.java \
   mozglue/DirectBufferAllocator.java \
+  mozglue/NativeReference.java \
+  mozglue/NativeZip.java \
   $(NULL)
 
 MOZGLUE_PP_JAVA_FILES := \
@@ -1090,10 +1093,10 @@ jars/gecko-mozglue.jar: $(addprefix $(srcdir)/,$(MOZGLUE_JAVA_FILES)) $(MOZGLUE_
 	$(JAVAC) $(JAVAC_FLAGS) -Xlint:all -d classes/gecko-mozglue $(addprefix $(srcdir)/,$(MOZGLUE_JAVA_FILES)) $(MOZGLUE_PP_JAVA_FILES)
 	$(JAR) cMf jars/gecko-mozglue.jar -C classes/gecko-mozglue .
 
-jars/gecko-util.jar: $(addprefix $(srcdir)/,$(UTIL_JAVA_FILES)) jars
+jars/gecko-util.jar: jars/gecko-mozglue.jar $(addprefix $(srcdir)/,$(UTIL_JAVA_FILES)) jars
 	@echo "JAR gecko-util.jar"
 	$(NSINSTALL) -D classes/gecko-util
-	$(JAVAC) $(JAVAC_FLAGS) -Xlint:all,-deprecation -d classes/gecko-util $(addprefix $(srcdir)/,$(UTIL_JAVA_FILES))
+	$(JAVAC) $(JAVAC_FLAGS) -Xlint:all,-deprecation -d classes/gecko-util -classpath "jars/gecko-mozglue.jar" $(addprefix $(srcdir)/,$(UTIL_JAVA_FILES))
 	$(JAR) cMf jars/gecko-util.jar -C classes/gecko-util .
 
 jars/sync-thirdparty.jar: $(addprefix $(srcdir)/,$(SYNC_THIRDPARTY_JAVA_FILES)) jars
@@ -1215,10 +1218,6 @@ $(RES_BRANDING_DRAWABLE_XHDPI): $(addprefix $(topsrcdir)/,$(MOZ_BRANDING_DRAWABL
 	$(NSINSTALL) -D res/drawable-xhdpi
 	$(NSINSTALL) $^ res/drawable-xhdpi/
 
-res/values/defaults.xml: $(topsrcdir)/$(MOZ_BRANDING_DIRECTORY)/res/values/defaults.xml
-	$(NSINSTALL) -D res/values
-	$(NSINSTALL) $^  res/values
-
 $(RES_DIRS):
 	$(RM) -r $@
 	$(NSINSTALL) -D $@
@@ -1228,10 +1227,10 @@ $(RESOURCES): $(RES_DIRS) $(subst res/,$(srcdir)/resources/,$(RESOURCES))
 	$(NSINSTALL) $(subst res/,$(srcdir)/resources/,$@) $(dir $@)
 
 
-R.java: $(MOZ_APP_ICON) $(RESOURCES) $(RES_DRAWABLE) $(RES_BRANDING_DRAWABLE_MDPI) $(RES_BRANDING_DRAWABLE_HDPI) $(RES_BRANDING_DRAWABLE_XHDPI) $(PP_RES_XML) res/values/defaults.xml res/drawable-mdpi/icon.png res/drawable-hdpi/icon.png res/drawable-xhdpi/icon.png res/drawable-xxhdpi/icon.png res/values/strings.xml AndroidManifest.xml FORCE
+R.java: $(MOZ_APP_ICON) $(RESOURCES) $(RES_DRAWABLE) $(RES_BRANDING_DRAWABLE_MDPI) $(RES_BRANDING_DRAWABLE_HDPI) $(RES_BRANDING_DRAWABLE_XHDPI) $(PP_RES_XML) res/drawable-mdpi/icon.png res/drawable-hdpi/icon.png res/drawable-xhdpi/icon.png res/drawable-xxhdpi/icon.png res/values/strings.xml AndroidManifest.xml FORCE
 	$(AAPT) package -f -M AndroidManifest.xml -I $(ANDROID_SDK)/android.jar -S res -J . --custom-package org.mozilla.gecko
 
-gecko.ap_: AndroidManifest.xml res/drawable-mdpi/icon.png res/drawable-hdpi/icon.png res/drawable-xhdpi/icon.png res/drawable-xxhdpi/icon.png $(RESOURCES) $(RES_DRAWABLE) $(RES_BRANDING_DRAWABLE_MDPI) $(RES_BRANDING_DRAWABLE_HDPI) $(RES_BRANDING_DRAWABLE_XHDPI) $(PP_RES_XML) res/values/defaults.xml res/values/strings.xml FORCE
+gecko.ap_: AndroidManifest.xml res/drawable-mdpi/icon.png res/drawable-hdpi/icon.png res/drawable-xhdpi/icon.png res/drawable-xxhdpi/icon.png $(RESOURCES) $(RES_DRAWABLE) $(RES_BRANDING_DRAWABLE_MDPI) $(RES_BRANDING_DRAWABLE_HDPI) $(RES_BRANDING_DRAWABLE_XHDPI) $(PP_RES_XML) res/values/strings.xml FORCE
 	$(AAPT) package -f -M AndroidManifest.xml -I $(ANDROID_SDK)/android.jar  -S res -F $@
 
 libs:: classes.dex package-name.txt jni-stubs.inc

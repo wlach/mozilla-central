@@ -773,15 +773,15 @@ class JSObject : public js::ObjectImpl
     /* Add a data property whose id is not yet in this scope. */
     js::RawShape addDataProperty(JSContext *cx, jsid id_, uint32_t slot, unsigned attrs) {
         JS_ASSERT(!(attrs & (JSPROP_GETTER | JSPROP_SETTER)));
-        js::RootedObject self(cx, this);
-        js::RootedId id(cx, id_);
+        JS::RootedObject self(cx, this);
+        JS::RootedId id(cx, id_);
         return addProperty(cx, self, id, NULL, NULL, slot, attrs, 0, 0);
     }
 
     js::RawShape addDataProperty(JSContext *cx, js::HandlePropertyName name, uint32_t slot, unsigned attrs) {
         JS_ASSERT(!(attrs & (JSPROP_GETTER | JSPROP_SETTER)));
-        js::RootedObject self(cx, this);
-        js::RootedId id(cx, NameToId(name));
+        JS::RootedObject self(cx, this);
+        JS::RootedId id(cx, NameToId(name));
         return addProperty(cx, self, id, NULL, NULL, slot, attrs, 0, 0);
     }
 
@@ -796,7 +796,7 @@ class JSObject : public js::ObjectImpl
                                     uint32_t slot, unsigned attrs,
                                     unsigned flags, int shortid)
     {
-        js::RootedId id(cx, js::NameToId(name));
+        JS::RootedId id(cx, js::NameToId(name));
         return putProperty(cx, obj, id, getter, setter, slot, attrs, flags, shortid);
     }
 
@@ -1199,9 +1199,11 @@ enum NewObjectKind {
 };
 
 inline gc::InitialHeap
-InitialHeapForNewKind(NewObjectKind newKind)
+GetInitialHeap(NewObjectKind newKind, const Class *clasp)
 {
-    return newKind == GenericObject ? gc::DefaultHeap : gc::TenuredHeap;
+    if (clasp->finalize || newKind != GenericObject)
+        return gc::TenuredHeap;
+    return gc::DefaultHeap;
 }
 
 // Specialized call for constructing |this| with a known function callee,

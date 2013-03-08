@@ -387,8 +387,6 @@ public class GeckoLayerClient implements LayerView.Listener, PanZoomTarget
 
         mForceRedraw = true;
         setViewportMetrics(newMetrics, true);
-
-        mView.requestRender();
     }
 
     public void setClampOnFixedLayerMarginsChange(boolean aClamp) {

@@ -360,7 +360,7 @@ abstract public class BrowserApp extends GeckoApp
         Distribution.init(this, getPackageResourcePath());
         JavaAddonManager.getInstance().init(getApplicationContext());
 
-        if (Build.VERSION.SDK_INT >= 10) {
+        if (Build.VERSION.SDK_INT >= 14) {
             NfcAdapter nfc = NfcAdapter.getDefaultAdapter(this);
             if (nfc != null) {
                 nfc.setNdefPushMessageCallback(new NfcAdapter.CreateNdefMessageCallback() {
@@ -421,7 +421,7 @@ abstract public class BrowserApp extends GeckoApp
         unregisterEventListener("Feedback:MaybeLater");
         unregisterEventListener("Telemetry:Gather");
 
-        if (Build.VERSION.SDK_INT >= 10) {
+        if (Build.VERSION.SDK_INT >= 14) {
             NfcAdapter nfc = NfcAdapter.getDefaultAdapter(this);
             if (nfc != null) {
                 // null this out even though the docs say it's not needed,
@@ -617,7 +617,7 @@ abstract public class BrowserApp extends GeckoApp
 
             mBrowserToolbar.adjustForTabsLayout(width);
 
-            ((LinearLayout.LayoutParams) mGeckoLayout.getLayoutParams()).setMargins(width, 0, 0, 0);
+            ((RelativeLayout.LayoutParams) mGeckoLayout.getLayoutParams()).setMargins(width, 0, 0, 0);
             mGeckoLayout.requestLayout();
         }
 
@@ -842,7 +842,7 @@ abstract public class BrowserApp extends GeckoApp
 
             // Set the gecko layout for sliding.
             if (!mTabsPanel.isShown()) {
-                ((LinearLayout.LayoutParams) mGeckoLayout.getLayoutParams()).setMargins(0, 0, 0, 0);
+                ((RelativeLayout.LayoutParams) mGeckoLayout.getLayoutParams()).setMargins(0, 0, 0, 0);
                 mGeckoLayout.scrollTo(mTabsPanel.getWidth() * -1, 0);
                 mGeckoLayout.requestLayout();
             }
@@ -882,7 +882,7 @@ abstract public class BrowserApp extends GeckoApp
 
         if (mTabsPanel.isShown()) {
             if (hasTabsSideBar()) {
-                ((LinearLayout.LayoutParams) mGeckoLayout.getLayoutParams()).setMargins(mTabsPanel.getWidth(), 0, 0, 0);
+                ((RelativeLayout.LayoutParams) mGeckoLayout.getLayoutParams()).setMargins(mTabsPanel.getWidth(), 0, 0, 0);
                 mGeckoLayout.scrollTo(0, 0);
             }
 
@@ -1512,5 +1512,15 @@ abstract public class BrowserApp extends GeckoApp
                     GeckoAppShell.sendEventToGecko(GeckoEvent.createBroadcastEvent("Feedback:LastUrl", url));
             }
         }).execute();
+    }
+
+    @Override
+    public void onResume()
+    {
+        super.onResume();
+        if (mAboutHomeContent != null) {
+            mAboutHomeContent.refresh();
+        }
+
     }
 }
