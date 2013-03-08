@@ -4126,8 +4126,8 @@ CheckSwitchRange(FunctionCompiler &f, ParseNode *stmt, int32_t *low, int32_t *hi
     }
 
     int64_t i64 = (int64_t(*high) - int64_t(*low)) + 1;
-    if (i64 > INT32_MAX)
-        return f.fail("The range of a switch must not exceed INT32_MAX", stmt);
+    if (i64 > 512*1024*1024)
+        return f.fail("All switch statements generate tables; this table would be bigger than 512MiB", stmt);
 
     *tableLength = int32_t(i64);
     return true;
