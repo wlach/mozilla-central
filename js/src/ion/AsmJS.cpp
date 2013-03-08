@@ -1024,8 +1024,6 @@ class ModuleCompiler
     typedef Vector<Func> FuncVector;
     typedef Vector<AsmJSGlobalAccess> GlobalAccessVector;
 
-    Maybe<AutoAssertNoGC>          noGC_;
-
     JSContext *                    cx_;
     LifoAlloc                      lifo_;
     TempAllocator                  alloc_;
@@ -1089,7 +1087,6 @@ class ModuleCompiler
     {}
 
     ~ModuleCompiler() {
-        noGC_.destroy();
         if (errorString_)
             tokenStream_.reportAsmError(errorNode_, JSMSG_USE_ASM_TYPE_FAIL, errorString_);
 
@@ -1131,7 +1128,6 @@ class ModuleCompiler
         if (!module_)
             return false;
 
-        noGC_.construct();
         return true;
     }
 
