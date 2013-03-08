@@ -456,11 +456,55 @@ CodeGeneratorX86::visitAsmStoreHeap(LAsmStoreHeap *ins)
 }
 
 bool
+CodeGeneratorX86::visitAsmLoadGlobalVar(LAsmLoadGlobalVar *ins)
+{
+    MAsmLoadGlobalVar *mir = ins->mir();
+
+    CodeOffsetLabel label;
+    if (mir->type() == MIRType_Int32)
+        label = masm.movlWithPatch(NULL, ToRegister(ins->output()));
+    else
+        label = masm.movsdWithPatch(NULL, ToFloatRegister(ins->output()));
+
+    return gen->noteAsmGlobalAccess(label.offset(), mir->globalDataOffset());
+}
+
+bool
+CodeGeneratorX86::visitAsmStoreGlobalVar(LAsmStoreGlobalVar *ins)
+{
+    MAsmStoreGlobalVar *mir = ins->mir();
+
+    MIRType type = mir->value()->type();
+    JS_ASSERT(type == MIRType_Int32 || type == MIRType_Double);
+
+    CodeOffsetLabel label;
+    if (type == MIRType_Int32)
+        label = masm.movlWithPatch(ToRegister(ins->value()), NULL);
+    else
+        label = masm.movsdWithPatch(ToFloatRegister(ins->value()), NULL);
+
+    return gen->noteAsmGlobalAccess(label.offset(), mir->globalDataOffset());
+}
+
+bool
+CodeGeneratorX86::visitAsmLoadFuncPtr(LAsmLoadFuncPtr *ins)
+{
+    MAsmLoadFuncPtr *mir = ins->mir();
+
+    Register index = ToRegister(ins->index());
+    Register out = ToRegister(ins->output());
+    CodeOffsetLabel label = masm.movlWithPatch(NULL, index, TimesFour, out);
+
+    return gen->noteAsmGlobalAccess(label.offset(), mir->globalDataOffset());
+}
+
+bool
 CodeGeneratorX86::visitAsmLoadFFIFunc(LAsmLoadFFIFunc *ins)
 {
     MAsmLoadFFIFunc *mir = ins->mir();
 
-    CodeOffsetLabel label = masm.movlWithPatch(NULL, ToRegister(ins->output()));
+    Register out = ToRegister(ins->output());
+    CodeOffsetLabel label = masm.movlWithPatch(NULL, out);
 
     return gen->noteAsmGlobalAccess(label.offset(), mir->globalDataOffset());
 }

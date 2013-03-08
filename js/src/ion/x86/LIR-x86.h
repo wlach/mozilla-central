@@ -70,6 +70,21 @@ class LUnboxDouble : public LInstructionHelper<1, 2, 0>
     }
 };
 
+class LAsmLoadFuncPtr : public LInstructionHelper<1, 1, 0>
+{
+  public:
+    LIR_HEADER(AsmLoadFuncPtr);
+    LAsmLoadFuncPtr(const LAllocation &index) {
+        setOperand(0, index);
+    }
+    MAsmLoadFuncPtr *mir() const {
+        return mir_->toAsmLoadFuncPtr();
+    }
+    const LAllocation *index() {
+        return getOperand(0);
+    }
+};
+
 } // namespace ion
 } // namespace js
 

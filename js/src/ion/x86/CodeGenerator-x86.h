@@ -51,6 +51,9 @@ class CodeGeneratorX86 : public CodeGeneratorX86Shared
     bool visitCompareVAndBranch(LCompareVAndBranch *lir);
     bool visitAsmLoadHeap(LAsmLoadHeap *ins);
     bool visitAsmStoreHeap(LAsmStoreHeap *ins);
+    bool visitAsmLoadGlobalVar(LAsmLoadGlobalVar *ins);
+    bool visitAsmStoreGlobalVar(LAsmStoreGlobalVar *ins);
+    bool visitAsmLoadFuncPtr(LAsmLoadFuncPtr *ins);
     bool visitAsmLoadFFIFunc(LAsmLoadFFIFunc *ins);
 
     void postAsmCall(LAsmCall *lir);

@@ -17,6 +17,7 @@
     _(ModI)                     \
     _(ModPowTwoI)               \
     _(PowHalfD)                 \
+    _(AsmLoadFuncPtr)           \
     _(AsmDivOrMod)
 
 #endif // jsion_lir_opcodes_x86_h__

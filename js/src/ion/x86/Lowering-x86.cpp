@@ -219,3 +219,10 @@ LIRGeneratorX86::visitStoreTypedArrayElement(MStoreTypedArrayElement *ins)
         value = useRegisterOrNonDoubleConstant(ins->value());
     return add(new LStoreTypedArrayElement(elements, index, value), ins);
 }
+
+bool
+LIRGeneratorX86::visitAsmLoadFuncPtr(MAsmLoadFuncPtr *ins)
+{
+    return define(new LAsmLoadFuncPtr(useRegisterAtStart(ins->index())), ins);
+}
+

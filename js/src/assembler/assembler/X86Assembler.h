@@ -1511,6 +1511,15 @@ public:
         m_formatter.oneByteOp_disp32(OP_MOV_GvEv, dst, base, offset);
     }
 
+#if WTF_CPU_X86
+    void movl_mr(void* base, RegisterID index, int scale, RegisterID dst)
+    {
+        spew("movl       %d(%s,%d), %s",
+             int(base), nameIReg(index), scale, nameIReg(dst));
+        m_formatter.oneByteOp_disp32(OP_MOV_GvEv, dst, index, scale, int(base));
+    }
+#endif
+
     void movl_mr(int offset, RegisterID base, RegisterID index, int scale, RegisterID dst)
     {
         spew("movl       %d(%s,%s,%d), %s",
@@ -2318,6 +2327,14 @@ public:
         m_formatter.prefix(PRE_SSE_F2);
         m_formatter.twoByteOp(OP2_MOVSD_VsdWsd, (RegisterID)dst, address);
     }
+
+    void movsd_rm(XMMRegisterID src, const void* address)
+    {
+        spew("movsd      %s, %p",
+             nameFPReg(src), address);
+        m_formatter.prefix(PRE_SSE_F2);
+        m_formatter.twoByteOp(OP2_MOVSD_WsdVsd, (RegisterID)src, address);
+    }
 #else
     JmpSrc movsd_ripr(XMMRegisterID dst)
     {
@@ -2889,6 +2906,14 @@ private:
             memoryModRM(reg, base, index, scale, offset);
         }
 
+        void oneByteOp_disp32(OneByteOpcodeID opcode, int reg, RegisterID index, int scale, int offset)
+        {
+            m_buffer.ensureSpace(maxInstructionSize);
+            emitRexIfNeeded(reg, index, 0);
+            m_buffer.putByteUnchecked(opcode);
+            memoryModRM_disp32(reg, index, scale, offset);
+        }
+
 #if !WTF_CPU_X86_64
         void oneByteOp(OneByteOpcodeID opcode, int reg, void* address)
         {
@@ -3353,6 +3378,28 @@ private:
                 putModRmSib(ModRmMemoryDisp32, reg, base, index, scale);
                 m_buffer.putIntUnchecked(offset);
             }
+        }
+
+        void memoryModRM_disp32(int reg, RegisterID index, int scale, int offset)
+        {
+            ASSERT(index != noIndex);
+
+            // NB: the base-less memoryModRM overloads generate different code
+            // then the base-full memoryModRM overloads in the base == noBase
+            // case. The base-less overloads assume that the desired effective
+            // address is:
+            //
+            //   reg := [scaled index] + disp32
+            //
+            // which means the mod needs to be ModRmMemoryNoDisp. The base-full
+            // overloads pass ModRmMemoryDisp32 in all cases and thus, when
+            // base == noBase (== ebp), the effective address is:
+            //
+            //   reg := [scaled index] + disp32 + [ebp]
+            //
+            // See Intel developer manual, Vol 2, 2.1.5, Table 2-3.
+            putModRmSib(ModRmMemoryNoDisp, reg, noBase, index, scale);
+            m_buffer.putIntUnchecked(offset);
         }
 
 #if !WTF_CPU_X86_64

@@ -280,8 +280,16 @@ class Assembler : public AssemblerX86Shared
         masm.movl_mr(addr, dest.code());
         return masm.currentOffset();
     }
+    CodeOffsetLabel movlWithPatch(const Register &src, void *addr) {
+        masm.movl_rm(src.code(), addr);
+        return masm.currentOffset();
+    }
     CodeOffsetLabel movlWithPatch(Imm32 imm, const Register &dest) {
         masm.movl_i32r(imm.value, dest.code());
+        return masm.currentOffset();
+    }
+    CodeOffsetLabel movlWithPatch(void *base, const Register &index, Scale scale, const Register &dest) {
+        masm.movl_mr(base, index.code(), scale, dest.code());
         return masm.currentOffset();
     }
 
@@ -431,6 +439,14 @@ class Assembler : public AssemblerX86Shared
 
     void movsd(const double *dp, const FloatRegister &dest) {
         masm.movsd_mr((const void *)dp, dest.code());
+    }
+    CodeOffsetLabel movsdWithPatch(void *addr, const FloatRegister &dest) {
+        masm.movsd_mr(addr, dest.code());
+        return masm.currentOffset();
+    }
+    CodeOffsetLabel movsdWithPatch(const FloatRegister &dest, void *addr) {
+        masm.movsd_rm(dest.code(), addr);
+        return masm.currentOffset();
     }
 };
 
