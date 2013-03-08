@@ -235,7 +235,7 @@ HandleException(PEXCEPTION_POINTERS exception)
         return true;
     }
 
-#ifdef JS_CPU_X64
+#if defined(JS_CPU_X64)
     // This isn't necessary, but, since we can, include this extra layer of
     // checking to make sure we aren't covering up a real bug.
     if (!module.maybeHeap() ||
@@ -283,23 +283,62 @@ AsmJSExceptionHandler(LPEXCEPTION_POINTERS exception)
 // Unfortunately, we still need OS-specific code to read/write to the thread
 // state via the mcontext_t.
 # if defined(__linux__)
+
 static const int SignalCode = SIGSEGV;
 
 static uint8_t **
 ContextToPC(mcontext_t &context)
 {
-#  if defined(JS_CPU_X64)
+#  if defined(JS_CPU_X86)
+    JS_STATIC_ASSERT(sizeof(context.gregs[REG_EIP]) == sizeof(void*));
+    return reinterpret_cast<uint8_t**>(&context.gregs[REG_EIP]);
+#  else
     JS_STATIC_ASSERT(sizeof(context.gregs[REG_RIP]) == sizeof(void*));
     return reinterpret_cast<uint8_t**>(&context.gregs[REG_RIP]);
-#  else
-#   error "TODO"
 #  endif
 }
 
 static void
 SetRegisterToCoercedUndefined(mcontext_t &context, AnyRegister reg)
 {
-#  if defined(JS_CPU_X64)
+#  if defined(JS_CPU_X86)
+    if (reg.isFloat()) {
+        // Since x86 predates SSE, XMM registers are left out of the basic
+        // _libc_fpstate in sys/ucontext.h. Fortunately, we have _fpstate in
+        // asm/sigcontext.h which *does* expose the _xmm registers. The
+        // _fpstate::magic field comment explains that the magic value 0xffff
+        // indicates that the processor does not have SSE2. However, we've
+        // already guarded for the presence of SSE2 in js::CompileAsmJS, so
+        // we should be able to assert that magic is not 0xffff.
+        _fpstate *fpstate = reinterpret_cast<_fpstate*>(context.fpregs);
+        if (fpstate->magic == 0xffff)
+            MOZ_CRASH();
+
+        switch (reg.fpu().code()) {
+          case JSC::X86Registers::xmm0:  SetXMMRegToNaN(&fpstate->_xmm[0]); break;
+          case JSC::X86Registers::xmm1:  SetXMMRegToNaN(&fpstate->_xmm[1]); break;
+          case JSC::X86Registers::xmm2:  SetXMMRegToNaN(&fpstate->_xmm[2]); break;
+          case JSC::X86Registers::xmm3:  SetXMMRegToNaN(&fpstate->_xmm[3]); break;
+          case JSC::X86Registers::xmm4:  SetXMMRegToNaN(&fpstate->_xmm[4]); break;
+          case JSC::X86Registers::xmm5:  SetXMMRegToNaN(&fpstate->_xmm[5]); break;
+          case JSC::X86Registers::xmm6:  SetXMMRegToNaN(&fpstate->_xmm[6]); break;
+          case JSC::X86Registers::xmm7:  SetXMMRegToNaN(&fpstate->_xmm[7]); break;
+          default: MOZ_CRASH();
+        }
+    } else {
+        switch (reg.gpr().code()) {
+          case JSC::X86Registers::eax: context.gregs[REG_EAX] = 0; break;
+          case JSC::X86Registers::ecx: context.gregs[REG_ECX] = 0; break;
+          case JSC::X86Registers::edx: context.gregs[REG_EDX] = 0; break;
+          case JSC::X86Registers::ebx: context.gregs[REG_EBX] = 0; break;
+          case JSC::X86Registers::esp: context.gregs[REG_ESP] = 0; break;
+          case JSC::X86Registers::ebp: context.gregs[REG_EBP] = 0; break;
+          case JSC::X86Registers::esi: context.gregs[REG_ESI] = 0; break;
+          case JSC::X86Registers::edi: context.gregs[REG_EDI] = 0; break;
+          default: MOZ_CRASH();
+        }
+    }
+#  else
     if (reg.isFloat()) {
         switch (reg.fpu().code()) {
           case JSC::X86Registers::xmm0:  SetXMMRegToNaN(&context.fpregs->_xmm[0]); break;
@@ -341,11 +380,11 @@ SetRegisterToCoercedUndefined(mcontext_t &context, AnyRegister reg)
           default: MOZ_CRASH();
         }
     }
-#  else
-#   error "TODO"
 #  endif
 }
+
 # elif defined(XP_MACOSX)
+
 #if defined(JS_CPU_X86)
 static const int SignalCode = SIGSEGV;
 #elif defined(JS_CPU_X64)

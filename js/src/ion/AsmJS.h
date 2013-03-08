@@ -54,6 +54,9 @@ class AsmJSActivation
     void *errorRejoinSP_;
     SPSProfiler *profiler_;
     void *resumePC_;
+#if defined(JS_CPU_X86)
+    uint32_t savedHeapSegReg_;
+#endif
 
   public:
     AsmJSActivation(JSContext *cx, const AsmJSModule &module, unsigned entryIndex);
@@ -67,6 +70,11 @@ class AsmJSActivation
 
     // Initialized by JIT code:
     static unsigned offsetOfErrorRejoinSP() { return offsetof(AsmJSActivation, errorRejoinSP_); }
+
+#if defined(JS_CPU_X86)
+    // Read and written by JIT code
+    static unsigned offsetOfSavedHeapSegReg() { return offsetof(AsmJSActivation, savedHeapSegReg_); }
+#endif
 
     // Set from SIGSEGV handler:
     void setResumePC(void *pc) { resumePC_ = pc; }

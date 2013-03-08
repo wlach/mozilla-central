@@ -74,7 +74,8 @@ class ABIArgGenerator
     ABIArg &current() { return current_; }
     uint32_t stackBytesConsumedSoFar() const { return stackOffset_; }
 
-    static const Register NonArgReturnReg;
+    static const Register NonArgReturnReg1;
+    static const Register NonArgReturnReg2;
 };
 
 static const Register OsrFrameReg = edx;
@@ -277,6 +278,10 @@ class Assembler : public AssemblerX86Shared
     }
     CodeOffsetLabel movlWithPatch(void *addr, const Register &dest) {
         masm.movl_mr(addr, dest.code());
+        return masm.currentOffset();
+    }
+    CodeOffsetLabel movlWithPatch(Imm32 imm, const Register &dest) {
+        masm.movl_i32r(imm.value, dest.code());
         return masm.currentOffset();
     }
 

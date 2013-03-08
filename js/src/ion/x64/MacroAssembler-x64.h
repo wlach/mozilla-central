@@ -463,6 +463,9 @@ class MacroAssemblerX64 : public MacroAssemblerX86Shared
     void movePtr(const Register &src, const Register &dest) {
         movq(src, dest);
     }
+    void movePtr(const Register &src, const Operand &dest) {
+        movq(src, dest);
+    }
     void movePtr(ImmWord imm, Register dest) {
         movq(imm, dest);
     }

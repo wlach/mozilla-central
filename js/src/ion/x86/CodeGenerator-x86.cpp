@@ -455,6 +455,16 @@ CodeGeneratorX86::visitAsmStoreHeap(LAsmStoreHeap *ins)
     return gen->noteAsmStoreHeap(offsetBefore, offsetAfter);
 }
 
+bool
+CodeGeneratorX86::visitAsmLoadFFIFunc(LAsmLoadFFIFunc *ins)
+{
+    MAsmLoadFFIFunc *mir = ins->mir();
+
+    CodeOffsetLabel label = masm.movlWithPatch(NULL, ToRegister(ins->output()));
+
+    return gen->noteAsmGlobalAccess(label.offset(), mir->globalDataOffset());
+}
+
 void
 CodeGeneratorX86::postAsmCall(LAsmCall *lir)
 {

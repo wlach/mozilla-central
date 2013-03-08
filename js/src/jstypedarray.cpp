@@ -43,10 +43,6 @@
 #  include "jswin.h"
 # else
 #  include <sys/mman.h>
-#  if defined(XP_MACOSX)
-#   include <architecture/i386/table.h>
-#   include <i386/user_ldt.h>
-#  endif
 # endif
 
 using namespace js;
@@ -357,25 +353,25 @@ ArrayBufferObject::prepareForAsmJS(JSContext *cx, Handle<ArrayBufferObject*> buf
 
     // Get the entire reserved region (with all pages inaccessible).
     void *p;
-#ifdef XP_WIN
+# ifdef XP_WIN
     p = VirtualAlloc(NULL, AsmJSMappedSize, MEM_RESERVE, PAGE_NOACCESS);
     if (!p)
         return false;
-#else
+# else
     p = mmap(NULL, AsmJSMappedSize, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
     if (p == MAP_FAILED)
         return false;
-#endif
+# endif
 
     // Enable access to the valid region.
     JS_ASSERT(buffer->byteLength() % AsmJSAllocationGranularity == 0);
-#ifdef XP_WIN
+# ifdef XP_WIN
     if (!VirtualAlloc(p, PageSize + buffer->byteLength(), MEM_COMMIT, PAGE_READWRITE))
         return false;
-#else
+# else
     if (mprotect(p, PageSize + buffer->byteLength(), PROT_READ | PROT_WRITE))
         return false;
-#endif
+# endif
 
     // Copy over the current contents of the typed array.
     uint8_t *data = reinterpret_cast<uint8_t*>(p) + PageSize;
@@ -402,11 +398,11 @@ ArrayBufferObject::releaseAsmJSArrayBuffer(FreeOp *fop, RawObject obj)
 
     uint8_t *p = buffer.dataPointer() - PageSize ;
     JS_ASSERT(uintptr_t(p) % PageSize == 0);
-#ifdef XP_WIN
+# ifdef XP_WIN
     VirtualAlloc(p, AsmJSMappedSize, MEM_RESERVE, PAGE_NOACCESS);
-#else
+# else
     munmap(p, AsmJSMappedSize);
-#endif
+# endif
 }
 
 #elif defined(JS_CPU_X86)
@@ -433,10 +429,6 @@ JS_STATIC_ASSERT(PageSize == 4096);
 static uint16_t
 SegmentIndexToSelector(int index)
 {
-    // There are only 8192 entries in the LDT.
-    JS_ASSERT(index >= 0);
-    JS_ASSERT(index < UINT16_MAX);
-
     // See Vol 3, Sec 3.4.2 in the Intel developer's manual
     return (index << 3) | 4 /* LDT */ | 3 /* Ring 3 */;
 }
@@ -448,6 +440,135 @@ SegmentSelectorToIndex(uint16_t selector)
     return selector >> 3;
 }
 
+// This is the segment descriptor layout described in Vol 3, Sec 3.4.5 of the
+// Intel developer's manual. Mac, Windows and Linux all use this structure to
+// read/write LDT entries with the exception that Linux uses a different struct
+// layout for writing (a fact rather poorly explained in the man page).
+struct SegmentDescriptor
+{
+  uint16_t limit_bits00through15;
+  uint16_t base_bits00through15;
+  uint8_t base_bits16through23;
+  uint8_t segmentType : 4;
+  uint8_t descriptorType : 1;
+  uint8_t descriptorPrivilege : 2;
+  uint8_t present : 1;
+  uint8_t limit_bits16through19 : 4;
+  uint8_t reserved : 1;
+  uint8_t codeIs64Bit : 1;
+  uint8_t operandSizeIs32 : 1;
+  uint8_t pageGranularity : 1;
+  uint8_t base_bits24through31;
+};
+
+# if defined(XP_MACOSX) || defined(XP_WIN)
+static void
+InitSegmentDescriptor(Handle<ArrayBufferObject*> buffer, SegmentDescriptor *d)
+{
+    JS_ASSERT(buffer->byteLength() % 4096 == 0);
+    JS_ASSERT(buffer->byteLength() >= 4096);
+
+    PodZero(d);
+
+    uint32_t base = uint32_t(buffer->dataPointer());
+    d->base_bits00through15 = base;
+    d->base_bits16through23 = base >> 16;
+    d->base_bits24through31 = base >> 24;
+
+    uint32_t limit = buffer->byteLength() / 4096 - 1;
+    d->limit_bits00through15 = limit;
+    d->limit_bits16through19 = limit >> 16;
+
+    d->segmentType = 2;               // Read/Write access
+    d->descriptorType = 1;            // Not a system segment
+    d->descriptorPrivilege = 3;       // Ring 3
+    d->present = 1;
+    d->codeIs64Bit = 0;
+    d->operandSizeIs32 = 1;
+    d->pageGranularity = 1;
+}
+# endif
+
+# if defined(XP_MACOSX)
+#  include <architecture/i386/table.h>
+#  include <i386/user_ldt.h>
+
+JS_STATIC_ASSERT(sizeof(SegmentDescriptor) == sizeof(ldt_entry_t));
+
+static bool
+AddSegmentDescriptor(Handle<ArrayBufferObject*> buffer, uint16_t *index)
+{
+    SegmentDescriptor d;
+    InitSegmentDescriptor(buffer, &d);
+
+    // Add this descriptor to the process's LDT.
+    int rval = i386_set_ldt(LDT_AUTO_ALLOC, (ldt_entry_t*)&d, 1);
+    if (rval < 0)
+        return false;
+
+    // There are only 8192 entries in the LDT.
+    JS_ASSERT(rval < 8192);
+    *index = rval;
+    return true;
+}
+
+# elif defined(__linux__)
+#  include <sys/syscall.h>
+#  include <asm/ldt.h>
+#  include <unistd.h>
+
+JS_STATIC_ASSERT(sizeof(SegmentDescriptor) == LDT_ENTRY_SIZE);
+
+// man modify_ldt(2)
+static int
+modify_ldt(int func, void *ptr, unsigned long bytecount)
+{
+    return syscall(__NR_modify_ldt, func, ptr, bytecount);
+}
+
+static bool
+AddSegmentDescriptor(Handle<ArrayBufferObject*> buffer, uint16_t *index)
+{
+    SegmentDescriptor descs[LDT_ENTRIES];
+    PodArrayZero(descs);
+
+    // Get a copy of the LDT.
+    if (modify_ldt(0 /* read */, descs, sizeof(descs)) == -1)
+        return false;
+
+    // Look for a free entry in the table
+    unsigned i = 0;
+    while (i < LDT_ENTRIES && descs[i].present)
+        i++;
+
+    if (i == LDT_ENTRIES)
+        return false;
+
+    // While descriptors are *read* using the x86 format, they must be
+    // *written* using the Linux-specific user_desc struct.
+
+    user_desc d;
+    PodZero(&d);
+    d.entry_number = i;
+    d.base_addr = uint32_t(buffer->dataPointer());
+    JS_ASSERT(buffer->byteLength() % 4096 == 0);
+    JS_ASSERT(buffer->byteLength() >= 4096);
+    d.limit = buffer->byteLength() / 4096 - 1;
+    d.seg_32bit = 1;
+    d.contents = MODIFY_LDT_CONTENTS_DATA;
+    d.read_exec_only = 0;
+    d.limit_in_pages = 1;
+    d.seg_not_present = 0;
+    d.useable = 1;
+
+    if (modify_ldt(1 /* write = */, &d, sizeof(d)) == -1)
+        return false;
+
+    *index = i;
+    return true;
+}
+# endif  /* defined (__linux__) */
+
 bool
 ArrayBufferObject::prepareForAsmJS(JSContext *cx, Handle<ArrayBufferObject*> buffer)
 {
@@ -457,39 +578,13 @@ ArrayBufferObject::prepareForAsmJS(JSContext *cx, Handle<ArrayBufferObject*> buf
     if (!buffer->uninlineData(cx))
         return false;
 
-    ldt_entry_t d;
-    PodZero(&d);
-    d.data.type = DESC_DATA_WRITE;
-    d.data.dpl = 3;                    // Ring 3: unprivileged
-    d.data.present = 1;                // Memory is mapped
-    d.data.stksz = 1;                  // 32-bit mode
-    d.data.granular = DESC_GRAN_PAGE;  // The limit is multiplied by 4KiB
-
-    // The 32 bits of the base address are broken up between 3 fields:
-    uint32_t base = uint32_t(buffer->dataPointer());
-    d.data.base00 = uint16_t(base);
-    d.data.base16 = uint8_t(base >> 16);
-    d.data.base24 = uint8_t(base >> 24);
-
-    // The 20 bits of the limit are broken up between 2 fields. Because the
-    // limit is specified with page granularity (see DESC_GRAN_PAGE above) and
-    // the ArrayBuffer's byteLength is a multiple of 4096, we can express the
-    // full range.
-    JS_ASSERT(buffer->byteLength() >= 4096);
-    JS_ASSERT(buffer->byteLength() % 4096 == 0);
-    uint32_t limit = buffer->byteLength() / 4096 - 1;
-    d.data.limit00 = uint16_t(limit);
-    JS_ASSERT(limit >> 16 <= 0xf);
-    d.data.limit16 = limit >> 16;
-
-    // Add this descriptor to the process's LDT.
-    int selector = i386_set_ldt(LDT_AUTO_ALLOC, &d, 1);
-    if (selector == -1)
+    uint16_t index;
+    if (!AddSegmentDescriptor(buffer, &index))
         return false;
 
     ObjectElements *header = buffer->getElementsHeader();
     header->setIsAsmJSArrayBuffer();
-    header->setAsmJSSegmentSelector(SegmentIndexToSelector(selector));
+    header->setAsmJSSegmentSelector(SegmentIndexToSelector(index));
     return true;
 }
 
@@ -500,15 +595,24 @@ ArrayBufferObject::releaseAsmJSArrayBuffer(FreeOp *fop, RawObject obj)
     JS_ASSERT(buffer.isAsmJSArrayBuffer());
 
     ObjectElements *header = buffer.getElementsHeader();
+    unsigned index = SegmentSelectorToIndex(header->asmJSSegmentSelector());
 
-    // Release the LDT entry
-    unsigned selector = SegmentSelectorToIndex(header->asmJSSegmentSelector());
-    i386_set_ldt(selector, NULL, 1);
+    // Mark the LDT entry as unused.
+# if defined(XP_MACOSX)
+    i386_set_ldt(index, NULL, 1);
+# else
+    user_desc d;
+    PodZero(&d);
+    d.entry_number = index;
+    d.seg_not_present = 1;
+    modify_ldt(1 /* write = */, &d, sizeof(d));
+# endif
 
     fop->free_(header);
 }
 
-#else
+#else  /* defined(JS_CPU_X86) || defined(JS_CPU_X64) */
+
 bool
 ArrayBufferObject::prepareForAsmJS(JSContext *cx, Handle<ArrayBufferObject*> buffer)
 {

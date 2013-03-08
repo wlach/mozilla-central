@@ -20,11 +20,22 @@ ABIArg
 ABIArgGenerator::next(MIRType type)
 {
     current_ = ABIArg(stackOffset_);
-    stackOffset_ += sizeof(uint64_t);
+    switch (type) {
+      case MIRType_Int32:
+      case MIRType_Pointer:
+        stackOffset_ += sizeof(uint32_t);
+        break;
+      case MIRType_Double:
+        stackOffset_ += sizeof(uint64_t);
+        break;
+      default:
+        JS_NOT_REACHED("Unexpected argument type");
+    }
     return current_;
 }
 
-const Register ABIArgGenerator::NonArgReturnReg = ebx;
+const Register ABIArgGenerator::NonArgReturnReg1 = ebx;
+const Register ABIArgGenerator::NonArgReturnReg2 = ecx;
 
 void
 Assembler::executableCopy(uint8_t *buffer)
