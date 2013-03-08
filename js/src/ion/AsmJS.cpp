@@ -4471,10 +4471,10 @@ StoreReturnValueInArgv(MacroAssembler &masm, Register argv, const ModuleCompiler
     }
 }
 
+#if defined(JS_CPU_X64)
 static const unsigned FramePushedAfterSave = NonVolatileRegs.gprs().size() * STACK_SLOT_SIZE +
                                              NonVolatileRegs.fpus().size() * sizeof(double);
 
-#if defined(JS_CPU_X64)
 static bool
 GenerateEntry(ModuleCompiler &m, const AsmJSModule::ExportedFunction &exportedFunc)
 {
@@ -4541,6 +4541,10 @@ GenerateEntry(ModuleCompiler &m, const AsmJSModule::ExportedFunction &exportedFu
     return true;
 }
 #elif defined(JS_CPU_X86)
+static const unsigned FramePushedAfterSave = NonVolatileRegs.gprs().size() * STACK_SLOT_SIZE +
+                                             NonVolatileRegs.fpus().size() * sizeof(double) +
+                                             1 /* HeapSegReg */ * sizeof(void*);
+
 static bool
 GenerateEntry(ModuleCompiler &m, const AsmJSModule::ExportedFunction &exportedFunc)
 {
@@ -4554,6 +4558,8 @@ GenerateEntry(ModuleCompiler &m, const AsmJSModule::ExportedFunction &exportedFu
     // PushRegsInMask(NonVolatileRegs).
     masm.setFramePushed(0);
     masm.PushRegsInMask(NonVolatileRegs);
+    masm.movSeg(HeapSegReg, eax);
+    masm.Push(eax);
 
     // Remember the stack pointer in the current AsmJSActivation. This will be
     // used by error exit paths to set the stack pointer back to what it was
@@ -4597,6 +4603,8 @@ GenerateEntry(ModuleCompiler &m, const AsmJSModule::ExportedFunction &exportedFu
     masm.movl(Operand(StackPointer, NativeFrameSize + masm.framePushed()), argv);
     StoreReturnValueInArgv(masm, argv, func);
 
+    masm.Pop(eax);
+    masm.movSeg(eax, HeapSegReg);
     masm.PopRegsInMask(NonVolatileRegs);
     JS_ASSERT(masm.framePushed() == 0);
 
@@ -4778,6 +4786,7 @@ GenerateStackOverflowExit(ModuleCompiler &m, Label *throwLabel)
 
     masm.jmp(throwLabel);
 #else
+    // DON'T FORGET TO RESTORE HeapSegReg on both sides!
     masm.breakpoint();
 #endif
 }
@@ -4835,6 +4844,7 @@ GenerateOperationCallbackExit(ModuleCompiler &m, Label *throwLabel)
     masm.popFlags();              // after this, nothing that sets conditions
     masm.ret();                   // pop resumePC into PC
 #else
+    // DON'T FORGET TO RESTORE HeapSegReg on both sides!
     masm.breakpoint();
 #endif
 }
@@ -4854,7 +4864,13 @@ GenerateThrowExit(ModuleCompiler &m, Label *throwLabel)
 
     LoadAsmJSActivationIntoRegister(masm, ReturnReg);
     masm.mov(Operand(ReturnReg, AsmJSActivation::offsetOfErrorRejoinSP()), StackPointer);
+#if defined(JS_CPU_X86)
+    masm.Pop(eax);
+    masm.movSeg(eax, HeapSegReg);
+#endif
     masm.PopRegsInMask(NonVolatileRegs);
+    JS_ASSERT(masm.framePushed() == 0);
+
     masm.mov(Imm32(0), ReturnReg);
     masm.ret();
 }

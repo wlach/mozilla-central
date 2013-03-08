@@ -551,6 +551,11 @@ class AsmJSModule
 #if defined(JS_CPU_X86)
             heapSelectorDatum() = maybeHeap_->getElementsHeader()->asmJSSegmentSelector();
 #endif
+        } else {
+            heapDatum() = NULL;
+#if defined(JS_CPU_X86)
+            heapSelectorDatum() = 0;
+#endif
         }
     }
     bool isLinked() const {
