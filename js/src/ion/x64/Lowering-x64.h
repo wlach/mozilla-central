@@ -42,6 +42,7 @@ class LIRGeneratorX64 : public LIRGeneratorX86Shared
     bool visitUnbox(MUnbox *unbox);
     bool visitReturn(MReturn *ret);
     bool visitStoreTypedArrayElement(MStoreTypedArrayElement *ins);
+    bool visitAsmStoreHeap(MAsmStoreHeap *ins);
     bool visitAsmLoadFuncPtr(MAsmLoadFuncPtr *ins);
 };
 

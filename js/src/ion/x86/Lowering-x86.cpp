@@ -221,6 +221,36 @@ LIRGeneratorX86::visitStoreTypedArrayElement(MStoreTypedArrayElement *ins)
 }
 
 bool
+LIRGeneratorX86::visitAsmStoreHeap(MAsmStoreHeap *ins)
+{
+    LAsmStoreHeap *lir;
+    switch (ins->viewType()) {
+      case ArrayBufferView::TYPE_INT8: case ArrayBufferView::TYPE_UINT8:
+        // It's a trap! On x86, the 1-byte store can only use one of
+        // {al,bl,cl,dl,ah,bh,ch,dh}. That means if the register allocator
+        // gives us one of {edi,esi,ebp,esp}, we're out of luck. (The formatter
+        // will assert on us.) Ideally, we'd just ask the register allocator to
+        // give us one of {al,bl,cl,dl}. For now, just useFixed(al).
+        lir = new LAsmStoreHeap(useRegister(ins->ptr()),
+                                useFixed(ins->value(), eax));
+        break;
+      case ArrayBufferView::TYPE_INT16: case ArrayBufferView::TYPE_UINT16:
+      case ArrayBufferView::TYPE_INT32: case ArrayBufferView::TYPE_UINT32:
+        lir = new LAsmStoreHeap(useRegisterAtStart(ins->ptr()),
+                                useRegisterOrConstantAtStart(ins->value()));
+        break;
+      case ArrayBufferView::TYPE_FLOAT32:
+      case ArrayBufferView::TYPE_FLOAT64:
+        lir = new LAsmStoreHeap(useRegisterAtStart(ins->ptr()),
+                                useRegisterAtStart(ins->value()));
+        break;
+      default: JS_NOT_REACHED("unexpected array type");
+    }
+
+    return add(lir, ins);
+}
+
+bool
 LIRGeneratorX86::visitAsmLoadFuncPtr(MAsmLoadFuncPtr *ins)
 {
     return define(new LAsmLoadFuncPtr(useRegisterAtStart(ins->index())), ins);

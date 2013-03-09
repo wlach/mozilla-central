@@ -147,6 +147,28 @@ LIRGeneratorX64::visitStoreTypedArrayElement(MStoreTypedArrayElement *ins)
 }
 
 bool
+LIRGeneratorX64::visitAsmStoreHeap(MAsmStoreHeap *ins)
+{
+    LAsmStoreHeap *lir;
+    switch (ins->viewType()) {
+      case ArrayBufferView::TYPE_INT8: case ArrayBufferView::TYPE_UINT8:
+      case ArrayBufferView::TYPE_INT16: case ArrayBufferView::TYPE_UINT16:
+      case ArrayBufferView::TYPE_INT32: case ArrayBufferView::TYPE_UINT32:
+        lir = new LAsmStoreHeap(useRegisterAtStart(ins->ptr()),
+                                useRegisterOrConstantAtStart(ins->value()));
+        break;
+      case ArrayBufferView::TYPE_FLOAT32:
+      case ArrayBufferView::TYPE_FLOAT64:
+        lir = new LAsmStoreHeap(useRegisterAtStart(ins->ptr()),
+                                useRegisterAtStart(ins->value()));
+        break;
+      default: JS_NOT_REACHED("unexpected array type");
+    }
+
+    return add(lir, ins);
+}
+
+bool
 LIRGeneratorX64::visitAsmLoadFuncPtr(MAsmLoadFuncPtr *ins)
 {
     return define(new LAsmLoadFuncPtr(useRegister(ins->index()), temp()), ins);
