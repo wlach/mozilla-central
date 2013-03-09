@@ -74,8 +74,10 @@ class ABIArgGenerator
     ABIArg &current() { return current_; }
     uint32_t stackBytesConsumedSoFar() const { return stackOffset_; }
 
-    static const Register NonArgReturnReg1;
-    static const Register NonArgReturnReg2;
+    // Note: these registers are all guaranteed to be different
+    static const Register NonArgReturnVolatileReg1;
+    static const Register NonArgReturnVolatileReg2;
+    static const Register NonVolatileReg;
 };
 
 static const Register OsrFrameReg = edx;

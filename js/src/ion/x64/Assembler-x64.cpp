@@ -77,8 +77,9 @@ ABIArgGenerator::next(MIRType type)
 #endif
 }
 
-const Register ABIArgGenerator::NonArgReturnReg1 = rbx;
-const Register ABIArgGenerator::NonArgReturnReg2 = rcx;
+const Register ABIArgGenerator::NonArgReturnVolatileReg1 = r10;
+const Register ABIArgGenerator::NonArgReturnVolatileReg2 = r11;
+const Register ABIArgGenerator::NonVolatileReg = r12;
 
 void
 Assembler::writeRelocation(JmpSrc src, Relocation::Kind reloc)
