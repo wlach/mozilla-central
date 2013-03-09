@@ -1842,7 +1842,7 @@ MNot::foldsTo(bool useValueNumbers)
     if (operand()->isConstant()) {
         const Value &v = operand()->toConstant()->value();
         if (type() == MIRType_Int32)
-            return MConstant::New(Int32Value(ToBoolean(v)));
+            return MConstant::New(Int32Value(!ToBoolean(v)));
 
         // ToBoolean can cause no side effects, so this is safe.
         return MConstant::New(BooleanValue(!ToBoolean(v)));
