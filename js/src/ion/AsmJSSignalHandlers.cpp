@@ -284,8 +284,6 @@ AsmJSExceptionHandler(LPEXCEPTION_POINTERS exception)
 // state via the mcontext_t.
 # if defined(__linux__)
 
-static const int SignalCode = SIGSEGV;
-
 static uint8_t **
 ContextToPC(mcontext_t &context)
 {
@@ -385,12 +383,6 @@ SetRegisterToCoercedUndefined(mcontext_t &context, AnyRegister reg)
 
 # elif defined(XP_MACOSX)
 
-#if defined(JS_CPU_X86)
-static const int SignalCode = SIGSEGV;
-#elif defined(JS_CPU_X64)
-static const int SignalCode = SIGBUS;
-#endif
-
 static uint8_t **
 ContextToPC(mcontext_t context)
 {
@@ -468,9 +460,6 @@ SetRegisterToCoercedUndefined(mcontext_t &context, AnyRegister reg)
 static bool
 HandleSignal(int signum, siginfo_t *info, void *ctx)
 {
-    if (signum != SignalCode)
-        return false;
-
     AsmJSActivation *activation = InnermostAsmJSActivation();
     if (!activation)
         return false;
@@ -543,7 +532,7 @@ AsmJSFaultHandler(int signum, siginfo_t *info, void *context)
         sPrevHandler.sa_sigaction(signum, info, context);
         exit(signum);  // backstop
     } else if (sPrevHandler.sa_handler == SIG_DFL || sPrevHandler.sa_handler == SIG_IGN) {
-        sigaction(SignalCode, &sPrevHandler, NULL);
+        sigaction(signum, &sPrevHandler, NULL);
     } else {
         sPrevHandler.sa_handler(signum);
         exit(signum);  // backstop
@@ -566,7 +555,9 @@ js::EnsureAsmJSSignalHandlersInstalled()
     sigAction.sa_sigaction = &AsmJSFaultHandler;
     sigemptyset(&sigAction.sa_mask);
     sigAction.sa_flags = SA_SIGINFO;
-    if (sigaction(SignalCode, &sigAction, &sPrevHandler))
+    if (sigaction(SIGSEGV, &sigAction, &sPrevHandler))
+        return false;
+    if (sigaction(SIGBUS, &sigAction, &sPrevHandler))
         return false;
 #endif
 
