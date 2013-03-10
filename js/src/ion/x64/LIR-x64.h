@@ -66,6 +66,17 @@ class LUnboxDouble : public LUnboxBase {
     { }
 };
 
+// Convert a 32-bit unsigned integer to a double.
+class LUInt32ToDouble : public LInstructionHelper<1, 1, 0>
+{
+  public:
+    LIR_HEADER(UInt32ToDouble)
+
+    LUInt32ToDouble(const LAllocation &input) {
+        setOperand(0, input);
+    }
+};
+
 class LAsmLoadFuncPtr : public LInstructionHelper<1, 1, 1>
 {
   public:

@@ -245,13 +245,6 @@ CodeGenerator::visitInt32ToDouble(LInt32ToDouble *lir)
 }
 
 bool
-CodeGenerator::visitUInt32ToDouble(LUInt32ToDouble *lir)
-{
-    masm.convertUInt32ToDouble(ToRegister(lir->input()), ToFloatRegister(lir->output()));
-    return true;
-}
-
-bool
 CodeGenerator::visitDoubleToInt32(LDoubleToInt32 *lir)
 {
     Label fail;

@@ -400,6 +400,20 @@ CodeGeneratorX86::visitCompareVAndBranch(LCompareVAndBranch *lir)
 }
 
 bool
+CodeGeneratorX86::visitUInt32ToDouble(LUInt32ToDouble *lir)
+{
+    Register input = ToRegister(lir->input());
+    Register temp = ToRegister(lir->temp());
+
+    if (input != temp)
+        masm.mov(input, temp);
+
+    // Beware: convertUInt32ToDouble clobbers input.
+    masm.convertUInt32ToDouble(temp, ToFloatRegister(lir->output()));
+    return true;
+}
+
+bool
 CodeGeneratorX86::visitAsmLoadHeap(LAsmLoadHeap *ins)
 {
     const MAsmLoadHeap *mir = ins->mir();

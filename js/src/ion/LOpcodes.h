@@ -107,7 +107,6 @@
     _(CharCodeAt)                   \
     _(FromCharCode)                 \
     _(Int32ToDouble)                \
-    _(UInt32ToDouble)               \
     _(ValueToDouble)                \
     _(ValueToInt32)                 \
     _(DoubleToInt32)                \

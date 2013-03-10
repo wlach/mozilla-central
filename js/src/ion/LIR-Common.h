@@ -2171,17 +2171,6 @@ class LInt32ToDouble : public LInstructionHelper<1, 1, 0>
     }
 };
 
-// Convert a 32-bit unsigned integer to a double.
-class LUInt32ToDouble : public LInstructionHelper<1, 1, 0>
-{
-  public:
-    LIR_HEADER(UInt32ToDouble)
-
-    LUInt32ToDouble(const LAllocation &input) {
-        setOperand(0, input);
-    }
-};
-
 // Convert a value to a double.
 class LValueToDouble : public LInstructionHelper<1, BOX_PIECES, 0>
 {

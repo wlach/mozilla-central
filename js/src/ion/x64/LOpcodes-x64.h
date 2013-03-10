@@ -16,6 +16,7 @@
     _(ModI)                         \
     _(ModPowTwoI)                   \
     _(PowHalfD)                     \
+    _(UInt32ToDouble)               \
     _(AsmLoadFuncPtr)               \
     _(AsmDivOrMod)
 

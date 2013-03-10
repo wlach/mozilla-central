@@ -147,6 +147,14 @@ LIRGeneratorX64::visitStoreTypedArrayElement(MStoreTypedArrayElement *ins)
 }
 
 bool
+LIRGeneratorX64::visitAsmUnsignedToDouble(MAsmUnsignedToDouble *ins)
+{
+    JS_ASSERT(ins->input()->type() == MIRType_Int32);
+    LUInt32ToDouble *lir = new LUInt32ToDouble(useRegisterAtStart(ins->input()));
+    return define(lir, ins);
+}
+
+bool
 LIRGeneratorX64::visitAsmStoreHeap(MAsmStoreHeap *ins)
 {
     LAsmStoreHeap *lir;

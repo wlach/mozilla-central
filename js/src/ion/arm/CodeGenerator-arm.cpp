@@ -1332,6 +1332,14 @@ CodeGeneratorARM::visitCompareVAndBranch(LCompareVAndBranch *lir)
 
     return true;
 }
+
+bool
+CodeGeneratorARM::visitUInt32ToDouble(LUInt32ToDouble *lir)
+{
+    masm.convertUInt32ToDouble(ToRegister(lir->input()), ToFloatRegister(lir->output()));
+    return true;
+}
+
 bool
 CodeGeneratorARM::visitNotI(LNotI *ins)
 {

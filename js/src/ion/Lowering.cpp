@@ -2393,14 +2393,6 @@ LIRGenerator::visitFunctionBoundary(MFunctionBoundary *ins)
 }
 
 bool
-LIRGenerator::visitAsmUnsignedToDouble(MAsmUnsignedToDouble *ins)
-{
-    JS_ASSERT(ins->input()->type() == MIRType_Int32);
-    LUInt32ToDouble *lir = new LUInt32ToDouble(useRegister(ins->input()));
-    return define(lir, ins);
-}
-
-bool
 LIRGenerator::visitAsmLoadHeap(MAsmLoadHeap *ins)
 {
     LAsmLoadHeap *lir = new LAsmLoadHeap(useRegisterAtStart(ins->ptr()));
