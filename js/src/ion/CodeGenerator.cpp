@@ -2046,12 +2046,15 @@ CodeGenerator::maybeCreateScriptCounts()
     CompileInfo *outerInfo = &gen->info();
     RawScript script = outerInfo->script();
 
+    if (!script)
+        return NULL;
+
     if (cx->runtime->profilingScripts && !script->hasScriptCounts) {
         if (!script->initScriptCounts(cx))
             return NULL;
     }
 
-    if (!script || !script->hasScriptCounts)
+    if (!script->hasScriptCounts)
         return NULL;
 
     counts = js_new<IonScriptCounts>();
