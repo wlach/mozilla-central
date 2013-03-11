@@ -406,41 +406,38 @@ bool
 CodeGeneratorX64::visitAsmLoadHeap(LAsmLoadHeap *ins)
 {
     MAsmLoadHeap *mir = ins->mir();
+    ArrayBufferView::ViewType vt = mir->viewType();
+
     Operand srcAddr(HeapReg, ToRegister(ins->ptr()), TimesOne);
 
-    if (mir->viewType() == ArrayBufferView::TYPE_FLOAT32) {
-        // Float loads require two instructions: a load and a float-to-double
-        // conversion. Unlike the AsmStoreHeap case below, include both
-        // instructions in the offsetBefore/offsetAfter range. This is necessary
-        // since, after a faulting float32 load, the destination register will
-        // be assigned float64 NaN so we mustn't do a float-to-double
-        // conversion. It is critical that the load is first since offsetBefore
-        // must be the exact offset of the load.
+    if (vt == ArrayBufferView::TYPE_FLOAT32) {
+        FloatRegister dest = ToFloatRegister(ins->output());
         uint32_t offsetBefore = masm.size();
-        FloatRegister r = ToFloatRegister(ins->output());
-        masm.movss(srcAddr, r);
-        masm.cvtss2sd(r, r);
+        masm.movss(srcAddr, dest);
         uint32_t offsetAfter = masm.size();
-        return gen->noteAsmLoadHeap(offsetBefore, offsetAfter, ToAnyRegister(ins->output()));
+        masm.cvtss2sd(dest, dest);
+        return gen->noteAsmLoadHeap(offsetBefore, offsetAfter, vt, ToAnyRegister(ins->output()));
     }
 
     uint32_t offsetBefore = masm.size();
-    emitAsmLoadHeap(srcAddr, ins->output(), mir->viewType());
+    emitAsmLoadHeap(srcAddr, ins->output(), vt);
     uint32_t offsetAfter = masm.size();
-    return gen->noteAsmLoadHeap(offsetBefore, offsetAfter, ToAnyRegister(ins->output()));
+    return gen->noteAsmLoadHeap(offsetBefore, offsetAfter, vt, ToAnyRegister(ins->output()));
 }
 
 bool
 CodeGeneratorX64::visitAsmStoreHeap(LAsmStoreHeap *ins)
 {
     MAsmStoreHeap *mir = ins->mir();
+    ArrayBufferView::ViewType vt = mir->viewType();
+
     Operand dstAddr(HeapReg, ToRegister(ins->ptr()), TimesOne);
 
-    if (mir->viewType() == ArrayBufferView::TYPE_FLOAT32) {
+    if (vt == ArrayBufferView::TYPE_FLOAT32) {
         // Although we are storing to a float32, the input register holds a
         // float64 which must be explicitly converted (we cannot simply alias the low
         // float32 of the xmm register). Make sure that offsetBefore points to
-        // the store, not the conversion op since it is the load that will fault.
+        // the store, not the conversion op since it is the store that will fault.
         masm.convertDoubleToFloat(ToFloatRegister(ins->value()), ScratchFloatReg);
         uint32_t offsetBefore = masm.size();
         masm.movss(ScratchFloatReg, dstAddr);
@@ -449,7 +446,7 @@ CodeGeneratorX64::visitAsmStoreHeap(LAsmStoreHeap *ins)
     }
 
     uint32_t offsetBefore = masm.size();
-    emitAsmStoreHeap(dstAddr, ins->value(), mir->viewType());
+    emitAsmStoreHeap(dstAddr, ins->value(), vt);
     uint32_t offsetAfter = masm.size();
     return gen->noteAsmStoreHeap(offsetBefore, offsetAfter);
 }

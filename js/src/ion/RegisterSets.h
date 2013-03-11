@@ -686,13 +686,14 @@ class AsmJSHeapAccess
 {
     uint32_t offset_;
     uint8_t opLength_;
+    uint8_t isFloat32Load_;
     ion::AnyRegister::Code loadedReg_ : 8;
 
     JS_STATIC_ASSERT(ion::AnyRegister::Total < UINT8_MAX);
 
   public:
-    AsmJSHeapAccess(uint32_t offset, uint8_t opLength, AnyRegister loadedReg)
-      : offset_(offset), opLength_(opLength), loadedReg_(loadedReg.code())
+    AsmJSHeapAccess(uint32_t offset, uint8_t opLength, uint8_t isFloat32, AnyRegister loadedReg)
+      : offset_(offset), opLength_(opLength), isFloat32Load_(isFloat32), loadedReg_(loadedReg.code())
     {}
     AsmJSHeapAccess(uint32_t offset, uint8_t opLength)
       : offset_(offset), opLength_(opLength), loadedReg_(UINT8_MAX)
@@ -702,6 +703,7 @@ class AsmJSHeapAccess
     uint32_t offset() const { return offset_; }
     unsigned opLength() const { return opLength_; }
     bool isLoad() const { return loadedReg_ != UINT8_MAX; }
+    bool isFloat32Load() const { return isFloat32Load_; }
     ion::AnyRegister loadedReg() const { return ion::AnyRegister::FromCode(loadedReg_); }
 };
 

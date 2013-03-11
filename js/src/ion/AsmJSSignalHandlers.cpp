@@ -85,12 +85,21 @@ InnermostAsmJSActivation()
 
 template <class T>
 static void
-SetXMMRegToNaN(T *xmm_reg)
+SetXMMRegToNaN(bool isFloat32, T *xmm_reg)
 {
-    JS_STATIC_ASSERT(sizeof(T) == 2 * sizeof(double));
-    double *dbls = reinterpret_cast<double*>(xmm_reg);
-    dbls[0] = js_NaN;
-    dbls[1] = 0;
+    if (isFloat32) {
+        JS_STATIC_ASSERT(sizeof(T) == 4 * sizeof(float));
+        float *floats = reinterpret_cast<float*>(xmm_reg);
+        floats[0] = js_NaN;
+        floats[1] = 0;
+        floats[2] = 0;
+        floats[3] = 0;
+    } else {
+        JS_STATIC_ASSERT(sizeof(T) == 2 * sizeof(double));
+        double *dbls = reinterpret_cast<double*>(xmm_reg);
+        dbls[0] = js_NaN;
+        dbls[1] = 0;
+    }
 }
 
 static bool
@@ -146,27 +155,27 @@ ContextToPC(PCONTEXT context)
 }
 
 static void
-SetRegisterToCoercedUndefined(CONTEXT *context, AnyRegister reg)
+SetRegisterToCoercedUndefined(CONTEXT *context, bool isFloat32, AnyRegister reg)
 {
 #  if defined(JS_CPU_X64)
     if (reg.isFloat()) {
         switch (reg.fpu().code()) {
-          case JSC::X86Registers::xmm0:  SetXMMRegToNaN(&context->Xmm0); break;
-          case JSC::X86Registers::xmm1:  SetXMMRegToNaN(&context->Xmm1); break;
-          case JSC::X86Registers::xmm2:  SetXMMRegToNaN(&context->Xmm2); break;
-          case JSC::X86Registers::xmm3:  SetXMMRegToNaN(&context->Xmm3); break;
-          case JSC::X86Registers::xmm4:  SetXMMRegToNaN(&context->Xmm4); break;
-          case JSC::X86Registers::xmm5:  SetXMMRegToNaN(&context->Xmm5); break;
-          case JSC::X86Registers::xmm6:  SetXMMRegToNaN(&context->Xmm6); break;
-          case JSC::X86Registers::xmm7:  SetXMMRegToNaN(&context->Xmm7); break;
-          case JSC::X86Registers::xmm8:  SetXMMRegToNaN(&context->Xmm8); break;
-          case JSC::X86Registers::xmm9:  SetXMMRegToNaN(&context->Xmm9); break;
-          case JSC::X86Registers::xmm10: SetXMMRegToNaN(&context->Xmm10); break;
-          case JSC::X86Registers::xmm11: SetXMMRegToNaN(&context->Xmm11); break;
-          case JSC::X86Registers::xmm12: SetXMMRegToNaN(&context->Xmm12); break;
-          case JSC::X86Registers::xmm13: SetXMMRegToNaN(&context->Xmm13); break;
-          case JSC::X86Registers::xmm14: SetXMMRegToNaN(&context->Xmm14); break;
-          case JSC::X86Registers::xmm15: SetXMMRegToNaN(&context->Xmm15); break;
+          case JSC::X86Registers::xmm0:  SetXMMRegToNaN(isFloat32, &context->Xmm0); break;
+          case JSC::X86Registers::xmm1:  SetXMMRegToNaN(isFloat32, &context->Xmm1); break;
+          case JSC::X86Registers::xmm2:  SetXMMRegToNaN(isFloat32, &context->Xmm2); break;
+          case JSC::X86Registers::xmm3:  SetXMMRegToNaN(isFloat32, &context->Xmm3); break;
+          case JSC::X86Registers::xmm4:  SetXMMRegToNaN(isFloat32, &context->Xmm4); break;
+          case JSC::X86Registers::xmm5:  SetXMMRegToNaN(isFloat32, &context->Xmm5); break;
+          case JSC::X86Registers::xmm6:  SetXMMRegToNaN(isFloat32, &context->Xmm6); break;
+          case JSC::X86Registers::xmm7:  SetXMMRegToNaN(isFloat32, &context->Xmm7); break;
+          case JSC::X86Registers::xmm8:  SetXMMRegToNaN(isFloat32, &context->Xmm8); break;
+          case JSC::X86Registers::xmm9:  SetXMMRegToNaN(isFloat32, &context->Xmm9); break;
+          case JSC::X86Registers::xmm10: SetXMMRegToNaN(isFloat32, &context->Xmm10); break;
+          case JSC::X86Registers::xmm11: SetXMMRegToNaN(isFloat32, &context->Xmm11); break;
+          case JSC::X86Registers::xmm12: SetXMMRegToNaN(isFloat32, &context->Xmm12); break;
+          case JSC::X86Registers::xmm13: SetXMMRegToNaN(isFloat32, &context->Xmm13); break;
+          case JSC::X86Registers::xmm14: SetXMMRegToNaN(isFloat32, &context->Xmm14); break;
+          case JSC::X86Registers::xmm15: SetXMMRegToNaN(isFloat32, &context->Xmm15); break;
           default: MOZ_CRASH();
         }
     } else {
@@ -261,7 +270,7 @@ HandleException(PEXCEPTION_POINTERS exception)
     // register) and set the PC to the next op. Upon return from the handler,
     // execution will resume at this next PC.
     if (heapAccess->isLoad())
-        SetRegisterToCoercedUndefined(context, heapAccess->loadedReg());
+        SetRegisterToCoercedUndefined(context, heapAccess->isFloat32Load(), heapAccess->loadedReg());
     *ppc += heapAccess->opLength();
     return true;
 }
@@ -297,7 +306,7 @@ ContextToPC(mcontext_t &context)
 }
 
 static void
-SetRegisterToCoercedUndefined(mcontext_t &context, AnyRegister reg)
+SetRegisterToCoercedUndefined(mcontext_t &context, bool isFloat32, AnyRegister reg)
 {
 #  if defined(JS_CPU_X86)
     if (reg.isFloat()) {
@@ -313,14 +322,14 @@ SetRegisterToCoercedUndefined(mcontext_t &context, AnyRegister reg)
             MOZ_CRASH();
 
         switch (reg.fpu().code()) {
-          case JSC::X86Registers::xmm0:  SetXMMRegToNaN(&fpstate->_xmm[0]); break;
-          case JSC::X86Registers::xmm1:  SetXMMRegToNaN(&fpstate->_xmm[1]); break;
-          case JSC::X86Registers::xmm2:  SetXMMRegToNaN(&fpstate->_xmm[2]); break;
-          case JSC::X86Registers::xmm3:  SetXMMRegToNaN(&fpstate->_xmm[3]); break;
-          case JSC::X86Registers::xmm4:  SetXMMRegToNaN(&fpstate->_xmm[4]); break;
-          case JSC::X86Registers::xmm5:  SetXMMRegToNaN(&fpstate->_xmm[5]); break;
-          case JSC::X86Registers::xmm6:  SetXMMRegToNaN(&fpstate->_xmm[6]); break;
-          case JSC::X86Registers::xmm7:  SetXMMRegToNaN(&fpstate->_xmm[7]); break;
+          case JSC::X86Registers::xmm0:  SetXMMRegToNaN(isFloat32, &fpstate->_xmm[0]); break;
+          case JSC::X86Registers::xmm1:  SetXMMRegToNaN(isFloat32, &fpstate->_xmm[1]); break;
+          case JSC::X86Registers::xmm2:  SetXMMRegToNaN(isFloat32, &fpstate->_xmm[2]); break;
+          case JSC::X86Registers::xmm3:  SetXMMRegToNaN(isFloat32, &fpstate->_xmm[3]); break;
+          case JSC::X86Registers::xmm4:  SetXMMRegToNaN(isFloat32, &fpstate->_xmm[4]); break;
+          case JSC::X86Registers::xmm5:  SetXMMRegToNaN(isFloat32, &fpstate->_xmm[5]); break;
+          case JSC::X86Registers::xmm6:  SetXMMRegToNaN(isFloat32, &fpstate->_xmm[6]); break;
+          case JSC::X86Registers::xmm7:  SetXMMRegToNaN(isFloat32, &fpstate->_xmm[7]); break;
           default: MOZ_CRASH();
         }
     } else {
@@ -339,22 +348,22 @@ SetRegisterToCoercedUndefined(mcontext_t &context, AnyRegister reg)
 #  else
     if (reg.isFloat()) {
         switch (reg.fpu().code()) {
-          case JSC::X86Registers::xmm0:  SetXMMRegToNaN(&context.fpregs->_xmm[0]); break;
-          case JSC::X86Registers::xmm1:  SetXMMRegToNaN(&context.fpregs->_xmm[1]); break;
-          case JSC::X86Registers::xmm2:  SetXMMRegToNaN(&context.fpregs->_xmm[2]); break;
-          case JSC::X86Registers::xmm3:  SetXMMRegToNaN(&context.fpregs->_xmm[3]); break;
-          case JSC::X86Registers::xmm4:  SetXMMRegToNaN(&context.fpregs->_xmm[4]); break;
-          case JSC::X86Registers::xmm5:  SetXMMRegToNaN(&context.fpregs->_xmm[5]); break;
-          case JSC::X86Registers::xmm6:  SetXMMRegToNaN(&context.fpregs->_xmm[6]); break;
-          case JSC::X86Registers::xmm7:  SetXMMRegToNaN(&context.fpregs->_xmm[7]); break;
-          case JSC::X86Registers::xmm8:  SetXMMRegToNaN(&context.fpregs->_xmm[8]); break;
-          case JSC::X86Registers::xmm9:  SetXMMRegToNaN(&context.fpregs->_xmm[9]); break;
-          case JSC::X86Registers::xmm10: SetXMMRegToNaN(&context.fpregs->_xmm[10]); break;
-          case JSC::X86Registers::xmm11: SetXMMRegToNaN(&context.fpregs->_xmm[11]); break;
-          case JSC::X86Registers::xmm12: SetXMMRegToNaN(&context.fpregs->_xmm[12]); break;
-          case JSC::X86Registers::xmm13: SetXMMRegToNaN(&context.fpregs->_xmm[13]); break;
-          case JSC::X86Registers::xmm14: SetXMMRegToNaN(&context.fpregs->_xmm[14]); break;
-          case JSC::X86Registers::xmm15: SetXMMRegToNaN(&context.fpregs->_xmm[15]); break;
+          case JSC::X86Registers::xmm0:  SetXMMRegToNaN(isFloat32, &context.fpregs->_xmm[0]); break;
+          case JSC::X86Registers::xmm1:  SetXMMRegToNaN(isFloat32, &context.fpregs->_xmm[1]); break;
+          case JSC::X86Registers::xmm2:  SetXMMRegToNaN(isFloat32, &context.fpregs->_xmm[2]); break;
+          case JSC::X86Registers::xmm3:  SetXMMRegToNaN(isFloat32, &context.fpregs->_xmm[3]); break;
+          case JSC::X86Registers::xmm4:  SetXMMRegToNaN(isFloat32, &context.fpregs->_xmm[4]); break;
+          case JSC::X86Registers::xmm5:  SetXMMRegToNaN(isFloat32, &context.fpregs->_xmm[5]); break;
+          case JSC::X86Registers::xmm6:  SetXMMRegToNaN(isFloat32, &context.fpregs->_xmm[6]); break;
+          case JSC::X86Registers::xmm7:  SetXMMRegToNaN(isFloat32, &context.fpregs->_xmm[7]); break;
+          case JSC::X86Registers::xmm8:  SetXMMRegToNaN(isFloat32, &context.fpregs->_xmm[8]); break;
+          case JSC::X86Registers::xmm9:  SetXMMRegToNaN(isFloat32, &context.fpregs->_xmm[9]); break;
+          case JSC::X86Registers::xmm10: SetXMMRegToNaN(isFloat32, &context.fpregs->_xmm[10]); break;
+          case JSC::X86Registers::xmm11: SetXMMRegToNaN(isFloat32, &context.fpregs->_xmm[11]); break;
+          case JSC::X86Registers::xmm12: SetXMMRegToNaN(isFloat32, &context.fpregs->_xmm[12]); break;
+          case JSC::X86Registers::xmm13: SetXMMRegToNaN(isFloat32, &context.fpregs->_xmm[13]); break;
+          case JSC::X86Registers::xmm14: SetXMMRegToNaN(isFloat32, &context.fpregs->_xmm[14]); break;
+          case JSC::X86Registers::xmm15: SetXMMRegToNaN(isFloat32, &context.fpregs->_xmm[15]); break;
           default: MOZ_CRASH();
         }
     } else {
@@ -396,27 +405,27 @@ ContextToPC(mcontext_t context)
 }
 
 static void
-SetRegisterToCoercedUndefined(mcontext_t &context, AnyRegister reg)
+SetRegisterToCoercedUndefined(mcontext_t &context, bool isFloat32, AnyRegister reg)
 {
     if (reg.isFloat()) {
         switch (reg.fpu().code()) {
-          case JSC::X86Registers::xmm0:  SetXMMRegToNaN(&context->__fs.__fpu_xmm0); break;
-          case JSC::X86Registers::xmm1:  SetXMMRegToNaN(&context->__fs.__fpu_xmm1); break;
-          case JSC::X86Registers::xmm2:  SetXMMRegToNaN(&context->__fs.__fpu_xmm2); break;
-          case JSC::X86Registers::xmm3:  SetXMMRegToNaN(&context->__fs.__fpu_xmm3); break;
-          case JSC::X86Registers::xmm4:  SetXMMRegToNaN(&context->__fs.__fpu_xmm4); break;
-          case JSC::X86Registers::xmm5:  SetXMMRegToNaN(&context->__fs.__fpu_xmm5); break;
-          case JSC::X86Registers::xmm6:  SetXMMRegToNaN(&context->__fs.__fpu_xmm6); break;
-          case JSC::X86Registers::xmm7:  SetXMMRegToNaN(&context->__fs.__fpu_xmm7); break;
+          case JSC::X86Registers::xmm0:  SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm0); break;
+          case JSC::X86Registers::xmm1:  SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm1); break;
+          case JSC::X86Registers::xmm2:  SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm2); break;
+          case JSC::X86Registers::xmm3:  SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm3); break;
+          case JSC::X86Registers::xmm4:  SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm4); break;
+          case JSC::X86Registers::xmm5:  SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm5); break;
+          case JSC::X86Registers::xmm6:  SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm6); break;
+          case JSC::X86Registers::xmm7:  SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm7); break;
 #  if defined(JS_CPU_X64)
-          case JSC::X86Registers::xmm8:  SetXMMRegToNaN(&context->__fs.__fpu_xmm8); break;
-          case JSC::X86Registers::xmm9:  SetXMMRegToNaN(&context->__fs.__fpu_xmm9); break;
-          case JSC::X86Registers::xmm10: SetXMMRegToNaN(&context->__fs.__fpu_xmm10); break;
-          case JSC::X86Registers::xmm11: SetXMMRegToNaN(&context->__fs.__fpu_xmm11); break;
-          case JSC::X86Registers::xmm12: SetXMMRegToNaN(&context->__fs.__fpu_xmm12); break;
-          case JSC::X86Registers::xmm13: SetXMMRegToNaN(&context->__fs.__fpu_xmm13); break;
-          case JSC::X86Registers::xmm14: SetXMMRegToNaN(&context->__fs.__fpu_xmm14); break;
-          case JSC::X86Registers::xmm15: SetXMMRegToNaN(&context->__fs.__fpu_xmm15); break;
+          case JSC::X86Registers::xmm8:  SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm8); break;
+          case JSC::X86Registers::xmm9:  SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm9); break;
+          case JSC::X86Registers::xmm10: SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm10); break;
+          case JSC::X86Registers::xmm11: SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm11); break;
+          case JSC::X86Registers::xmm12: SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm12); break;
+          case JSC::X86Registers::xmm13: SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm13); break;
+          case JSC::X86Registers::xmm14: SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm14); break;
+          case JSC::X86Registers::xmm15: SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm15); break;
 #  endif
           default: MOZ_CRASH();
         }
@@ -508,7 +517,7 @@ HandleSignal(int signum, siginfo_t *info, void *ctx)
     // register) and set the PC to the next op. Upon return from the handler,
     // execution will resume at this next PC.
     if (heapAccess->isLoad())
-        SetRegisterToCoercedUndefined(context, heapAccess->loadedReg());
+        SetRegisterToCoercedUndefined(context, heapAccess->isFloat32Load(), heapAccess->loadedReg());
     *ppc += heapAccess->opLength();
     return true;
 }
