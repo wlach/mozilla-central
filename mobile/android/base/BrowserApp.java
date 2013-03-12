@@ -35,6 +35,7 @@ import android.nfc.NfcEvent;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -56,7 +57,8 @@ import java.util.Vector;
 
 abstract public class BrowserApp extends GeckoApp
                                  implements TabsPanel.TabsLayoutChangeListener,
-                                            PropertyAnimator.PropertyAnimationListener {
+                                            PropertyAnimator.PropertyAnimationListener,
+                                            View.OnKeyListener {
     private static final String LOGTAG = "GeckoBrowserApp";
 
     private static final String PREF_CHROME_DYNAMICTOOLBAR = "browser.chrome.dynamictoolbar";
@@ -289,6 +291,48 @@ abstract public class BrowserApp extends GeckoApp
         return super.onInterceptTouchEvent(view, event);
     }
 
+    @Override
+    public boolean onKey(View v, int keyCode, KeyEvent event) {
+        // Global onKey handler. This is called if the focused UI doesn't
+        // handle the key event, and before Gecko swallows the events.
+        if (event.getAction() != KeyEvent.ACTION_DOWN) {
+            return false;
+        }
+
+        // Toggle/focus the address bar on gamepad-y button.
+        if (keyCode == KeyEvent.KEYCODE_BUTTON_Y &&
+            (event.getSource() & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD) {
+            mToolbarLocked = true;
+            if (mBrowserToolbar.isVisible()) {
+                if (mDynamicToolbarEnabled &&
+                    Boolean.FALSE.equals(mAboutHomeShowing)) {
+                    mBrowserToolbar.animateVisibility(false, 0);
+                    mLayerView.requestFocus();
+                } else {
+                    // Just focus the address bar when about:home is visible
+                    // or when the dynamic toolbar isn't enabled.
+                    mBrowserToolbar.requestFocusFromTouch();
+                }
+            } else {
+                mBrowserToolbar.animateVisibility(true, 0);
+                mBrowserToolbar.requestFocusFromTouch();
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (onKey(null, keyCode, event)) {
+            return true;
+        }
+
+        return super.onKeyDown(keyCode, event);
+    }
+
     void handleReaderAdded(boolean success, final String title, final String url) {
         if (!success) {
             showToast(R.string.reading_list_failed, Toast.LENGTH_SHORT);
@@ -343,6 +387,9 @@ abstract public class BrowserApp extends GeckoApp
         mBrowserToolbar = new BrowserToolbar(this);
         mBrowserToolbar.from(actionBar);
 
+        // Intercept key events for gamepad shortcuts
+        actionBar.setOnKeyListener(this);
+
         if (mTabsPanel != null) {
             mTabsPanel.setTabsLayoutChangeListener(this);
             updateSideBarState();
@@ -370,7 +417,7 @@ abstract public class BrowserApp extends GeckoApp
                         if (tab == null || tab.isPrivate()) {
                             return null;
                         }
-                        return new NdefMessage(NdefRecord.createUri(tab.getURL()));
+                        return new NdefMessage(new NdefRecord[] { NdefRecord.createUri(tab.getURL()) });
                     }
                 }, this);
             }
@@ -474,6 +521,9 @@ abstract public class BrowserApp extends GeckoApp
                 Tabs.getInstance().loadUrl(uri, flags);
             }
         }
+
+        // Intercept key events for gamepad shortcuts
+        mLayerView.setOnKeyListener(this);
     }
 
     public void setToolbarHeight(int aHeight, int aVisibleHeight) {
@@ -798,7 +848,7 @@ abstract public class BrowserApp extends GeckoApp
     }
 
     private void showTabs(TabsPanel.Panel panel) {
-        if (Tabs.getInstance().getCount() == 0)
+        if (Tabs.getInstance().getDisplayCount() == 0)
             return;
 
         mTabsPanel.show(panel);
@@ -960,9 +1010,6 @@ abstract public class BrowserApp extends GeckoApp
         mAboutHomeShowing = true;
         Runnable r = new AboutHomeRunnable(true);
         mMainHandler.postAtFrontOfQueue(r);
-
-        // Refresh margins to possibly remove the toolbar padding
-        ((BrowserToolbarLayout)mBrowserToolbar.getLayout()).refreshMargins();
     }
 
     private void hideAboutHome() {
@@ -975,9 +1022,6 @@ abstract public class BrowserApp extends GeckoApp
         mAboutHomeShowing = false;
         Runnable r = new AboutHomeRunnable(false);
         mMainHandler.postAtFrontOfQueue(r);
-
-        // Refresh margins to possibly restore the toolbar padding
-        ((BrowserToolbarLayout)mBrowserToolbar.getLayout()).refreshMargins();
     }
 
     private class AboutHomeRunnable implements Runnable {
@@ -1014,7 +1058,10 @@ abstract public class BrowserApp extends GeckoApp
             } else {
                 findViewById(R.id.abouthome_content).setVisibility(View.GONE);
             }
-        } 
+
+            // Refresh margins to possibly restore the toolbar padding
+            ((BrowserToolbarLayout)mBrowserToolbar.getLayout()).refreshMargins();
+        }
     }
 
     private class HideTabsTouchListener implements OnInterceptTouchListener {

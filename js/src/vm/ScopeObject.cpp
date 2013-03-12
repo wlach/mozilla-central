@@ -121,7 +121,7 @@ js::ScopeCoordinateToStaticScopeShape(JSContext *cx, JSScript *script, jsbytecod
 PropertyName *
 js::ScopeCoordinateName(JSContext *cx, JSScript *script, jsbytecode *pc)
 {
-    Shape::Range r = ScopeCoordinateToStaticScopeShape(cx, script, pc)->all();
+    Shape::Range<NoGC> r(ScopeCoordinateToStaticScopeShape(cx, script, pc));
     ScopeCoordinate sc(pc);
     while (r.front().slot() != sc.slot)
         r.popFront();
@@ -168,17 +168,15 @@ CallObject::createTemplateObject(JSContext *cx, HandleScript script)
     if (!type)
         return NULL;
 
-    HeapSlot *slots;
-    if (!PreallocateObjectDynamicSlots(cx, shape, &slots))
+    gc::AllocKind kind = gc::GetGCObjectKind(shape->numFixedSlots());
+    JS_ASSERT(CanBeFinalizedInBackground(kind, &CallClass));
+    kind = gc::GetBackgroundAllocKind(kind);
+
+    JSObject *obj = JSObject::create(cx, kind, gc::TenuredHeap, shape, type);
+    if (!obj)
         return NULL;
 
-    CallObject *callobj = CallObject::create(cx, shape, type, slots);
-    if (!callobj) {
-        js_free(slots);
-        return NULL;
-    }
-
-    return callobj;
+    return &obj->asCall();
 }
 
 /*
@@ -296,7 +294,7 @@ DeclEnvObject::createTemplateObject(JSContext *cx, HandleFunction fun)
     if (!emptyDeclEnvShape)
         return NULL;
 
-    RootedObject obj(cx, JSObject::create(cx, FINALIZE_KIND, gc::DefaultHeap, emptyDeclEnvShape, type, NULL));
+    RootedObject obj(cx, JSObject::create(cx, FINALIZE_KIND, gc::DefaultHeap, emptyDeclEnvShape, type));
     if (!obj)
         return NULL;
 
@@ -338,7 +336,7 @@ WithObject::create(JSContext *cx, HandleObject proto, HandleObject enclosing, ui
     if (!shape)
         return NULL;
 
-    RootedObject obj(cx, JSObject::create(cx, FINALIZE_KIND, gc::DefaultHeap, shape, type, NULL));
+    RootedObject obj(cx, JSObject::create(cx, FINALIZE_KIND, gc::DefaultHeap, shape, type));
     if (!obj)
         return NULL;
 
@@ -612,13 +610,9 @@ ClonedBlockObject::create(JSContext *cx, Handle<StaticBlockObject *> block, Abst
     if (!type)
         return NULL;
 
-    HeapSlot *slots;
-    if (!PreallocateObjectDynamicSlots(cx, block->lastProperty(), &slots))
-        return NULL;
-
     RootedShape shape(cx, block->lastProperty());
 
-    RootedObject obj(cx, JSObject::create(cx, FINALIZE_KIND, gc::TenuredHeap, shape, type, slots));
+    RootedObject obj(cx, JSObject::create(cx, FINALIZE_KIND, gc::TenuredHeap, shape, type));
     if (!obj)
         return NULL;
 
@@ -676,7 +670,7 @@ StaticBlockObject::create(JSContext *cx)
     if (!emptyBlockShape)
         return NULL;
 
-    JSObject *obj = JSObject::create(cx, FINALIZE_KIND, gc::TenuredHeap, emptyBlockShape, type, NULL);
+    JSObject *obj = JSObject::create(cx, FINALIZE_KIND, gc::TenuredHeap, emptyBlockShape, type);
     if (!obj)
         return NULL;
 
@@ -793,8 +787,8 @@ js::XDRStaticBlockObject(XDRState<mode> *xdr, HandleObject enclosingScope, Handl
         if (!shapes.growBy(count))
             return false;
 
-        for (Shape::Range r(obj->lastProperty()); !r.empty(); r.popFront()) {
-            RawShape shape = &r.front();
+        for (Shape::Range<NoGC> r(obj->lastProperty()); !r.empty(); r.popFront()) {
+            Shape *shape = &r.front();
             shapes[shape->shortid()] = shape;
         }
 
@@ -850,7 +844,7 @@ js::CloneStaticBlockObject(JSContext *cx, HandleObject enclosingScope, Handle<St
     AutoShapeVector shapes(cx);
     if (!shapes.growBy(srcBlock->slotCount()))
         return NULL;
-    for (Shape::Range r = srcBlock->lastProperty()->all(); !r.empty(); r.popFront())
+    for (Shape::Range<NoGC> r(srcBlock->lastProperty()); !r.empty(); r.popFront())
         shapes[r.front().shortid()] = &r.front();
 
     for (Shape **p = shapes.begin(); p != shapes.end(); ++p) {

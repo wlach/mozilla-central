@@ -2961,16 +2961,7 @@ nsHTMLInputElement::PostHandleEvent(nsEventChainPostVisitor& aVisitor)
                   newValue = value - std::max(step, 0.1 * (maximum - minimum));
                   break;
               }
-              MOZ_ASSERT(MOZ_DOUBLE_IS_FINITE(newValue));
-              nsAutoString val;
-              ConvertNumberToString(newValue, val);
-              SetValueInternal(val, true, true);
-              nsIFrame* frame = GetPrimaryFrame();
-              if (frame) {
-                // Trigger reflow to update the position of the thumb:
-                frame->PresContext()->GetPresShell()->
-                  FrameNeedsReflow(frame, nsIPresShell::eResize, NS_FRAME_IS_DIRTY);
-              }
+              SetValueOfRangeForUserEvent(newValue);
               aVisitor.mEventStatus = nsEventStatus_eConsumeNoDefault;
             }
           }
@@ -3121,9 +3112,6 @@ nsHTMLInputElement::PostHandleEventForRangeThumb(nsEventChainPostVisitor& aVisit
         }
       }
       aVisitor.mEvent->mFlags.mMultipleActionsPrevented = true;
-      // Also set this to tell the native code on Android that it should not
-      // scroll:
-      aVisitor.mEventStatus = nsEventStatus_eConsumeNoDefault;
     } break;
 
     case NS_MOUSE_MOVE:
@@ -3139,9 +3127,6 @@ nsHTMLInputElement::PostHandleEventForRangeThumb(nsEventChainPostVisitor& aVisit
       SetValueOfRangeForUserEvent(rangeFrame->GetValueAtEventPoint(
                                     static_cast<nsInputEvent*>(aVisitor.mEvent)));
       aVisitor.mEvent->mFlags.mMultipleActionsPrevented = true;
-      // Also set this to tell the native code on Android that it should not
-      // scroll:
-      aVisitor.mEventStatus = nsEventStatus_eConsumeNoDefault;
       break;
 
     case NS_MOUSE_BUTTON_UP:
@@ -4086,7 +4071,8 @@ FireEventForAccessibility(nsIDOMHTMLInputElement* aTarget,
                           const nsAString& aEventType)
 {
   nsCOMPtr<nsIDOMEvent> event;
-  if (NS_SUCCEEDED(nsEventDispatcher::CreateEvent(aPresContext, nullptr,
+  nsCOMPtr<mozilla::dom::Element> element = do_QueryInterface(aTarget);
+  if (NS_SUCCEEDED(nsEventDispatcher::CreateEvent(element, aPresContext, nullptr,
                                                   NS_LITERAL_STRING("Events"),
                                                   getter_AddRefs(event)))) {
     event->InitEvent(aEventType, true, true);

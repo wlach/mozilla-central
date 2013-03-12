@@ -830,7 +830,7 @@ struct JSRuntime : js::RuntimeFriendFields,
     js::RootedValueMap  gcRootsHash;
     js::GCLocks         gcLocksHash;
     unsigned            gcKeepAtoms;
-    size_t              gcBytes;
+    volatile size_t     gcBytes;
     size_t              gcMaxBytes;
     size_t              gcMaxMallocBytes;
 
@@ -986,7 +986,7 @@ struct JSRuntime : js::RuntimeFriendFields,
 
     bool                gcPoke;
 
-    js::HeapState       heapState;
+    volatile js::HeapState heapState;
 
     bool isHeapBusy() { return heapState != js::Idle; }
 
@@ -1051,6 +1051,7 @@ struct JSRuntime : js::RuntimeFriendFields,
 #endif
 
     bool                gcValidate;
+    bool                gcFullCompartmentChecks;
 
     JSGCCallback        gcCallback;
     js::GCSliceCallback gcSliceCallback;
@@ -1643,7 +1644,6 @@ struct JSContext : js::ContextFriendFields,
 
     bool hasStrictOption() const { return hasOption(JSOPTION_STRICT); }
     bool hasWErrorOption() const { return hasOption(JSOPTION_WERROR); }
-    bool hasAtLineOption() const { return hasOption(JSOPTION_ATLINE); }
 
     js::LifoAlloc &tempLifoAlloc() { return runtime->tempLifoAlloc; }
     inline js::LifoAlloc &analysisLifoAlloc();
