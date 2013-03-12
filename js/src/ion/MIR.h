@@ -4724,9 +4724,6 @@ class MEffectiveAddress : public MBinaryInstruction
     int32_t displacement() const {
         return displacement_;
     }
-
-    // TODO: this is generated after GVN, so do we need any additional bits
-    // (aliasSet, etc) for it to optimize well?
 };
 
 // Clamp input to range [0, 255] for Uint8ClampedArray.
