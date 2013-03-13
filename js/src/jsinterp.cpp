@@ -1439,6 +1439,7 @@ BEGIN_CASE(JSOP_LOOPENTRY)
 END_CASE(JSOP_LOOPENTRY)
 
 BEGIN_CASE(JSOP_LINKASMJS)
+#ifdef JS_ION
 {
     RootedValue &rval = rootValue0;
 
@@ -1471,6 +1472,7 @@ BEGIN_CASE(JSOP_LINKASMJS)
      * otherwise a JS semantic error so we keep executing as normal.
      */
 }
+#endif
 END_CASE(JSOP_LINKASMJS)
 
 BEGIN_CASE(JSOP_NOTEARG)

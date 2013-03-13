@@ -187,8 +187,10 @@ JSRuntime::triggerOperationCallback()
      */
     JS_ATOMIC_SET(&interrupt, 1);
 
+#ifdef JS_ION
     /* asm.js code uses a separate mechanism to halt running code. */
     TriggerOperationCallbackForAsmJSCode(this);
+#endif
 }
 
 void

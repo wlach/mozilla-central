@@ -481,6 +481,7 @@ class PerThreadData : public js::PerThreadDataFriendFields
      */
     js::ion::IonActivation  *ionActivation;
 
+#ifdef JS_ION
     /*
      * asm.js maintains a stack of AsmJSModule activations (see AsmJS.h). This
      * stack is used by JSRuntime::triggerOperationCallback to stop long-
@@ -495,10 +496,10 @@ class PerThreadData : public js::PerThreadDataFriendFields
     /* See AsmJSActivation comment. */
     js::AsmJSActivation *asmJSActivationStack_;
 
-#ifdef JS_THREADSAFE
+# ifdef JS_THREADSAFE
     /* Synchronizes pushing/popping with triggerOperationCallback. */
     PRLock *asmJSActivationStackLock_;
-#endif
+# endif
     /* Track whether the asmJSActivationStackLock_ is held. */
     mozilla::DebugOnly<unsigned> asmJSActivationStackLockCount_;
 
@@ -510,7 +511,7 @@ class PerThreadData : public js::PerThreadDataFriendFields
     class AsmJSActivationStackLock {
         PerThreadData &data_;
       public:
-#ifdef JS_THREADSAFE
+# ifdef JS_THREADSAFE
         AsmJSActivationStackLock(PerThreadData &data) : data_(data) {
             PR_Lock(data_.asmJSActivationStackLock_);
             data_.asmJSActivationStackLockCount_++;
@@ -519,14 +520,14 @@ class PerThreadData : public js::PerThreadDataFriendFields
             PR_Unlock(data_.asmJSActivationStackLock_);
             data_.asmJSActivationStackLockCount_--;
         }
-#else
+# else
         AsmJSActivationStackLock(PerThreadData &data) : data_(data) {
             data_.asmJSActivationStackLockCount_++;
         }
         ~AsmJSActivationStackLock() {
             data_.asmJSActivationStackLockCount_--;
         }
-#endif
+# endif
     };
 
     js::AsmJSActivation *asmJSActivationStackFromAnyThread() const {
@@ -537,6 +538,7 @@ class PerThreadData : public js::PerThreadDataFriendFields
         // Called from signal handler; don't do any fancy assertions.
         return asmJSActivationStack_;
     }
+#endif
 
     /*
      * When this flag is non-zero, any attempt to GC will be skipped. It is used
@@ -549,7 +551,6 @@ class PerThreadData : public js::PerThreadDataFriendFields
     int32_t             suppressGC;
 
     PerThreadData(JSRuntime *runtime);
-    ~PerThreadData();
     bool init();
 
     bool associatedWith(const JSRuntime *rt) { return runtime_ == rt; }

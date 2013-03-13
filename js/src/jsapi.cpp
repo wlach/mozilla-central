@@ -694,18 +694,15 @@ PerThreadData::PerThreadData(JSRuntime *runtime)
     ionJSContext(NULL),
     ionStackLimit(0),
     ionActivation(NULL),
+#ifdef JS_ION
     asmJSActivationStack_(NULL),
-#ifdef JS_THREADSAFE
+# ifdef JS_THREADSAFE
     asmJSActivationStackLock_(NULL),
     asmJSActivationStackLockCount_(0),
+# endif
 #endif
     suppressGC(0)
 {}
-
-PerThreadData::~PerThreadData()
-{
-    JS_ASSERT(!asmJSActivationStack_);
-}
 
 bool
 PerThreadData::init()
