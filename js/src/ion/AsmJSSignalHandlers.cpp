@@ -83,6 +83,14 @@ InnermostAsmJSActivation()
     return threadData->asmJSActivationStackFromOwnerThread();
 }
 
+static bool
+PCIsInModule(const AsmJSModule &module, void *pc)
+{
+    uint8_t *code = module.functionCode();
+    return pc >= code && pc < (code + module.functionBytes());
+}
+
+#if defined(JS_CPU_X64)
 template <class T>
 static void
 SetXMMRegToNaN(bool isFloat32, T *xmm_reg)
@@ -100,13 +108,6 @@ SetXMMRegToNaN(bool isFloat32, T *xmm_reg)
         dbls[0] = js_NaN;
         dbls[1] = 0;
     }
-}
-
-static bool
-PCIsInModule(const AsmJSModule &module, void *pc)
-{
-    uint8_t *code = module.functionCode();
-    return pc >= code && pc < (code + module.functionBytes());
 }
 
 // Perform a binary search on the projected offsets of the known heap accesses
@@ -139,6 +140,7 @@ LookupHeapAccess(const AsmJSModule &module, uint8_t *pc)
 
     return NULL;
 }
+#endif
 
 #if defined(XP_WIN)
 # include "jswin.h"
@@ -146,18 +148,19 @@ LookupHeapAccess(const AsmJSModule &module, uint8_t *pc)
 static uint8_t **
 ContextToPC(PCONTEXT context)
 {
-#  if defined(JS_CPU_X64)
+# if defined(JS_CPU_X64)
     JS_STATIC_ASSERT(sizeof(context->Rip) == sizeof(void*));
     return reinterpret_cast<uint8_t**>(&context->Rip);
-#  else
-#   error "TODO"
-#  endif
+# else
+    JS_STATIC_ASSERT(sizeof(context->Eip) == sizeof(void*));
+    return reinterpret_cast<uint8_t**>(&context->Eip);
+# endif
 }
 
+# if defined(JS_CPU_X64)
 static void
 SetRegisterToCoercedUndefined(CONTEXT *context, bool isFloat32, AnyRegister reg)
 {
-#  if defined(JS_CPU_X64)
     if (reg.isFloat()) {
         switch (reg.fpu().code()) {
           case JSC::X86Registers::xmm0:  SetXMMRegToNaN(isFloat32, &context->Xmm0); break;
@@ -199,10 +202,8 @@ SetRegisterToCoercedUndefined(CONTEXT *context, bool isFloat32, AnyRegister reg)
           default: MOZ_CRASH();
         }
     }
-#  else
-#   error "TODO"
-#  endif
 }
+# endif
 
 static bool
 HandleException(PEXCEPTION_POINTERS exception)
@@ -244,23 +245,15 @@ HandleException(PEXCEPTION_POINTERS exception)
         return true;
     }
 
+#if defined(JS_CPU_X64)
     // These checks aren't necessary, but, since we can, check anyway to make
     // sure we aren't covering up a real bug.
-    if (!module.maybeHeap())
-        return false;
-#if defined(JS_CPU_X64)
-    if (faultingAddress < module.maybeHeap() ||
+    if (!module.maybeHeap() ||
+        faultingAddress < module.maybeHeap() ||
         faultingAddress >= module.maybeHeap() + AsmJSBufferProtectedSize)
     {
         return false;
     }
-#elif defined(JS_CPU_X86)
-    if (faultingAddress < module.maybeHeap() ||
-        faultingAddress >= module.maybeHeap() + module.heapLength())
-    {
-        return false;
-    }
-#endif
 
     const AsmJSHeapAccess *heapAccess = LookupHeapAccess(module, pc);
     if (!heapAccess)
@@ -280,6 +273,9 @@ HandleException(PEXCEPTION_POINTERS exception)
         SetRegisterToCoercedUndefined(context, heapAccess->isFloat32Load(), heapAccess->loadedReg());
     *ppc += heapAccess->opLength();
     return true;
+#else
+    return false;
+#endif
 }
 
 static LONG WINAPI
@@ -299,7 +295,6 @@ AsmJSExceptionHandler(LPEXCEPTION_POINTERS exception)
 // Unfortunately, we still need OS-specific code to read/write to the thread
 // state via the mcontext_t.
 # if defined(__linux__)
-
 static uint8_t **
 ContextToPC(mcontext_t &context)
 {
@@ -312,47 +307,10 @@ ContextToPC(mcontext_t &context)
 #  endif
 }
 
+#  if defined(JS_CPU_X64)
 static void
 SetRegisterToCoercedUndefined(mcontext_t &context, bool isFloat32, AnyRegister reg)
 {
-#  if defined(JS_CPU_X86)
-    if (reg.isFloat()) {
-        // Since x86 predates SSE, XMM registers are left out of the basic
-        // _libc_fpstate in sys/ucontext.h. Fortunately, we have _fpstate in
-        // asm/sigcontext.h which *does* expose the _xmm registers. The
-        // _fpstate::magic field comment explains that the magic value 0xffff
-        // indicates that the processor does not have SSE2. However, we've
-        // already guarded for the presence of SSE2 in js::CompileAsmJS, so
-        // we should be able to assert that magic is not 0xffff.
-        _fpstate *fpstate = reinterpret_cast<_fpstate*>(context.fpregs);
-        if (fpstate->magic == 0xffff)
-            MOZ_CRASH();
-
-        switch (reg.fpu().code()) {
-          case JSC::X86Registers::xmm0:  SetXMMRegToNaN(isFloat32, &fpstate->_xmm[0]); break;
-          case JSC::X86Registers::xmm1:  SetXMMRegToNaN(isFloat32, &fpstate->_xmm[1]); break;
-          case JSC::X86Registers::xmm2:  SetXMMRegToNaN(isFloat32, &fpstate->_xmm[2]); break;
-          case JSC::X86Registers::xmm3:  SetXMMRegToNaN(isFloat32, &fpstate->_xmm[3]); break;
-          case JSC::X86Registers::xmm4:  SetXMMRegToNaN(isFloat32, &fpstate->_xmm[4]); break;
-          case JSC::X86Registers::xmm5:  SetXMMRegToNaN(isFloat32, &fpstate->_xmm[5]); break;
-          case JSC::X86Registers::xmm6:  SetXMMRegToNaN(isFloat32, &fpstate->_xmm[6]); break;
-          case JSC::X86Registers::xmm7:  SetXMMRegToNaN(isFloat32, &fpstate->_xmm[7]); break;
-          default: MOZ_CRASH();
-        }
-    } else {
-        switch (reg.gpr().code()) {
-          case JSC::X86Registers::eax: context.gregs[REG_EAX] = 0; break;
-          case JSC::X86Registers::ecx: context.gregs[REG_ECX] = 0; break;
-          case JSC::X86Registers::edx: context.gregs[REG_EDX] = 0; break;
-          case JSC::X86Registers::ebx: context.gregs[REG_EBX] = 0; break;
-          case JSC::X86Registers::esp: context.gregs[REG_ESP] = 0; break;
-          case JSC::X86Registers::ebp: context.gregs[REG_EBP] = 0; break;
-          case JSC::X86Registers::esi: context.gregs[REG_ESI] = 0; break;
-          case JSC::X86Registers::edi: context.gregs[REG_EDI] = 0; break;
-          default: MOZ_CRASH();
-        }
-    }
-#  else
     if (reg.isFloat()) {
         switch (reg.fpu().code()) {
           case JSC::X86Registers::xmm0:  SetXMMRegToNaN(isFloat32, &context.fpregs->_xmm[0]); break;
@@ -394,23 +352,22 @@ SetRegisterToCoercedUndefined(mcontext_t &context, bool isFloat32, AnyRegister r
           default: MOZ_CRASH();
         }
     }
-#  endif
 }
-
+#  endif
 # elif defined(XP_MACOSX)
-
 static uint8_t **
 ContextToPC(mcontext_t context)
 {
-#  if defined(JS_CPU_X64)
-    JS_STATIC_ASSERT(sizeof(context->__ss.__rip) == sizeof(void*));
-    return reinterpret_cast<uint8_t **>(&context->__ss.__rip);
-#  else
+#  if defined(JS_CPU_X86)
     JS_STATIC_ASSERT(sizeof(context->__ss.__eip) == sizeof(void*));
     return reinterpret_cast<uint8_t **>(&context->__ss.__eip);
+#  else
+    JS_STATIC_ASSERT(sizeof(context->__ss.__rip) == sizeof(void*));
+    return reinterpret_cast<uint8_t **>(&context->__ss.__rip);
 #  endif
 }
 
+#  if defined(JS_CPU_X64)
 static void
 SetRegisterToCoercedUndefined(mcontext_t &context, bool isFloat32, AnyRegister reg)
 {
@@ -424,7 +381,6 @@ SetRegisterToCoercedUndefined(mcontext_t &context, bool isFloat32, AnyRegister r
           case JSC::X86Registers::xmm5:  SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm5); break;
           case JSC::X86Registers::xmm6:  SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm6); break;
           case JSC::X86Registers::xmm7:  SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm7); break;
-#  if defined(JS_CPU_X64)
           case JSC::X86Registers::xmm8:  SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm8); break;
           case JSC::X86Registers::xmm9:  SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm9); break;
           case JSC::X86Registers::xmm10: SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm10); break;
@@ -433,12 +389,10 @@ SetRegisterToCoercedUndefined(mcontext_t &context, bool isFloat32, AnyRegister r
           case JSC::X86Registers::xmm13: SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm13); break;
           case JSC::X86Registers::xmm14: SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm14); break;
           case JSC::X86Registers::xmm15: SetXMMRegToNaN(isFloat32, &context->__fs.__fpu_xmm15); break;
-#  endif
           default: MOZ_CRASH();
         }
     } else {
         switch (reg.gpr().code()) {
-#  if defined(JS_CPU_X64)
           case JSC::X86Registers::eax: context->__ss.__rax = 0; break;
           case JSC::X86Registers::ecx: context->__ss.__rcx = 0; break;
           case JSC::X86Registers::edx: context->__ss.__rdx = 0; break;
@@ -455,7 +409,6 @@ SetRegisterToCoercedUndefined(mcontext_t &context, bool isFloat32, AnyRegister r
           case JSC::X86Registers::r13: context->__ss.__r13 = 0; break;
           case JSC::X86Registers::r14: context->__ss.__r14 = 0; break;
           case JSC::X86Registers::r15: context->__ss.__r15 = 0; break;
-#  else
           case JSC::X86Registers::eax: context->__ss.__eax = 0; break;
           case JSC::X86Registers::ecx: context->__ss.__ecx = 0; break;
           case JSC::X86Registers::edx: context->__ss.__edx = 0; break;
@@ -464,11 +417,11 @@ SetRegisterToCoercedUndefined(mcontext_t &context, bool isFloat32, AnyRegister r
           case JSC::X86Registers::ebp: context->__ss.__ebp = 0; break;
           case JSC::X86Registers::esi: context->__ss.__esi = 0; break;
           case JSC::X86Registers::edi: context->__ss.__edi = 0; break;
-#  endif
           default: MOZ_CRASH();
         }
     }
 }
+#  endif
 # endif  // end of OS-specific mcontext accessors
 
 // Be very cautious and default to not handling; we don't want to accidentally
@@ -502,23 +455,15 @@ HandleSignal(int signum, siginfo_t *info, void *ctx)
         return true;
     }
 
+# if defined(JS_CPU_X64)
     // These checks aren't necessary, but, since we can, check anyway to make
     // sure we aren't covering up a real bug.
-    if (!module.maybeHeap())
-        return false;
-#if defined(JS_CPU_X64)
-    if (faultingAddress < module.maybeHeap() ||
+    if (!module.maybeHeap() ||
+        faultingAddress < module.maybeHeap() ||
         faultingAddress >= module.maybeHeap() + AsmJSBufferProtectedSize)
     {
         return false;
     }
-#elif defined(JS_CPU_X86)
-    if (faultingAddress < module.maybeHeap() ||
-        faultingAddress >= module.maybeHeap() + module.heapLength())
-    {
-        return false;
-    }
-#endif
 
     const AsmJSHeapAccess *heapAccess = LookupHeapAccess(module, pc);
     if (!heapAccess)
@@ -534,6 +479,9 @@ HandleSignal(int signum, siginfo_t *info, void *ctx)
         SetRegisterToCoercedUndefined(context, heapAccess->isFloat32Load(), heapAccess->loadedReg());
     *ppc += heapAccess->opLength();
     return true;
+# else
+    return false;
+# endif
 }
 
 static struct sigaction sPrevHandler;
