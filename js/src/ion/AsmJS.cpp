@@ -4488,6 +4488,7 @@ GenerateEntry(ModuleCompiler &m, const AsmJSModule::ExportedFunction &exportedFu
 #endif
 
     Register argv = ABIArgGenerator::NonArgReturnVolatileReg1;
+    Register scratch = ABIArgGenerator::NonArgReturnVolatileReg2;
 #if defined(JS_CPU_X86)
     masm.movl(Operand(StackPointer, NativeFrameSize + masm.framePushed()), argv);
 #elif defined(JS_CPU_X64)
@@ -4510,8 +4511,14 @@ GenerateEntry(ModuleCompiler &m, const AsmJSModule::ExportedFunction &exportedFu
             masm.loadDouble(src, iter->fpu());
             break;
           case ABIArg::Stack:
-            masm.loadDouble(src, ScratchFloatReg);
-            masm.storeDouble(ScratchFloatReg, Operand(StackPointer, iter->offsetFromArgBase()));
+            if (iter.mirType() == MIRType_Int32) {
+                masm.load32(src, scratch);
+                masm.store32(scratch, Operand(StackPointer, iter->offsetFromArgBase()));
+            } else {
+                JS_ASSERT(iter.mirType() == MIRType_Double);
+                masm.loadDouble(src, ScratchFloatReg);
+                masm.storeDouble(ScratchFloatReg, Operand(StackPointer, iter->offsetFromArgBase()));
+            }
             break;
         }
     }
