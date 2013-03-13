@@ -368,9 +368,6 @@ js::LinkAsmJS(JSContext *cx, StackFrame *fp, MutableHandleValue rval)
     if (!DynamicallyLinkModule(cx, fp, moduleObj))
         return !cx->isExceptionPending();
 
-    // Uncomment this to validate asm.js tests against non-asm.js
-    //return true;
-
     if (module.numExportedFunctions() == 1) {
         const AsmJSModule::ExportedFunction &func = module.exportedFunction(0);
         if (!func.maybeFieldName()) {
