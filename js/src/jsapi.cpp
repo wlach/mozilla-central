@@ -698,7 +698,6 @@ PerThreadData::PerThreadData(JSRuntime *runtime)
     asmJSActivationStack_(NULL),
 # ifdef JS_THREADSAFE
     asmJSActivationStackLock_(NULL),
-    asmJSActivationStackLockCount_(0),
 # endif
 #endif
     suppressGC(0)

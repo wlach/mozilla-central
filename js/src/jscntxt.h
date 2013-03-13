@@ -500,8 +500,6 @@ class PerThreadData : public js::PerThreadDataFriendFields
     /* Synchronizes pushing/popping with triggerOperationCallback. */
     PRLock *asmJSActivationStackLock_;
 # endif
-    /* Track whether the asmJSActivationStackLock_ is held. */
-    mozilla::DebugOnly<unsigned> asmJSActivationStackLockCount_;
 
   public:
     static unsigned offsetOfAsmJSActivationStackReadOnly() {
@@ -514,28 +512,20 @@ class PerThreadData : public js::PerThreadDataFriendFields
 # ifdef JS_THREADSAFE
         AsmJSActivationStackLock(PerThreadData &data) : data_(data) {
             PR_Lock(data_.asmJSActivationStackLock_);
-            data_.asmJSActivationStackLockCount_++;
         }
         ~AsmJSActivationStackLock() {
             PR_Unlock(data_.asmJSActivationStackLock_);
-            data_.asmJSActivationStackLockCount_--;
         }
 # else
-        AsmJSActivationStackLock(PerThreadData &data) : data_(data) {
-            data_.asmJSActivationStackLockCount_++;
-        }
-        ~AsmJSActivationStackLock() {
-            data_.asmJSActivationStackLockCount_--;
-        }
+        AsmJSActivationStackLock(PerThreadData &data) : data_(data) {}
+        ~AsmJSActivationStackLock() {}
 # endif
     };
 
     js::AsmJSActivation *asmJSActivationStackFromAnyThread() const {
-        JS_ASSERT(asmJSActivationStackLockCount_ > 0);
         return asmJSActivationStack_;
     }
     js::AsmJSActivation *asmJSActivationStackFromOwnerThread() const {
-        // Called from signal handler; don't do any fancy assertions.
         return asmJSActivationStack_;
     }
 #endif
