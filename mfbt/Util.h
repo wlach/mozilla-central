@@ -162,16 +162,6 @@ class Maybe
 
     bool empty() const { return !constructed; }
 
-    typedef void (Maybe::*ConvertibleToBool)();
-    void nonNull() {}
-    operator ConvertibleToBool() const {
-        return constructed ? &Maybe::nonNull : NULL;
-    }
-
-    bool operator!() const {
-        return !constructed;
-    }
-
     void construct() {
       MOZ_ASSERT(!constructed);
       ::new (storage.addr()) T();

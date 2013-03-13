@@ -5735,13 +5735,13 @@ CodeGenerator::visitOutOfLineParallelAbort(OutOfLineParallelAbort *ool)
     return true;
 }
 
-bool        
+bool
 CodeGenerator::visitAsmCall(LAsmCall *ins)
 {
     MAsmCall *mir = ins->mir();
 
     if (mir->spIncrement())
-        masm.freeStack(mir->spIncrement());    
+        masm.freeStack(mir->spIncrement());
 
     JS_ASSERT((AlignmentAtPrologue + masm.framePushed()) % StackAlignment == 0);
 #ifdef DEBUG

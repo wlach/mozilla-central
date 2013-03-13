@@ -15,7 +15,7 @@ using namespace js;
 using namespace js::ion;
 
 ABIArgGenerator::ABIArgGenerator()
-  : 
+  :
 #if defined(XP_WIN)
     regIndex_(0),
     stackOffset_(ShadowStackSpace),
