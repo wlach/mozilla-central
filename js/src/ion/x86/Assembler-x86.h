@@ -83,7 +83,11 @@ static const Register PreBarrierReg = edx;
 
 // GCC stack is aligned on 16 bytes, but we don't maintain the invariant in
 // jitted code.
+#if defined(__GNUC__)
 static const uint32_t StackAlignment = 16;
+#else
+static const uint32_t StackAlignment = 4;
+#endif
 static const bool StackKeptAligned = false;
 static const uint32_t NativeFrameSize = sizeof(void*);
 static const uint32_t AlignmentAtPrologue = sizeof(void*);
