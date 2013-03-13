@@ -8,8 +8,6 @@
 #if !defined(jsion_asmjssignalhandlers_h__)
 #define jsion_asmjssignalhandlers_h__
 
-#include "gc/Root.h"
-
 namespace js {
 
 class ArrayBufferObject;

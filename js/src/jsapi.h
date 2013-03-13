@@ -25,11 +25,11 @@
 #include "jspubtd.h"
 #include "jsutil.h"
 
-#include "gc/Root.h"
 #include "js/Anchor.h"
 #include "js/CharacterEncoding.h"
 #include "js/HashTable.h"
 #include "js/PropertyKey.h"
+#include "js/RootingAPI.h"
 #include "js/Utility.h"
 #include "js/Value.h"
 #include "js/Vector.h"
@@ -141,7 +141,8 @@ class JS_PUBLIC_API(AutoGCRooter) {
         WRAPPER =     -31, /* js::AutoWrapperRooter */
         OBJOBJHASHMAP=-32, /* js::AutoObjectObjectHashMap */
         OBJU32HASHMAP=-33, /* js::AutoObjectUnsigned32HashMap */
-        OBJHASHSET =  -34  /* js::AutoObjectHashSet */
+        OBJHASHSET =  -34, /* js::AutoObjectHashSet */
+        JSONPARSER =  -35  /* js::JSONParser */
     };
 
   private:

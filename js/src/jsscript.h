@@ -10,12 +10,13 @@
 /*
  * JS script descriptor.
  */
+
 #include "jsdbgapi.h"
 #include "jsinfer.h"
 #include "jsopcode.h"
 
 #include "gc/Barrier.h"
-#include "gc/Root.h"
+#include "js/RootingAPI.h"
 #include "ion/AsmJS.h"
 #include "vm/Shape.h"
 
@@ -366,7 +367,6 @@ class JSScript : public js::gc::Cell
     uint8_t         *data;      /* pointer to variable-length data array (see
                                    comment above Create() for details) */
 
-    const char      *filename;  /* source filename or null */
     js::HeapPtrAtom *atoms;     /* maps immediate index to literal struct */
 
     void            *principalsPad;
@@ -469,6 +469,7 @@ class JSScript : public js::gc::Cell
     bool            strict:1; /* code is in strict mode */
     bool            explicitUseStrict:1; /* code has "use strict"; explicitly */
     bool            compileAndGo:1;   /* see Parser::compileAndGo */
+    bool            selfHosted:1;     /* see Parser::selfHostingMode */
     bool            bindingsAccessedDynamically:1; /* see ContextFlags' field of the same name */
     bool            funHasExtensibleScope:1;       /* see ContextFlags' field of the same name */
     bool            funHasAnyAliasedFormal:1;      /* true if any formalIsAliased(i) */
@@ -637,11 +638,13 @@ class JSScript : public js::gc::Cell
 
     static bool loadSource(JSContext *cx, js::HandleScript scr, bool *worked);
 
-    js::ScriptSource *scriptSource() {
+    js::ScriptSource *scriptSource() const {
         return scriptSource_;
     }
 
     void setScriptSource(js::ScriptSource *ss);
+
+    inline const char *filename() const;
 
   public:
 
@@ -1051,6 +1054,7 @@ struct ScriptSource
     uint32_t refs;
     uint32_t length_;
     uint32_t compressedLength_;
+    char *filename_;
     jschar *sourceMap_;
 
     // True if we can call JSRuntime::sourceHook to load the source on
@@ -1065,6 +1069,7 @@ struct ScriptSource
       : refs(0),
         length_(0),
         compressedLength_(0),
+        filename_(NULL),
         sourceMap_(NULL),
         sourceRetrievable_(false),
         argumentsNotIncluded_(false),
@@ -1102,6 +1107,11 @@ struct ScriptSource
     // XDR handling
     template <XDRMode mode>
     bool performXDR(XDRState<mode> *xdr);
+
+    bool setFilename(JSContext *cx, const char *filename);
+    const char *filename() const {
+        return filename_;
+    }
 
     // Source maps
     bool setSourceMap(JSContext *cx, jschar *sourceMapURL, const char *filename);
@@ -1225,41 +1235,6 @@ CallNewScriptHook(JSContext *cx, JS::HandleScript script, JS::HandleFunction fun
 
 extern void
 CallDestroyScriptHook(FreeOp *fop, js::RawScript script);
-
-extern const char *
-SaveScriptFilename(JSContext *cx, const char *filename);
-
-struct ScriptFilenameEntry
-{
-    bool marked;
-    char filename[1];
-
-    static ScriptFilenameEntry *fromFilename(const char *filename) {
-        return (ScriptFilenameEntry *)(filename - offsetof(ScriptFilenameEntry, filename));
-    }
-};
-
-struct ScriptFilenameHasher
-{
-    typedef const char *Lookup;
-    static HashNumber hash(const char *l) { return mozilla::HashString(l); }
-    static bool match(const ScriptFilenameEntry *e, const char *l) {
-        return strcmp(e->filename, l) == 0;
-    }
-};
-
-typedef HashSet<ScriptFilenameEntry *,
-                ScriptFilenameHasher,
-                SystemAllocPolicy> ScriptFilenameTable;
-
-inline void
-MarkScriptFilename(JSRuntime *rt, const char *filename);
-
-extern void
-SweepScriptFilenames(JSRuntime *rt);
-
-extern void
-FreeScriptFilenames(JSRuntime *rt);
 
 struct SharedScriptData
 {
