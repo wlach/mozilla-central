@@ -3333,19 +3333,19 @@ CheckMathBuiltinCall(FunctionCompiler &f, ParseNode *callNode, AsmJSMathBuiltin 
     switch (mathBuiltin) {
       case AsmJSMathBuiltin_imul:  return CheckMathIMul(f, callNode, def, type);
       case AsmJSMathBuiltin_abs:   return CheckMathAbs(f, callNode, def, type);
-      case AsmJSMathBuiltin_sin:   arity = 1; callee = UnaryMathFunCast(sin);     break;
-      case AsmJSMathBuiltin_cos:   arity = 1; callee = UnaryMathFunCast(cos);     break;
-      case AsmJSMathBuiltin_tan:   arity = 1; callee = UnaryMathFunCast(tan);     break;
-      case AsmJSMathBuiltin_asin:  arity = 1; callee = UnaryMathFunCast(asin);    break;
-      case AsmJSMathBuiltin_acos:  arity = 1; callee = UnaryMathFunCast(acos);    break;
-      case AsmJSMathBuiltin_atan:  arity = 1; callee = UnaryMathFunCast(atan);    break;
-      case AsmJSMathBuiltin_ceil:  arity = 1; callee = UnaryMathFunCast(ceil);    break;
-      case AsmJSMathBuiltin_floor: arity = 1; callee = UnaryMathFunCast(floor);   break;
-      case AsmJSMathBuiltin_exp:   arity = 1; callee = UnaryMathFunCast(exp);     break;
-      case AsmJSMathBuiltin_log:   arity = 1; callee = UnaryMathFunCast(log);     break;
-      case AsmJSMathBuiltin_sqrt:  arity = 1; callee = UnaryMathFunCast(sqrt);    break;
-      case AsmJSMathBuiltin_pow:   arity = 2; callee = BinaryMathFunCast(ecmaPow); break;
-      case AsmJSMathBuiltin_atan2: arity = 2; callee = BinaryMathFunCast(atan2);   break;
+      case AsmJSMathBuiltin_sin:   arity = 1; callee = UnaryMathFunCast(sin);        break;
+      case AsmJSMathBuiltin_cos:   arity = 1; callee = UnaryMathFunCast(cos);        break;
+      case AsmJSMathBuiltin_tan:   arity = 1; callee = UnaryMathFunCast(tan);        break;
+      case AsmJSMathBuiltin_asin:  arity = 1; callee = UnaryMathFunCast(asin);       break;
+      case AsmJSMathBuiltin_acos:  arity = 1; callee = UnaryMathFunCast(acos);       break;
+      case AsmJSMathBuiltin_atan:  arity = 1; callee = UnaryMathFunCast(atan);       break;
+      case AsmJSMathBuiltin_ceil:  arity = 1; callee = UnaryMathFunCast(ceil);       break;
+      case AsmJSMathBuiltin_floor: arity = 1; callee = UnaryMathFunCast(floor);      break;
+      case AsmJSMathBuiltin_exp:   arity = 1; callee = UnaryMathFunCast(exp);        break;
+      case AsmJSMathBuiltin_log:   arity = 1; callee = UnaryMathFunCast(log);        break;
+      case AsmJSMathBuiltin_sqrt:  arity = 1; callee = UnaryMathFunCast(sqrt);       break;
+      case AsmJSMathBuiltin_pow:   arity = 2; callee = BinaryMathFunCast(ecmaPow);   break;
+      case AsmJSMathBuiltin_atan2: arity = 2; callee = BinaryMathFunCast(ecmaAtan2); break;
     }
 
     FunctionCompiler::Args args(f);

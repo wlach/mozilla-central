@@ -146,6 +146,9 @@ extern JSBool
 math_atan2(JSContext *cx, unsigned argc, Value *vp);
 
 extern double
+ecmaAtan2(double x, double y);
+
+extern double
 math_atan_impl(MathCache *cache, double x);
 
 extern JSBool
