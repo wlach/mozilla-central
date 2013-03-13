@@ -404,6 +404,22 @@ ArrayBufferObject::releaseAsmJSArrayBuffer(FreeOp *fop, RawObject obj)
     munmap(p, AsmJSMappedSize);
 # endif
 }
+
+void
+ArrayBufferObject::neuterAsmJSArrayBuffer(ArrayBufferObject &buffer)
+{
+    // Protect all the pages so that any read/write will generate a fault which
+    // the AsmJSMemoryFaultHandler will turn into the expected result value.
+    JS_ASSERT(buffer.isAsmJSArrayBuffer());
+    JS_ASSERT(buffer.byteLength() % AsmJSAllocationGranularity == 0);
+#ifdef XP_WIN
+    if (!VirtualAlloc(buffer.dataPointer(), buffer.byteLength(), MEM_RESERVE, PAGE_NOACCESS))
+        MOZ_CRASH();
+#else
+    if (mprotect(buffer.dataPointer(), buffer.byteLength(), PROT_NONE))
+        MOZ_CRASH();
+#endif
+}
 #else  /* defined(JS_CPU_X64) */
 bool
 ArrayBufferObject::prepareForAsmJS(JSContext *cx, Handle<ArrayBufferObject*> buffer)
@@ -420,23 +436,13 @@ ArrayBufferObject::releaseAsmJSArrayBuffer(FreeOp *fop, RawObject obj)
 {
     fop->free_(obj->asArrayBuffer().getElementsHeader());
 }
-#endif
 
-// Protect all the pages so that any read/write will generate a fault which the
-// AsmJSMemoryFaultHandler will turn into the expected result value.
 void
 ArrayBufferObject::neuterAsmJSArrayBuffer(ArrayBufferObject &buffer)
 {
-    JS_ASSERT(buffer.isAsmJSArrayBuffer());
-    JS_ASSERT(buffer.byteLength() % AsmJSAllocationGranularity == 0);
-#ifdef XP_WIN
-    if (!VirtualAlloc(buffer.dataPointer(), buffer.byteLength(), MEM_RESERVE, PAGE_NOACCESS))
-        MOZ_CRASH();
-#else
-    if (mprotect(buffer.dataPointer(), buffer.byteLength(), PROT_NONE))
-        MOZ_CRASH();
-#endif
+    // TODO: be every-so-slightly unsound (but safe) for now.
 }
+#endif
 
 #ifdef JSGC_GENERATIONAL
 class WeakObjectSlotRef : public js::gc::BufferableRef
