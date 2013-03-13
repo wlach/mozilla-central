@@ -39,7 +39,6 @@ class MTableSwitch;
 class MIRGenerator;
 class MSnapshot;
 
-static const uint32_t MAX_VIRTUAL_REGISTERS = (1 << 21) - 1;
 static const uint32_t VREG_INCREMENT = 1;
 
 static const uint32_t THIS_FRAME_SLOT = 0;
@@ -220,12 +219,12 @@ class LUse : public LAllocation
     static const uint32_t USED_AT_START_SHIFT = REG_SHIFT + REG_BITS;
     static const uint32_t USED_AT_START_MASK = (1 << USED_AT_START_BITS) - 1;
 
+  public:
     // Virtual registers get the remaining 20 bits.
     static const uint32_t VREG_BITS = DATA_BITS - (USED_AT_START_SHIFT + USED_AT_START_BITS);
     static const uint32_t VREG_SHIFT = USED_AT_START_SHIFT + USED_AT_START_BITS;
     static const uint32_t VREG_MASK = (1 << VREG_BITS) - 1;
 
-  public:
     enum Policy {
         // Input should be in a read-only register or stack slot.
         ANY,
@@ -279,7 +278,6 @@ class LUse : public LAllocation
     }
 
     void setVirtualRegister(uint32_t index) {
-        JS_STATIC_ASSERT(VREG_MASK <= MAX_VIRTUAL_REGISTERS);
         JS_ASSERT(index < VREG_MASK);
 
         uint32_t old = data() & ~(VREG_MASK << VREG_SHIFT);
@@ -305,6 +303,8 @@ class LUse : public LAllocation
         return !!((data() >> USED_AT_START_SHIFT) & USED_AT_START_MASK);
     }
 };
+
+static const uint32_t MAX_VIRTUAL_REGISTERS = LUse::VREG_MASK;
 
 class LGeneralReg : public LAllocation
 {
