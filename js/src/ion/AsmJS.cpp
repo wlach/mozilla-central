@@ -1182,10 +1182,12 @@ class ModuleCompiler
     const Func &function(unsigned i) const {
         return functions_[i];
     }
-    Maybe<AsmJSMathBuiltin> lookupStandardLibraryMathName(PropertyName *name) const {
-        if (MathNameMap::Ptr p = standardLibraryMathNames_.lookup(name))
-            return p->value;
-        return Maybe<AsmJSMathBuiltin>();
+    bool lookupStandardLibraryMathName(PropertyName *name, AsmJSMathBuiltin *mathBuiltin) const {
+        if (MathNameMap::Ptr p = standardLibraryMathNames_.lookup(name)) {
+            *mathBuiltin = p->value;
+            return true;
+        }
+        return false;
     }
     ExitMap::Range allExits() const {
         return exits_.all();
@@ -2563,11 +2565,11 @@ CheckGlobalDotImport(ModuleCompiler &m, PropertyName *varName, ParseNode *initNo
         if (!IsUseOfName(global, m.globalArgumentName()) || math != m.cx()->names().Math)
             return m.fail("Expecting global.Math", base);
 
-        Maybe<AsmJSMathBuiltin> mathBuiltin = m.lookupStandardLibraryMathName(field);
-        if (!mathBuiltin)
+        AsmJSMathBuiltin mathBuiltin;
+        if (!m.lookupStandardLibraryMathName(field, &mathBuiltin))
             return m.fail("Does not match a standard Math builtin", initNode);
 
-        return m.addMathBuiltin(varName, mathBuiltin.get(), field);
+        return m.addMathBuiltin(varName, mathBuiltin, field);
     }
 
     if (IsUseOfName(base, m.globalArgumentName())) {
