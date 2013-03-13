@@ -1459,49 +1459,5 @@ CodeGeneratorX86Shared::generateInvalidateEpilogue()
     return true;
 }
 
-void
-CodeGeneratorX86Shared::emitAsmLoadHeap(Operand srcAddr, const LDefinition *dest,
-                                        ArrayBufferView::ViewType viewType)
-{
-    switch (viewType) {
-      case ArrayBufferView::TYPE_INT8:    masm.movxbl(srcAddr, ToRegister(dest)); break;
-      case ArrayBufferView::TYPE_UINT8:   masm.movzbl(srcAddr, ToRegister(dest)); break;
-      case ArrayBufferView::TYPE_INT16:   masm.movxwl(srcAddr, ToRegister(dest)); break;
-      case ArrayBufferView::TYPE_UINT16:  masm.movzwl(srcAddr, ToRegister(dest)); break;
-      case ArrayBufferView::TYPE_INT32:   masm.movl(srcAddr, ToRegister(dest)); break;
-      case ArrayBufferView::TYPE_UINT32:  masm.movl(srcAddr, ToRegister(dest)); break;
-      case ArrayBufferView::TYPE_FLOAT64: masm.movsd(srcAddr, ToFloatRegister(dest)); break;
-      default: JS_NOT_REACHED("unexpected array type");
-    }
-}
-
-void
-CodeGeneratorX86Shared::emitAsmStoreHeap(Operand dstAddr, const LAllocation *value,
-                                         ArrayBufferView::ViewType viewType)
-{
-    if (value->isConstant()) {
-        switch (viewType) {
-          case ArrayBufferView::TYPE_INT8:    masm.movb(Imm32(ToInt32(value)), dstAddr); break;
-          case ArrayBufferView::TYPE_UINT8:   masm.movb(Imm32(ToInt32(value)), dstAddr); break;
-          case ArrayBufferView::TYPE_INT16:   masm.movw(Imm32(ToInt32(value)), dstAddr); break;
-          case ArrayBufferView::TYPE_UINT16:  masm.movw(Imm32(ToInt32(value)), dstAddr); break;
-          case ArrayBufferView::TYPE_INT32:   masm.movl(Imm32(ToInt32(value)), dstAddr); break;
-          case ArrayBufferView::TYPE_UINT32:  masm.movl(Imm32(ToInt32(value)), dstAddr); break;
-          default: JS_NOT_REACHED("unexpected array type");
-        }
-    } else {
-        switch (viewType) {
-          case ArrayBufferView::TYPE_INT8:    masm.movb(ToRegister(value), dstAddr); break;
-          case ArrayBufferView::TYPE_UINT8:   masm.movb(ToRegister(value), dstAddr); break;
-          case ArrayBufferView::TYPE_INT16:   masm.movw(ToRegister(value), dstAddr); break;
-          case ArrayBufferView::TYPE_UINT16:  masm.movw(ToRegister(value), dstAddr); break;
-          case ArrayBufferView::TYPE_INT32:   masm.movl(ToRegister(value), dstAddr); break;
-          case ArrayBufferView::TYPE_UINT32:  masm.movl(ToRegister(value), dstAddr); break;
-          case ArrayBufferView::TYPE_FLOAT64: masm.movsd(ToFloatRegister(value), dstAddr); break;
-          default: JS_NOT_REACHED("unexpected array type");
-        }
-    }
-}
-
 } // namespace ion
 } // namespace js

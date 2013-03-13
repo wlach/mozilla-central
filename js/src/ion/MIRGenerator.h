@@ -109,17 +109,8 @@ class MIRGenerator
         JS_ASSERT(compilingAsmJS());
         return performsAsmCall_;
     }
-    bool noteAsmLoadHeap(uint32_t offsetBefore, uint32_t offsetAfter, ArrayBufferView::ViewType vt,
-                         AnyRegister dest) {
-        uint32_t opLength = offsetAfter - offsetBefore;
-        uint8_t f32Load = vt == ArrayBufferView::TYPE_FLOAT32;
-        JS_ASSERT(opLength <= UINT8_MAX);
-        return asmHeapAccesses_.append(AsmJSHeapAccess(offsetBefore, opLength, f32Load, dest));
-    }
-    bool noteAsmStoreHeap(uint32_t offsetBefore, uint32_t offsetAfter) {
-        uint32_t opLength = offsetAfter - offsetBefore;
-        JS_ASSERT(opLength <= UINT8_MAX);
-        return asmHeapAccesses_.append(AsmJSHeapAccess(offsetBefore, opLength));
+    bool noteHeapAccess(AsmJSHeapAccess heapAccess) {
+        return asmHeapAccesses_.append(heapAccess);
     }
     const Vector<AsmJSHeapAccess> &asmHeapAccesses() const {
         return asmHeapAccesses_;

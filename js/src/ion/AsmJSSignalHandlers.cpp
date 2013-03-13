@@ -244,12 +244,19 @@ HandleException(PEXCEPTION_POINTERS exception)
         return true;
     }
 
+    // These checks aren't necessary, but, since we can, check anyway to make
+    // sure we aren't covering up a real bug.
+    if (!module.maybeHeap())
+        return false;
 #if defined(JS_CPU_X64)
-    // This isn't necessary, but, since we can, include this extra layer of
-    // checking to make sure we aren't covering up a real bug.
-    if (!module.maybeHeap() ||
-        faultingAddress < module.maybeHeap() ||
+    if (faultingAddress < module.maybeHeap() ||
         faultingAddress >= module.maybeHeap() + AsmJSBufferProtectedSize)
+    {
+        return false;
+    }
+#elif defined(JS_CPU_X86)
+    if (faultingAddress < module.maybeHeap() ||
+        faultingAddress >= module.maybeHeap() + module.heapLength())
     {
         return false;
     }
@@ -495,12 +502,19 @@ HandleSignal(int signum, siginfo_t *info, void *ctx)
         return true;
     }
 
-#ifdef JS_CPU_X64
-    // This isn't necessary, but, since we can, include this extra layer of
-    // checking to make sure we aren't covering up a real bug.
-    if (!module.maybeHeap() ||
-        faultingAddress < module.maybeHeap() ||
+    // These checks aren't necessary, but, since we can, check anyway to make
+    // sure we aren't covering up a real bug.
+    if (!module.maybeHeap())
+        return false;
+#if defined(JS_CPU_X64)
+    if (faultingAddress < module.maybeHeap() ||
         faultingAddress >= module.maybeHeap() + AsmJSBufferProtectedSize)
+    {
+        return false;
+    }
+#elif defined(JS_CPU_X86)
+    if (faultingAddress < module.maybeHeap() ||
+        faultingAddress >= module.maybeHeap() + module.heapLength())
     {
         return false;
     }

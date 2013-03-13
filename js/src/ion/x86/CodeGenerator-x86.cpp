@@ -413,29 +413,66 @@ CodeGeneratorX86::visitUInt32ToDouble(LUInt32ToDouble *lir)
     return true;
 }
 
+class ion::OutOfLineAsmLoadHeapOutOfBounds : public OutOfLineCodeBase<CodeGeneratorX86>
+{
+    AnyRegister dest_;
+  public:
+    OutOfLineAsmLoadHeapOutOfBounds(AnyRegister dest) : dest_(dest) {}
+    const AnyRegister &dest() const { return dest_; }
+    bool accept(CodeGeneratorX86 *codegen) { return codegen->visitOutOfLineAsmLoadHeapOutOfBounds(this); }
+};
+
 bool
 CodeGeneratorX86::visitAsmLoadHeap(LAsmLoadHeap *ins)
 {
     const MAsmLoadHeap *mir = ins->mir();
     ArrayBufferView::ViewType vt = mir->viewType();
 
-    Operand srcAddr(ToRegister(ins->ptr()), 0);
+    Register ptr = ToRegister(ins->ptr());
+    const LDefinition *out = ins->output();
 
+    OutOfLineAsmLoadHeapOutOfBounds *ool = new OutOfLineAsmLoadHeapOutOfBounds(ToAnyRegister(out));
+    if (!addOutOfLineCode(ool))
+        return false;
+
+    CodeOffsetLabel cmp = masm.cmplWithPatch(ptr, Imm32(0));
+    masm.j(Assembler::AboveOrEqual, ool->entry());
+
+    Address srcAddr(ptr, 0);
     if (vt == ArrayBufferView::TYPE_FLOAT32) {
-        FloatRegister dest = ToFloatRegister(ins->output());
-        uint32_t offsetBefore = masm.size();
-        masm.emitSegmentPrefix(HeapSegReg);
-        masm.movss(srcAddr, dest);
-        uint32_t offsetAfter = masm.size();
+        FloatRegister dest = ToFloatRegister(out);
+        uint32_t before = masm.size();
+        masm.movssWithPatch(srcAddr, dest);
+        uint32_t after = masm.size();
         masm.cvtss2sd(dest, dest);
-        return gen->noteAsmLoadHeap(offsetBefore, offsetAfter, vt, ToAnyRegister(ins->output()));
+        masm.bind(ool->rejoin());
+        return gen->noteHeapAccess(AsmJSHeapAccess(cmp.offset(), before, after, vt, AnyRegister(dest)));
     }
+    uint32_t before = masm.size();
+    switch (vt) {
+      case ArrayBufferView::TYPE_INT8:    masm.movxblWithPatch(srcAddr, ToRegister(out)); break;
+      case ArrayBufferView::TYPE_UINT8:   masm.movzblWithPatch(srcAddr, ToRegister(out)); break;
+      case ArrayBufferView::TYPE_INT16:   masm.movxwlWithPatch(srcAddr, ToRegister(out)); break;
+      case ArrayBufferView::TYPE_UINT16:  masm.movzwlWithPatch(srcAddr, ToRegister(out)); break;
+      case ArrayBufferView::TYPE_INT32:   masm.movlWithPatch(srcAddr, ToRegister(out)); break;
+      case ArrayBufferView::TYPE_UINT32:  masm.movlWithPatch(srcAddr, ToRegister(out)); break;
+      case ArrayBufferView::TYPE_FLOAT64: masm.movsdWithPatch(srcAddr, ToFloatRegister(out)); break;
+      default: JS_NOT_REACHED("unexpected array type");
+    }
+    uint32_t after = masm.size();
+    masm.bind(ool->rejoin());
+    return gen->noteHeapAccess(AsmJSHeapAccess(cmp.offset(), before, after, vt, ToAnyRegister(out)));
+}
 
-    uint32_t offsetBefore = masm.size();
-    masm.emitSegmentPrefix(HeapSegReg);
-    emitAsmLoadHeap(srcAddr, ins->output(), vt);
-    uint32_t offsetAfter = masm.size();
-    return gen->noteAsmLoadHeap(offsetBefore, offsetAfter, vt, ToAnyRegister(ins->output()));
+bool
+CodeGeneratorX86::visitOutOfLineAsmLoadHeapOutOfBounds(OutOfLineAsmLoadHeapOutOfBounds *ool)
+{
+    if (ool->dest().isFloat())
+        masm.movsd(&js_NaN, ool->dest().fpu());
+    else
+        masm.movl(Imm32(0), ool->dest().gpr());
+    masm.jmp(ool->rejoin());
+    return true;
 }
 
 bool
@@ -444,26 +481,36 @@ CodeGeneratorX86::visitAsmStoreHeap(LAsmStoreHeap *ins)
     MAsmStoreHeap *mir = ins->mir();
     ArrayBufferView::ViewType vt = mir->viewType();
 
-    Operand dstAddr(Address(ToRegister(ins->ptr()), 0));
+    Register ptr = ToRegister(ins->ptr());
+    const LAllocation *value = ins->value();
 
+    CodeOffsetLabel cmp = masm.cmplWithPatch(ptr, Imm32(0));
+    Label rejoin;
+    masm.j(Assembler::AboveOrEqual, &rejoin);
+
+    Address dstAddr(ptr, 0);
     if (vt == ArrayBufferView::TYPE_FLOAT32) {
-        // Although we are storing to a float32, the input register holds a
-        // float64 which must be explicitly converted (we cannot simply alias the low
-        // float32 of the xmm register). Make sure that offsetBefore points to
-        // the store, not the conversion op since it is the store that will fault.
-        masm.convertDoubleToFloat(ToFloatRegister(ins->value()), ScratchFloatReg);
-        uint32_t offsetBefore = masm.size();
-        masm.emitSegmentPrefix(HeapSegReg);
-        masm.movss(ScratchFloatReg, dstAddr);
-        uint32_t offsetAfter = masm.size();
-        return gen->noteAsmStoreHeap(offsetBefore, offsetAfter);
+        masm.convertDoubleToFloat(ToFloatRegister(value), ScratchFloatReg);
+        uint32_t before = masm.size();
+        masm.movssWithPatch(ScratchFloatReg, dstAddr);
+        uint32_t after = masm.size();
+        masm.bind(&rejoin);
+        return gen->noteHeapAccess(AsmJSHeapAccess(cmp.offset(), before, after));
     }
-
-    uint32_t offsetBefore = masm.size();
-    masm.emitSegmentPrefix(HeapSegReg);
-    emitAsmStoreHeap(dstAddr, ins->value(), vt);
-    uint32_t offsetAfter = masm.size();
-    return gen->noteAsmStoreHeap(offsetBefore, offsetAfter);
+    uint32_t before = masm.size();
+    switch (vt) {
+      case ArrayBufferView::TYPE_INT8:    masm.movbWithPatch(ToRegister(value), dstAddr); break;
+      case ArrayBufferView::TYPE_UINT8:   masm.movbWithPatch(ToRegister(value), dstAddr); break;
+      case ArrayBufferView::TYPE_INT16:   masm.movwWithPatch(ToRegister(value), dstAddr); break;
+      case ArrayBufferView::TYPE_UINT16:  masm.movwWithPatch(ToRegister(value), dstAddr); break;
+      case ArrayBufferView::TYPE_INT32:   masm.movlWithPatch(ToRegister(value), dstAddr); break;
+      case ArrayBufferView::TYPE_UINT32:  masm.movlWithPatch(ToRegister(value), dstAddr); break;
+      case ArrayBufferView::TYPE_FLOAT64: masm.movsdWithPatch(ToFloatRegister(value), dstAddr); break;
+      default: JS_NOT_REACHED("unexpected array type");
+    }
+    uint32_t after = masm.size();
+    masm.bind(&rejoin);
+    return gen->noteHeapAccess(AsmJSHeapAccess(cmp.offset(), before, after));
 }
 
 bool

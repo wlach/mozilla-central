@@ -928,14 +928,7 @@ class ObjectElements
     friend class ArrayBufferObject;
 
     /* See Flags enum above. */
-    uint16_t flags;
-
-    /* Used on x86 when the ASMJS_ARRAY_BUFFER flag is set. */
-#if defined(JS_CPU_X86)
-    uint16_t segmentSelector;
-#else
-    uint16_t unused16;
-#endif
+    uint32_t flags;
 
     /*
      * Number of initialized elements. This is <= the capacity, and for arrays
@@ -975,12 +968,6 @@ class ObjectElements
     void setIsAsmJSArrayBuffer() {
         flags |= ASMJS_ARRAY_BUFFER;
     }
-#if defined(JS_CPU_X86)
-    void setAsmJSSegmentSelector(uint16_t selector) {
-        JS_ASSERT(isAsmJSArrayBuffer());
-        segmentSelector = selector;
-    }
-#endif
 
   public:
     ObjectElements(uint32_t capacity, uint32_t length)
@@ -1006,13 +993,6 @@ class ObjectElements
     }
 
     static bool ConvertElementsToDoubles(JSContext *cx, uintptr_t elements);
-
-#if defined(JS_CPU_X86)
-    uint16_t asmJSSegmentSelector() const {
-        JS_ASSERT(isAsmJSArrayBuffer());
-        return segmentSelector;
-    }
-#endif
 
     static const size_t VALUES_PER_HEADER = 2;
 };

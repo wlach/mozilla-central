@@ -14,6 +14,8 @@
 namespace js {
 namespace ion {
 
+class OutOfLineAsmLoadHeapOutOfBounds;
+
 class CodeGeneratorX86 : public CodeGeneratorX86Shared
 {
   private:
@@ -56,6 +58,8 @@ class CodeGeneratorX86 : public CodeGeneratorX86Shared
     bool visitAsmStoreGlobalVar(LAsmStoreGlobalVar *ins);
     bool visitAsmLoadFuncPtr(LAsmLoadFuncPtr *ins);
     bool visitAsmLoadFFIFunc(LAsmLoadFFIFunc *ins);
+
+    bool visitOutOfLineAsmLoadHeapOutOfBounds(OutOfLineAsmLoadHeapOutOfBounds *ool);
 
     void postAsmCall(LAsmCall *lir);
 };

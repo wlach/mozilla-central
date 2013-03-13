@@ -15,6 +15,7 @@
 #include "AsmJSSignalHandlers.h"
 
 using namespace js;
+using namespace js::ion;
 using namespace mozilla;
 
 static bool
@@ -188,6 +189,17 @@ DynamicallyLinkModule(JSContext *cx, StackFrame *fp, HandleObject moduleObj)
 
         if (!ArrayBufferObject::prepareForAsmJS(cx, heap))
             return LinkFail(cx, "Unable to prepare ArrayBuffer for asm.js use");
+
+#if defined(JS_CPU_X86)
+        void *heapOffset = (void*)heap->dataPointer();
+        void *heapLength = (void*)heap->byteLength();
+        uint8_t *code = module.functionCode();
+        for (unsigned i = 0; i < module.numHeapAccesses(); i++) {
+            const AsmJSHeapAccess &access = module.heapAccess(i);
+            JSC::X86Assembler::setPointer(access.patchLengthAt(code), heapLength);
+            JSC::X86Assembler::setPointer(access.patchOffsetAt(code), heapOffset);
+        }
+#endif
     }
 
     AutoObjectVector ffis(cx);

@@ -686,25 +686,58 @@ class AsmJSHeapAccess
 {
     uint32_t offset_;
     uint8_t opLength_;
+#if defined(JS_CPU_X86)
+    uint8_t cmpDelta_;
+#endif
     uint8_t isFloat32Load_;
     ion::AnyRegister::Code loadedReg_ : 8;
 
     JS_STATIC_ASSERT(ion::AnyRegister::Total < UINT8_MAX);
 
   public:
-    AsmJSHeapAccess(uint32_t offset, uint8_t opLength, uint8_t isFloat32, AnyRegister loadedReg)
-      : offset_(offset), opLength_(opLength), isFloat32Load_(isFloat32), loadedReg_(loadedReg.code())
+#if defined(JS_CPU_X86)
+    AsmJSHeapAccess(uint32_t cmp, uint32_t offset, uint32_t after, ArrayBufferView::ViewType vt,
+                    AnyRegister loadedReg)
+      : offset_(offset),
+        opLength_(after - offset),
+        cmpDelta_(offset - cmp),
+        isFloat32Load_(vt == ArrayBufferView::TYPE_FLOAT32),
+        loadedReg_(loadedReg.code())
     {}
-    AsmJSHeapAccess(uint32_t offset, uint8_t opLength)
-      : offset_(offset), opLength_(opLength), loadedReg_(UINT8_MAX)
+    AsmJSHeapAccess(uint32_t cmp, uint32_t offset, uint8_t after)
+      : offset_(offset),
+        opLength_(after - offset),
+        cmpDelta_(offset - cmp),
+        isFloat32Load_(false),
+        loadedReg_(UINT8_MAX)
     {}
+#else
+    AsmJSHeapAccess(uint32_t offset, uint32_t after, ArrayBufferView::ViewType vt,
+                    AnyRegister loadedReg)
+      : offset_(offset),
+        opLength_(after - offset),
+        isFloat32Load_(vt == ArrayBufferView::TYPE_FLOAT32),
+        loadedReg_(loadedReg.code())
+    {}
+    AsmJSHeapAccess(uint32_t offset, uint8_t after)
+      : offset_(offset),
+        opLength_(after - offset),
+        isFloat32Load_(false),
+        loadedReg_(UINT8_MAX)
+    {}
+#endif
 
-    void setOffset(uint32_t offset) { offset_ = offset; }
     uint32_t offset() const { return offset_; }
     unsigned opLength() const { return opLength_; }
     bool isLoad() const { return loadedReg_ != UINT8_MAX; }
     bool isFloat32Load() const { return isFloat32Load_; }
     ion::AnyRegister loadedReg() const { return ion::AnyRegister::FromCode(loadedReg_); }
+
+#if defined(JS_CPU_X86)
+    void *patchLengthAt(uint8_t *code) const { return code + (offset_ - cmpDelta_); }
+    void *patchOffsetAt(uint8_t *code) const { return code + (offset_ + opLength_); }
+#endif
+    void updateOffset(uint32_t offset) { offset_ = offset; }
 };
 
 } // namespace ion

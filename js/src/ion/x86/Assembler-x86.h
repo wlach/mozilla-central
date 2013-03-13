@@ -48,8 +48,6 @@ static const Register ReturnReg = eax;
 static const FloatRegister ReturnFloatReg = xmm0;
 static const FloatRegister ScratchFloatReg = xmm7;
 
-static const JSC::X86Registers::SegmentRegister HeapSegReg = JSC::X86Registers::ES;
-
 static const Register ArgumentsRectifierReg = esi;
 static const Register CallTempReg0 = edi;
 static const Register CallTempReg1 = eax;
@@ -278,26 +276,6 @@ class Assembler : public AssemblerX86Shared
         push(Imm32(word.value));
         return masm.currentOffset();
     }
-    CodeOffsetLabel movlWithPatch(void *addr, const Register &dest) {
-        masm.movl_mr(addr, dest.code());
-        return masm.currentOffset();
-    }
-    CodeOffsetLabel movlWithPatch(const Register &src, void *addr) {
-        masm.movl_rm(src.code(), addr);
-        return masm.currentOffset();
-    }
-    CodeOffsetLabel movlWithPatch(Imm32 imm, const Register &dest) {
-        masm.movl_i32r(imm.value, dest.code());
-        return masm.currentOffset();
-    }
-    CodeOffsetLabel movlWithPatch(void *base, const Register &index, Scale scale, const Register &dest) {
-        masm.movl_mr(base, index.code(), scale, dest.code());
-        return masm.currentOffset();
-    }
-
-    void emitSegmentPrefix(JSC::X86Registers::SegmentRegister seg) {
-        masm.emitSegmentPrefix(seg);
-    }
 
     void movl(const ImmGCPtr &ptr, const Register &dest) {
         masm.movl_i32r(ptr.value, dest.code());
@@ -349,12 +327,6 @@ class Assembler : public AssemblerX86Shared
     void mov(const Register &src, const Register &dest) {
         movl(src, dest);
     }
-    void movSeg(const Register &src, JSC::X86Assembler::SegmentRegister seg) {
-        masm.movw_rseg(src.code(), seg);
-    }
-    void movSeg(JSC::X86Assembler::SegmentRegister seg, const Register &dest) {
-        masm.movw_segr(seg, dest.code());
-    }
     void lea(const Operand &src, const Register &dest) {
         return leal(src, dest);
     }
@@ -386,6 +358,10 @@ class Assembler : public AssemblerX86Shared
           default:
             JS_NOT_REACHED("unexpected operand kind");
         }
+    }
+    CodeOffsetLabel cmplWithPatch(const Register &lhs, Imm32 rhs) {
+        masm.cmpl_ir_force32(rhs.value, lhs.code());
+        return masm.currentOffset();
     }
 
     void jmp(void *target, Relocation::Kind reloc = Relocation::HARDCODED) {
@@ -442,12 +418,89 @@ class Assembler : public AssemblerX86Shared
     void movsd(const double *dp, const FloatRegister &dest) {
         masm.movsd_mr((const void *)dp, dest.code());
     }
-    CodeOffsetLabel movsdWithPatch(void *addr, const FloatRegister &dest) {
+
+    // Move a 32-bit immediate into a register where the immediate can be
+    // patched.
+    CodeOffsetLabel movlWithPatch(Imm32 imm, Register dest) {
+        masm.movl_i32r(imm.value, dest.code());
+        return masm.currentOffset();
+    }
+
+    // Load from *addr where addr can be patched.
+    CodeOffsetLabel movlWithPatch(void *addr, Register dest) {
+        masm.movl_mr(addr, dest.code());
+        return masm.currentOffset();
+    }
+    CodeOffsetLabel movsdWithPatch(void *addr, FloatRegister dest) {
         masm.movsd_mr(addr, dest.code());
         return masm.currentOffset();
     }
-    CodeOffsetLabel movsdWithPatch(const FloatRegister &dest, void *addr) {
+
+    // Store to *addr where addr can be patched
+    CodeOffsetLabel movlWithPatch(Register src, void *addr) {
+        masm.movl_rm(src.code(), addr);
+        return masm.currentOffset();
+    }
+    CodeOffsetLabel movsdWithPatch(FloatRegister dest, void *addr) {
         masm.movsd_rm(dest.code(), addr);
+        return masm.currentOffset();
+    }
+
+    // Load from *(base + disp32) where disp32 can be patched.
+    CodeOffsetLabel movxblWithPatch(Address src, Register dest) {
+        masm.movxbl_mr_disp32(src.offset, src.base.code(), dest.code());
+        return masm.currentOffset();
+    }
+    CodeOffsetLabel movzblWithPatch(Address src, Register dest) {
+        masm.movzbl_mr_disp32(src.offset, src.base.code(), dest.code());
+        return masm.currentOffset();
+    }
+    CodeOffsetLabel movxwlWithPatch(Address src, Register dest) {
+        masm.movxwl_mr_disp32(src.offset, src.base.code(), dest.code());
+        return masm.currentOffset();
+    }
+    CodeOffsetLabel movzwlWithPatch(Address src, Register dest) {
+        masm.movzwl_mr_disp32(src.offset, src.base.code(), dest.code());
+        return masm.currentOffset();
+    }
+    CodeOffsetLabel movlWithPatch(Address src, Register dest) {
+        masm.movl_mr_disp32(src.offset, src.base.code(), dest.code());
+        return masm.currentOffset();
+    }
+    CodeOffsetLabel movssWithPatch(Address src, FloatRegister dest) {
+        masm.movss_mr_disp32(src.offset, src.base.code(), dest.code());
+        return masm.currentOffset();
+    }
+    CodeOffsetLabel movsdWithPatch(Address src, FloatRegister dest) {
+        masm.movsd_mr_disp32(src.offset, src.base.code(), dest.code());
+        return masm.currentOffset();
+    }
+
+    // Store to *(base + disp32) where disp32 can be patched.
+    CodeOffsetLabel movbWithPatch(Register src, Address dest) {
+        masm.movb_rm_disp32(src.code(), dest.offset, dest.base.code());
+        return masm.currentOffset();
+    }
+    CodeOffsetLabel movwWithPatch(Register src, Address dest) {
+        masm.movw_rm_disp32(src.code(), dest.offset, dest.base.code());
+        return masm.currentOffset();
+    }
+    CodeOffsetLabel movlWithPatch(Register src, Address dest) {
+        masm.movl_rm_disp32(src.code(), dest.offset, dest.base.code());
+        return masm.currentOffset();
+    }
+    CodeOffsetLabel movssWithPatch(FloatRegister src, Address dest) {
+        masm.movss_rm_disp32(src.code(), dest.offset, dest.base.code());
+        return masm.currentOffset();
+    }
+    CodeOffsetLabel movsdWithPatch(FloatRegister src, Address dest) {
+        masm.movsd_rm_disp32(src.code(), dest.offset, dest.base.code());
+        return masm.currentOffset();
+    }
+
+    // Load from *(addr + index*scale) where addr can be patched.
+    CodeOffsetLabel movlWithPatch(void *addr, Register index, Scale scale, Register dest) {
+        masm.movl_mr(addr, index.code(), scale, dest.code());
         return masm.currentOffset();
     }
 };

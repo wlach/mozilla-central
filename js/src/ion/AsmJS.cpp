@@ -4361,7 +4361,7 @@ CheckFunctionBody(ModuleCompiler &m, ModuleCompiler::Func &func)
 
     ScopedJSDeletePtr<CodeGenerator> codegen(CompileBackEnd(&f.mirGen(), &m.masm()));
     if (!codegen)
-        return false;
+        return m.fail("Internal compiler failure (probably out of memory)", func.fn());
 
     if (!m.collectAccesses(f.mirGen()))
         return false;
@@ -4449,23 +4449,6 @@ StackDecrementForCall(MacroAssembler &masm, const MIRTypeVector &argTypes, unsig
     return AlignBytes(alreadyPushed + extraBytes + argBytes, StackAlignment) - alreadyPushed;
 }
 
-#if defined(JS_CPU_X86)
-static void
-InstallSegments(ModuleCompiler &m, MacroAssembler &masm, Register scratch)
-{
-    CodeOffsetLabel label = masm.movlWithPatch(NULL, scratch);
-    m.addGlobalAccess(AsmJSGlobalAccess(label.offset(), m.module().heapSelectorOffset()));
-    masm.movSeg(scratch, HeapSegReg);
-}
-
-static void
-RestoreSegments(MacroAssembler &masm, Register activation, Register scratch)
-{
-    masm.movl(Operand(activation, AsmJSActivation::offsetOfSavedHeapSegReg()), scratch);
-    masm.movSeg(scratch, HeapSegReg);
-}
-#endif
-
 static const unsigned FramePushedAfterSave = NonVolatileRegs.gprs().size() * STACK_SLOT_SIZE +
                                              NonVolatileRegs.fpus().size() * sizeof(double);
 
@@ -4492,15 +4475,7 @@ GenerateEntry(ModuleCompiler &m, const AsmJSModule::ExportedFunction &exportedFu
     LoadAsmJSActivationIntoRegister(masm, activation);
     masm.movePtr(StackPointer, Operand(activation, AsmJSActivation::offsetOfErrorRejoinSP()));
 
-#if defined(JS_CPU_X86)
-    // Install the heap's segment selector into the globally-pinned HeapSegReg.
-    // The selector is stored in the global data section and is patched at
-    // dynamic link time.
-    Register scratch = ABIArgGenerator::NonArgReturnVolatileReg2;
-    masm.movSeg(HeapSegReg, scratch);
-    masm.movl(scratch, Operand(activation, AsmJSActivation::offsetOfSavedHeapSegReg()));
-    InstallSegments(m, masm, scratch);
-#elif defined(JS_CPU_X64)
+#if defined(JS_CPU_X64)
     // Install the heap pointer into the globally-pinned HeapReg. The heap
     // pointer is stored in the global data section and is patched at dynamic
     // link time.
@@ -4562,10 +4537,6 @@ GenerateEntry(ModuleCompiler &m, const AsmJSModule::ExportedFunction &exportedFu
     }
 
     // Restore clobbered registers.
-#if defined(JS_CPU_X86)
-    LoadAsmJSActivationIntoRegister(masm, activation);
-    RestoreSegments(masm, activation, activation);
-#endif
     masm.PopRegsInMask(NonVolatileRegs);
     JS_ASSERT(masm.framePushed() == 0);
 
@@ -4732,10 +4703,6 @@ GenerateFFIExit(ModuleCompiler &m, const ModuleCompiler::ExitDescriptor &exit, u
     i++;
     JS_ASSERT(i.done());
 
-#if defined(JS_CPU_X86)
-    RestoreSegments(masm, activation, activation);
-#endif
-
     // Make the call, test whether it succeeded, and extract the return value.
     AssertStackAlignment(masm);
     switch (exit.use().which()) {
@@ -4756,10 +4723,6 @@ GenerateFFIExit(ModuleCompiler &m, const ModuleCompiler::ExitDescriptor &exit, u
       case Use::AddOrSub:
         JS_NOT_REACHED("Should have been a type error");
     }
-
-#if defined(JS_CPU_X86)
-    InstallSegments(m, masm, scratch);
-#endif
 
     // Note: the caller is IonMonkey code which means there are no non-volatile
     // registers to restore.
@@ -4790,8 +4753,6 @@ GenerateStackOverflowExit(ModuleCompiler &m, Label *throwLabel)
     LoadJSContextFromActivation(masm, IntArgReg0, IntArgReg0);
 #elif defined(JS_CPU_X86)
     LoadAsmJSActivationIntoRegister(masm, eax);
-    masm.movl(Operand(eax, AsmJSActivation::offsetOfSavedHeapSegReg()), ebx);
-    masm.movSeg(ebx, HeapSegReg);
     LoadJSContextFromActivation(masm, eax, eax);
     masm.push(eax);
 #else
@@ -4853,17 +4814,9 @@ GenerateOperationCallbackExit(ModuleCompiler &m, Label *throwLabel)
     LoadJSContextFromActivation(masm, activation, IntArgReg0);
 #endif
 
-#if defined(JS_CPU_X86)
-    RestoreSegments(masm, activation, scratch);
-#endif
-
     JSBool (*pf)(JSContext*) = js_HandleExecutionInterrupt;
     masm.call(ImmWord(JS_FUNC_TO_DATA_PTR(void*, pf)));
     masm.branchTest32(Assembler::Zero, ReturnReg, ReturnReg, throwLabel);
-
-#if defined(JS_CPU_X86)
-    InstallSegments(m, masm, scratch);
-#endif
 
     // Restore the StackPointer to it's position before the call.
     masm.mov(ABIArgGenerator::NonVolatileReg, StackPointer);
@@ -4888,10 +4841,6 @@ GenerateThrowExit(ModuleCompiler &m, Label *throwLabel)
 
     Register activation = ABIArgGenerator::NonArgReturnVolatileReg1;
     LoadAsmJSActivationIntoRegister(masm, activation);
-#if defined(JS_CPU_X86)
-    Register scratch = ABIArgGenerator::NonArgReturnVolatileReg2;
-    RestoreSegments(masm, activation, scratch);
-#endif
 
     masm.setFramePushed(FramePushedAfterSave);
     masm.mov(Operand(activation, AsmJSActivation::offsetOfErrorRejoinSP()), StackPointer);

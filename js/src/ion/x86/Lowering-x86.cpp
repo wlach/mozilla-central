@@ -244,11 +244,9 @@ LIRGeneratorX86::visitAsmStoreHeap(MAsmStoreHeap *ins)
         break;
       case ArrayBufferView::TYPE_INT16: case ArrayBufferView::TYPE_UINT16:
       case ArrayBufferView::TYPE_INT32: case ArrayBufferView::TYPE_UINT32:
-        lir = new LAsmStoreHeap(useRegisterAtStart(ins->ptr()),
-                                useRegisterOrConstantAtStart(ins->value()));
-        break;
-      case ArrayBufferView::TYPE_FLOAT32:
-      case ArrayBufferView::TYPE_FLOAT64:
+      case ArrayBufferView::TYPE_FLOAT32: case ArrayBufferView::TYPE_FLOAT64:
+        // For now, don't allow constants. The immediate operand affects
+        // instruction layout which affects patching.
         lir = new LAsmStoreHeap(useRegisterAtStart(ins->ptr()),
                                 useRegisterAtStart(ins->value()));
         break;
