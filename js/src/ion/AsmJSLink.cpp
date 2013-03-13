@@ -107,7 +107,7 @@ ValidateMathBuiltin(JSContext *cx, AsmJSModule::Global global, HandleValue globa
     if (!GetProperty(cx, v, field, &v))
         return false;
 
-    Native native;
+    Native native = NULL;
     switch (global.mathBuiltin()) {
       case AsmJSMathBuiltin_sin: native = math_sin; break;
       case AsmJSMathBuiltin_cos: native = math_cos; break;

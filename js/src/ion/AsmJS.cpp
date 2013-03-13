@@ -496,8 +496,10 @@ class VarType
     Which which_;
 
   public:
-    VarType() {}
-    VarType(Which w) : which_(w) {}
+    VarType()
+      : which_(Which(-1)) {}
+    VarType(Which w)
+      : which_(w) {}
     VarType(AsmJSCoercion coercion) {
         switch (coercion) {
           case AsmJS_ToInt32: which_ = Int; break;
@@ -3328,8 +3330,8 @@ static bool
 CheckMathBuiltinCall(FunctionCompiler &f, ParseNode *callNode, AsmJSMathBuiltin mathBuiltin,
                      MDefinition **def, Type *type)
 {
-    unsigned arity;
-    void *callee;
+    unsigned arity = 0;
+    void *callee = NULL;
     switch (mathBuiltin) {
       case AsmJSMathBuiltin_imul:  return CheckMathIMul(f, callNode, def, type);
       case AsmJSMathBuiltin_abs:   return CheckMathAbs(f, callNode, def, type);
@@ -4108,14 +4110,14 @@ CheckSwitchRange(FunctionCompiler &f, ParseNode *stmt, int32_t *low, int32_t *hi
         return true;
     }
 
-    int32_t i;
+    int32_t i = 0;
     if (!CheckCaseExpr(f, CaseExpr(stmt), &i))
         return false;
 
     *low = *high = i;
 
     for (stmt = NextNode(stmt); stmt && stmt->isKind(PNK_CASE); stmt = NextNode(stmt)) {
-        int32_t i;
+        int32_t i = 0;
         if (!CheckCaseExpr(f, CaseExpr(stmt), &i))
             return false;
 
@@ -4157,7 +4159,7 @@ CheckSwitch(FunctionCompiler &f, ParseNode *switchStmt)
     if (!stmt)
         return true;
 
-    int32_t low, high, tableLength;
+    int32_t low = 0, high = 0, tableLength = 0;
     if (!CheckSwitchRange(f, stmt, &low, &high, &tableLength))
         return false;
 
