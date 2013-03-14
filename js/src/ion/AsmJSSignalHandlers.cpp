@@ -409,14 +409,6 @@ SetRegisterToCoercedUndefined(mcontext_t &context, bool isFloat32, AnyRegister r
           case JSC::X86Registers::r13: context->__ss.__r13 = 0; break;
           case JSC::X86Registers::r14: context->__ss.__r14 = 0; break;
           case JSC::X86Registers::r15: context->__ss.__r15 = 0; break;
-          case JSC::X86Registers::eax: context->__ss.__eax = 0; break;
-          case JSC::X86Registers::ecx: context->__ss.__ecx = 0; break;
-          case JSC::X86Registers::edx: context->__ss.__edx = 0; break;
-          case JSC::X86Registers::ebx: context->__ss.__ebx = 0; break;
-          case JSC::X86Registers::esp: context->__ss.__esp = 0; break;
-          case JSC::X86Registers::ebp: context->__ss.__ebp = 0; break;
-          case JSC::X86Registers::esi: context->__ss.__esi = 0; break;
-          case JSC::X86Registers::edi: context->__ss.__edi = 0; break;
           default: MOZ_CRASH();
         }
     }
