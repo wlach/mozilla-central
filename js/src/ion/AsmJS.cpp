@@ -22,6 +22,8 @@ using namespace js::ion;
 using namespace js::frontend;
 using namespace mozilla;
 
+#ifdef JS_ASMJS
+
 /*****************************************************************************/
 // ParseNode utilities
 
@@ -791,8 +793,6 @@ TypedArrayStoreType(ArrayBufferView::ViewType viewType)
 
 /*****************************************************************************/
 
-#ifdef JS_ASMJS
-
 typedef Vector<PropertyName*,1> LabelVector;
 typedef Vector<MBasicBlock*,16> CaseVector;
 
@@ -1503,8 +1503,7 @@ class FunctionCompiler
         if (!newBlock(/* pred = */ NULL, &curBlock_))
             return false;
 
-        if (!m_.cx()->runtime->asmJSUnsafe)
-            curBlock_->add(MAsmCheckOverRecursed::New(&m_.stackOverflowLabel()));
+        curBlock_->add(MAsmCheckOverRecursed::New(&m_.stackOverflowLabel()));
 
         for (ABIArgIter i(func_.argMIRTypes()); !i.done(); i++) {
             MAsmParameter *ins = MAsmParameter::New(*i, i.mirType());
@@ -3038,10 +3037,7 @@ CheckArrayAccess(FunctionCompiler &f, ParseNode *elem, ArrayBufferView::ViewType
     // followed by the left shift implicit in the array access. E.g., H32[i>>2]
     // loses the low two bits.
     int32_t mask = ~((uint32_t(1) << TypedArrayShift(*viewType)) - 1);
-    if (f.m().cx()->runtime->asmJSUnsafe)
-        *def = pointerDef;
-    else
-        *def = f.bitwise<MBitAnd>(pointerDef, f.constant(Int32Value(mask)));
+    *def = f.bitwise<MBitAnd>(pointerDef, f.constant(Int32Value(mask)));
     return true;
 }
 
@@ -4962,7 +4958,7 @@ js::CompileAsmJS(JSContext *cx, TokenStream &ts, ParseNode *fn, HandleScript scr
     if (cx->compartment->debugMode())
         return Warn(cx, JSMSG_USE_ASM_TYPE_FAIL, "Disabled by debugger");
 
-#if JS_ASMJS
+#ifdef JS_ASMJS
     if (!EnsureAsmJSSignalHandlersInstalled())
         return Warn(cx, JSMSG_USE_ASM_TYPE_FAIL, "Platform missing signal handler support");
 

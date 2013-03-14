@@ -11,7 +11,7 @@
 // Only turn on asm.js for supported platforms:
 #if (defined(JS_CPU_X86) || defined(JS_CPU_X64)) &&  \
     (defined(__linux__) || defined(XP_WIN) || defined(XP_MACOSX))
-# define JS_ASM
+# define JS_ASMJS
 #endif
 
 namespace js {

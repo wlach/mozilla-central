@@ -17,6 +17,8 @@
 using namespace js;
 using namespace js::ion;
 
+#ifdef JS_ASMJS
+
 // Prevent races trying to install the signal handlers.
 #ifdef JS_THREADSAFE
 # include "jslock.h"
@@ -89,7 +91,6 @@ PCIsInModule(const AsmJSModule &module, void *pc)
     return pc >= code && pc < (code + module.functionBytes());
 }
 
-#ifdef JS_ASMJS
 # if defined(JS_CPU_X64)
 template <class T>
 static void
