@@ -35,6 +35,11 @@ CompileAsmJS(JSContext *cx, frontend::TokenStream &ts, frontend::ParseNode *fn, 
 extern bool
 LinkAsmJS(JSContext *cx, StackFrame *fp, MutableHandleValue rval);
 
+// Return whether asm.js optimization is inhibitted by the platform or
+// dynamically disabled. (Exposed as JSNative for shell testing.)
+extern JSBool
+IsAsmJSCompilationAvailable(JSContext *cx, unsigned argc, Value *vp);
+
 // The JSRuntime maintains a stack of AsmJSModule activations. An "activation"
 // of module A is an initial call from outside A into a function inside A,
 // followed by a sequence of calls inside A, and terminated by a call that

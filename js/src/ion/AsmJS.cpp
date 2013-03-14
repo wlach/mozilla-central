@@ -4970,3 +4970,15 @@ js::CompileAsmJS(JSContext *cx, TokenStream &ts, ParseNode *fn, HandleScript scr
     return Warn(cx, JSMSG_USE_ASM_TYPE_OK);
 }
 
+JSBool
+js::IsAsmJSCompilationAvailable(JSContext *cx, unsigned argc, Value *vp)
+{
+    CallArgs args = CallArgsFromVp(argc, vp);
+
+    bool available = JSC::MacroAssembler().supportsFloatingPoint() &&
+                     !cx->compartment->debugMode();
+
+    args.rval().set(BooleanValue(available));
+    return true;
+}
+

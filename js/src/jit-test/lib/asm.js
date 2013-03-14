@@ -14,6 +14,9 @@ const BUF_64KB = new ArrayBuffer(64 * 1024);
 
 function asmCompile()
 {
+    if (!isAsmJSCompilationAvailable())
+        return Function.apply(null, arguments);
+
     // asm.js emits a warning on successful compilation
 
     // Turn on warnings-as-errors
@@ -41,6 +44,9 @@ function asmCompile()
 
 function assertAsmTypeFail()
 {
+    if (!isAsmJSCompilationAvailable())
+        return;
+
     // Verify no error is thrown with warnings off
     Function.apply(null, arguments);
 
@@ -66,6 +72,9 @@ function assertAsmTypeFail()
 
 function assertAsmLinkFail(f)
 {
+    if (!isAsmJSCompilationAvailable())
+        return;
+
     // Verify no error is thrown with warnings off
     f.apply(null, Array.slice(arguments, 1));
 
@@ -122,6 +131,9 @@ function assertAsmLinkAlwaysFail(f)
 // Linking should throw a warning-as-error but otherwise run fine
 function asmLink(f)
 {
+    if (!isAsmJSCompilationAvailable())
+        return f.apply(null, Array.slice(arguments, 1));
+
     // Turn on warnings-as-errors
     var oldOpts = options("werror");
     assertEq(oldOpts.indexOf("werror"), -1);
