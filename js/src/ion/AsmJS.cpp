@@ -4751,6 +4751,11 @@ GenerateStackOverflowExit(ModuleCompiler &m, Label *throwLabel)
     masm.align(CodeAlignment);
     masm.bind(&m.stackOverflowLabel());
 
+#if defined(JS_CPU_X86)
+    // Ensure that at least one slot is pushed for passing 'cx' below.
+    masm.push(Imm32(0));
+#endif
+
     // We know that StackPointer is word-aligned, but nothing past that. Thus,
     // we must align StackPointer dynamically. Don't worry about restoring
     // StackPointer since throwLabel will clobber StackPointer immediately.
@@ -4759,13 +4764,13 @@ GenerateStackOverflowExit(ModuleCompiler &m, Label *throwLabel)
         masm.subPtr(Imm32(ShadowStackSpace), StackPointer);
 
     // Prepare the arguments for the call to js_ReportOverRecursed.
-#if defined(JS_CPU_X64)
-    LoadAsmJSActivationIntoRegister(masm, IntArgReg0);
-    LoadJSContextFromActivation(masm, IntArgReg0, IntArgReg0);
-#elif defined(JS_CPU_X86)
+#if defined(JS_CPU_X86)
     LoadAsmJSActivationIntoRegister(masm, eax);
     LoadJSContextFromActivation(masm, eax, eax);
-    masm.push(eax);
+    masm.storePtr(eax, Address(StackPointer, 0));
+#elif defined(JS_CPU_X64)
+    LoadAsmJSActivationIntoRegister(masm, IntArgReg0);
+    LoadJSContextFromActivation(masm, IntArgReg0, IntArgReg0);
 #else
 # error "ARM here"
 #endif
