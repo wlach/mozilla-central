@@ -752,6 +752,7 @@ JSOpToDoubleCondition(JSOp op)
 
 typedef Vector<MIRType, 8> MIRTypeVector;
 
+#ifdef JS_ASMJS
 class ABIArgIter
 {
     ABIArgGenerator gen_;
@@ -771,6 +772,7 @@ class ABIArgIter
     MIRType mirType() const { JS_ASSERT(!done()); return types_[i_]; }
     uint32_t stackBytesConsumedSoFar() const { return gen_.stackBytesConsumedSoFar(); }
 };
+#endif
 
 } // namespace ion
 } // namespace js

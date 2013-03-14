@@ -402,4 +402,3 @@ js::LinkAsmJS(JSContext *cx, StackFrame *fp, MutableHandleValue rval)
     rval.set(ObjectValue(*obj));
     return true;
 }
-

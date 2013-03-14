@@ -10,11 +10,11 @@
 
 namespace js {
 
-class ArrayBufferObject;
-
+// Install any process-level signal/exception-handlers needed to support asm.js.
 bool
 EnsureAsmJSSignalHandlersInstalled();
 
+// Force any executing asm.js code to call js_HandleExecutionInterrupt.
 void
 TriggerOperationCallbackForAsmJSCode(JSRuntime *rt);
 

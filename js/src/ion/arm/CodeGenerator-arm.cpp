@@ -106,7 +106,7 @@ CodeGeneratorARM::visitTestIAndBranch(LTestIAndBranch *test)
 bool
 CodeGeneratorARM::visitCompare(LCompare *comp)
 {
-    Assembler::Condition cond = JSOpToCondition(comp->mir()->compareType(), comp->json());
+    Assembler::Condition cond = JSOpToCondition(comp->mir()->compareType(), comp->jsop());
     const LAllocation *left = comp->getOperand(0);
     const LAllocation *right = comp->getOperand(1);
     const LDefinition *def = comp->getDef(0);
@@ -123,7 +123,7 @@ CodeGeneratorARM::visitCompare(LCompare *comp)
 bool
 CodeGeneratorARM::visitCompareAndBranch(LCompareAndBranch *comp)
 {
-    Assembler::Condition cond = JSOpToCondition(comp->mir()->compareType(), comp->json());
+    Assembler::Condition cond = JSOpToCondition(comp->mir()->compareType(), comp->jsop());
     if (comp->right()->isConstant())
         masm.ma_cmp(ToRegister(comp->left()), Imm32(ToInt32(comp->right())));
     else

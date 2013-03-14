@@ -2867,7 +2867,7 @@ CodeGenerator::visitNegI(LNegI *ins)
     Register input = ToRegister(ins->input());
     JS_ASSERT(input == ToRegister(ins->output()));
 
-    masm.negl(input);
+    masm.neg32(input);
     return true;
 }
 

@@ -143,6 +143,8 @@ class CodeGeneratorARM : public CodeGeneratorShared
     bool visitInterruptCheck(LInterruptCheck *lir);
 
     bool generateInvalidateEpilogue();
+
+    void postAsmCall(LAsmCall *lir) {}
 };
 
 typedef CodeGeneratorARM CodeGeneratorSpecific;

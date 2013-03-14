@@ -872,7 +872,6 @@ JSRuntime::JSRuntime(JSUseHelperThreads useHelperThreads)
     noGCOrAllocationCheck(0),
 #endif
     jitHardening(false),
-    asmJSUnsafe(false),
     ionPcScriptCache(NULL),
     threadPool(this),
     ctypesActivityCallback(NULL),

@@ -14,7 +14,6 @@
 #include "ion/AsmJSSignalHandlers.h"
 #include "assembler/assembler/MacroAssembler.h"
 
-
 using namespace js;
 using namespace js::ion;
 
@@ -90,7 +89,8 @@ PCIsInModule(const AsmJSModule &module, void *pc)
     return pc >= code && pc < (code + module.functionBytes());
 }
 
-#if defined(JS_CPU_X64)
+#ifdef JS_ASMJS
+# if defined(JS_CPU_X64)
 template <class T>
 static void
 SetXMMRegToNaN(bool isFloat32, T *xmm_reg)
@@ -140,24 +140,24 @@ LookupHeapAccess(const AsmJSModule &module, uint8_t *pc)
 
     return NULL;
 }
-#endif
+# endif
 
-#if defined(XP_WIN)
-# include "jswin.h"
+# if defined(XP_WIN)
+#  include "jswin.h"
 
 static uint8_t **
 ContextToPC(PCONTEXT context)
 {
-# if defined(JS_CPU_X64)
+#  if defined(JS_CPU_X64)
     JS_STATIC_ASSERT(sizeof(context->Rip) == sizeof(void*));
     return reinterpret_cast<uint8_t**>(&context->Rip);
-# else
+#  else
     JS_STATIC_ASSERT(sizeof(context->Eip) == sizeof(void*));
     return reinterpret_cast<uint8_t**>(&context->Eip);
-# endif
+#  endif
 }
 
-# if defined(JS_CPU_X64)
+#  if defined(JS_CPU_X64)
 static void
 SetRegisterToCoercedUndefined(CONTEXT *context, bool isFloat32, AnyRegister reg)
 {
@@ -203,7 +203,7 @@ SetRegisterToCoercedUndefined(CONTEXT *context, bool isFloat32, AnyRegister reg)
         }
     }
 }
-# endif
+#  endif
 
 static bool
 HandleException(PEXCEPTION_POINTERS exception)
@@ -245,7 +245,7 @@ HandleException(PEXCEPTION_POINTERS exception)
         return true;
     }
 
-#if defined(JS_CPU_X64)
+# if defined(JS_CPU_X64)
     // These checks aren't necessary, but, since we can, check anyway to make
     // sure we aren't covering up a real bug.
     if (!module.maybeHeap() ||
@@ -273,9 +273,9 @@ HandleException(PEXCEPTION_POINTERS exception)
         SetRegisterToCoercedUndefined(context, heapAccess->isFloat32Load(), heapAccess->loadedReg());
     *ppc += heapAccess->opLength();
     return true;
-#else
+# else
     return false;
-#endif
+# endif
 }
 
 static LONG WINAPI
@@ -288,26 +288,26 @@ AsmJSExceptionHandler(LPEXCEPTION_POINTERS exception)
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
-#else  // If not Windows, assume Unix
-# include <signal.h>
-# include <sys/mman.h>
+# else  // If not Windows, assume Unix
+#  include <signal.h>
+#  include <sys/mman.h>
 
 // Unfortunately, we still need OS-specific code to read/write to the thread
 // state via the mcontext_t.
-# if defined(__linux__)
+#  if defined(__linux__)
 static uint8_t **
 ContextToPC(mcontext_t &context)
 {
-#  if defined(JS_CPU_X86)
+#   if defined(JS_CPU_X86)
     JS_STATIC_ASSERT(sizeof(context.gregs[REG_EIP]) == sizeof(void*));
     return reinterpret_cast<uint8_t**>(&context.gregs[REG_EIP]);
-#  else
+#   else
     JS_STATIC_ASSERT(sizeof(context.gregs[REG_RIP]) == sizeof(void*));
     return reinterpret_cast<uint8_t**>(&context.gregs[REG_RIP]);
-#  endif
+#   endif
 }
 
-#  if defined(JS_CPU_X64)
+#   if defined(JS_CPU_X64)
 static void
 SetRegisterToCoercedUndefined(mcontext_t &context, bool isFloat32, AnyRegister reg)
 {
@@ -353,21 +353,21 @@ SetRegisterToCoercedUndefined(mcontext_t &context, bool isFloat32, AnyRegister r
         }
     }
 }
-#  endif
-# elif defined(XP_MACOSX)
+#   endif
+#  elif defined(XP_MACOSX)
 static uint8_t **
 ContextToPC(mcontext_t context)
 {
-#  if defined(JS_CPU_X86)
+#   if defined(JS_CPU_X86)
     JS_STATIC_ASSERT(sizeof(context->__ss.__eip) == sizeof(void*));
     return reinterpret_cast<uint8_t **>(&context->__ss.__eip);
-#  else
+#   else
     JS_STATIC_ASSERT(sizeof(context->__ss.__rip) == sizeof(void*));
     return reinterpret_cast<uint8_t **>(&context->__ss.__rip);
-#  endif
+#   endif
 }
 
-#  if defined(JS_CPU_X64)
+#   if defined(JS_CPU_X64)
 static void
 SetRegisterToCoercedUndefined(mcontext_t &context, bool isFloat32, AnyRegister reg)
 {
@@ -413,8 +413,8 @@ SetRegisterToCoercedUndefined(mcontext_t &context, bool isFloat32, AnyRegister r
         }
     }
 }
-#  endif
-# endif  // end of OS-specific mcontext accessors
+#   endif
+#  endif  // end of OS-specific mcontext accessors
 
 // Be very cautious and default to not handling; we don't want to accidentally
 // silence real crashes from real bugs.
@@ -447,7 +447,7 @@ HandleSignal(int signum, siginfo_t *info, void *ctx)
         return true;
     }
 
-# if defined(JS_CPU_X64)
+#  if defined(JS_CPU_X64)
     // These checks aren't necessary, but, since we can, check anyway to make
     // sure we aren't covering up a real bug.
     if (!module.maybeHeap() ||
@@ -471,9 +471,9 @@ HandleSignal(int signum, siginfo_t *info, void *ctx)
         SetRegisterToCoercedUndefined(context, heapAccess->isFloat32Load(), heapAccess->loadedReg());
     *ppc += heapAccess->opLength();
     return true;
-# else
+#  else
     return false;
-# endif
+#  endif
 }
 
 static struct sigaction sPrevHandler;
@@ -501,11 +501,13 @@ AsmJSFaultHandler(int signum, siginfo_t *info, void *context)
         exit(signum);  // backstop
     }
 }
-#endif
+# endif
+#endif // JS_ASMJS
 
 bool
 js::EnsureAsmJSSignalHandlersInstalled()
 {
+#if defined(JS_ASMJS)
     SignalMutex::Lock lock;
     if (lock.handlersInstalled())
         return true;
@@ -525,6 +527,7 @@ js::EnsureAsmJSSignalHandlersInstalled()
 #endif
 
     lock.setHandlersInstalled();
+#endif
     return true;
 }
 
@@ -541,6 +544,7 @@ js::EnsureAsmJSSignalHandlersInstalled()
 void
 js::TriggerOperationCallbackForAsmJSCode(JSRuntime *rt)
 {
+#if defined(JS_ASMJS)
     PerThreadData::AsmJSActivationStackLock lock(rt->mainThread);
 
     AsmJSActivation *activation = rt->mainThread.asmJSActivationStackFromAnyThread();
@@ -549,12 +553,13 @@ js::TriggerOperationCallbackForAsmJSCode(JSRuntime *rt)
 
     const AsmJSModule &module = activation->module();
 
-#if defined(XP_WIN)
+# if defined(XP_WIN)
     DWORD oldProtect;
     if (!VirtualProtect(module.functionCode(), 4096, PAGE_NOACCESS, &oldProtect))
         MOZ_CRASH();
-#else
+# else
     if (mprotect(module.functionCode(), module.functionBytes(), PROT_NONE))
         MOZ_CRASH();
+# endif
 #endif
 }

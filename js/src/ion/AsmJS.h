@@ -8,11 +8,22 @@
 #if !defined(jsion_asmjs_h__) && defined(JS_ION)
 #define jsion_asmjs_h__
 
+// Only turn on asm.js for supported platforms:
+#if (defined(JS_CPU_X86) || defined(JS_CPU_X64)) &&  \
+    (defined(__linux__) || defined(XP_WIN) || defined(XP_MACOSX))
+# define JS_ASM
+#endif
+
 namespace js {
 
 class SPSProfiler;
 class AsmJSModule;
 namespace frontend { struct TokenStream; struct ParseNode; }
+
+// Return whether asm.js optimization is inhibitted by the platform or
+// dynamically disabled. (Exposed as JSNative for shell testing.)
+extern JSBool
+IsAsmJSCompilationAvailable(JSContext *cx, unsigned argc, Value *vp);
 
 // Called after parsing a function 'fn' which contains the "use asm" directive.
 // This function performs type-checking and code-generation. If type-checking
@@ -35,11 +46,6 @@ CompileAsmJS(JSContext *cx, frontend::TokenStream &ts, frontend::ParseNode *fn, 
 extern bool
 LinkAsmJS(JSContext *cx, StackFrame *fp, MutableHandleValue rval);
 
-// Return whether asm.js optimization is inhibitted by the platform or
-// dynamically disabled. (Exposed as JSNative for shell testing.)
-extern JSBool
-IsAsmJSCompilationAvailable(JSContext *cx, unsigned argc, Value *vp);
-
 // The JSRuntime maintains a stack of AsmJSModule activations. An "activation"
 // of module A is an initial call from outside A into a function inside A,
 // followed by a sequence of calls inside A, and terminated by a call that
@@ -59,9 +65,6 @@ class AsmJSActivation
     void *errorRejoinSP_;
     SPSProfiler *profiler_;
     void *resumePC_;
-#if defined(JS_CPU_X86)
-    uint32_t savedHeapSegReg_;
-#endif
 
   public:
     AsmJSActivation(JSContext *cx, const AsmJSModule &module, unsigned entryIndex);
@@ -76,11 +79,6 @@ class AsmJSActivation
     // Initialized by JIT code:
     static unsigned offsetOfErrorRejoinSP() { return offsetof(AsmJSActivation, errorRejoinSP_); }
 
-#if defined(JS_CPU_X86)
-    // Read and written by JIT code
-    static unsigned offsetOfSavedHeapSegReg() { return offsetof(AsmJSActivation, savedHeapSegReg_); }
-#endif
-
     // Set from SIGSEGV handler:
     void setResumePC(void *pc) { resumePC_ = pc; }
 };
@@ -91,11 +89,10 @@ static const size_t AsmJSAllocationGranularity = 4096;
 // On x64, the internal ArrayBuffer data array is inflated to 4GiB (only the
 // byteLength portion of which is accessible) so that out-of-bounds accesses
 // (made using a uint32 index) are guaranteed to raise a SIGSEGV.
-#ifdef JS_CPU_X64
+# ifdef JS_CPU_X64
 static const size_t AsmJSBufferProtectedSize = 4 * 1024ULL * 1024ULL * 1024ULL;
-#endif
+# endif
 
 } // namespace js
 
 #endif // jsion_asmjs_h__
-

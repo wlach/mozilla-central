@@ -1226,9 +1226,6 @@ struct JSRuntime : js::RuntimeFriendFields,
 
     bool                jitHardening;
 
-    /* 'True' if '--asm-unsafe' is passed to the js shell. */
-    bool asmJSUnsafe;
-
     void resetIonStackLimit() {
         mainThread.ionStackLimit = mainThread.nativeStackLimit;
     }

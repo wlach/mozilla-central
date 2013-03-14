@@ -826,6 +826,7 @@ MacroAssembler::printf(const char *output, Register value)
     PopRegsInMask(RegisterSet::Volatile());
 }
 
+#ifdef JS_ASMJS
 ABIArgIter::ABIArgIter(const MIRTypeVector &types)
   : gen_(),
     types_(types),
@@ -843,3 +844,5 @@ ABIArgIter::operator++(int)
     if (!done())
         gen_.next(types_[i_]);
 }
+#endif
+

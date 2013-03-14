@@ -791,6 +791,8 @@ TypedArrayStoreType(ArrayBufferView::ViewType viewType)
 
 /*****************************************************************************/
 
+#ifdef JS_ASMJS
+
 typedef Vector<PropertyName*,1> LabelVector;
 typedef Vector<MBasicBlock*,16> CaseVector;
 
@@ -4942,6 +4944,8 @@ CheckModule(JSContext *cx, TokenStream &ts, ParseNode *fn, ScopedJSDeletePtr<Asm
     return m.finish(module);
 }
 
+#endif // defined(JS_ASMJS)
+
 static bool
 Warn(JSContext *cx, int code, const char *str = NULL)
 {
@@ -4952,14 +4956,15 @@ Warn(JSContext *cx, int code, const char *str = NULL)
 bool
 js::CompileAsmJS(JSContext *cx, TokenStream &ts, ParseNode *fn, HandleScript script)
 {
-    if (!EnsureAsmJSSignalHandlersInstalled())
-        return Warn(cx, JSMSG_USE_ASM_TYPE_FAIL, "Platform missing signal handler support");
-
     if (!JSC::MacroAssembler().supportsFloatingPoint())
         return Warn(cx, JSMSG_USE_ASM_TYPE_FAIL, "Disabled by lack of floating point support");
 
     if (cx->compartment->debugMode())
         return Warn(cx, JSMSG_USE_ASM_TYPE_FAIL, "Disabled by debugger");
+
+#if JS_ASMJS
+    if (!EnsureAsmJSSignalHandlersInstalled())
+        return Warn(cx, JSMSG_USE_ASM_TYPE_FAIL, "Platform missing signal handler support");
 
     ScopedJSDeletePtr<AsmJSModule> module;
     if (!CheckModule(cx, ts, fn, &module))
@@ -4973,6 +4978,9 @@ js::CompileAsmJS(JSContext *cx, TokenStream &ts, ParseNode *fn, HandleScript scr
     script->asmJS.init(moduleObj);
 
     return Warn(cx, JSMSG_USE_ASM_TYPE_OK);
+#else
+    return Warn(cx, JSMSG_USE_ASM_TYPE_FAIL, "Platform not supported");
+#endif
 }
 
 JSBool
@@ -4980,8 +4988,12 @@ js::IsAsmJSCompilationAvailable(JSContext *cx, unsigned argc, Value *vp)
 {
     CallArgs args = CallArgsFromVp(argc, vp);
 
+#ifdef JS_ASMJS
     bool available = JSC::MacroAssembler().supportsFloatingPoint() &&
                      !cx->compartment->debugMode();
+#else
+    bool available = false;
+#endif
 
     args.rval().set(BooleanValue(available));
     return true;

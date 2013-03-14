@@ -17,7 +17,6 @@
 
 #include "gc/Barrier.h"
 #include "js/RootingAPI.h"
-#include "ion/AsmJS.h"
 #include "vm/Shape.h"
 
 ForwardDeclareJS(Script);
