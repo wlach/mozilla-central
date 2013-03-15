@@ -4514,7 +4514,7 @@ GenerateEntry(ModuleCompiler &m, const AsmJSModule::ExportedFunction &exportedFu
           case ABIArg::Stack:
             if (iter.mirType() == MIRType_Int32) {
                 masm.load32(src, scratch);
-                masm.store32(scratch, Operand(StackPointer, iter->offsetFromArgBase()));
+                masm.storePtr(scratch, Operand(StackPointer, iter->offsetFromArgBase()));
             } else {
                 JS_ASSERT(iter.mirType() == MIRType_Double);
                 masm.loadDouble(src, ScratchFloatReg);

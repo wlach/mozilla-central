@@ -500,6 +500,9 @@ class MacroAssemblerX64 : public MacroAssemblerX86Shared
     void storePtr(Register src, const Address &address) {
         movq(src, Operand(address));
     }
+    void storePtr(Register src, const Operand &dest) {
+        movq(src, dest);
+    }
     void storePtr(const Register &src, const AbsoluteAddress &address) {
         movq(ImmWord(address.addr), ScratchReg);
         movq(src, Operand(ScratchReg, 0x0));

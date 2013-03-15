@@ -503,6 +503,9 @@ class MacroAssemblerX86 : public MacroAssemblerX86Shared
     void storePtr(Register src, const Address &address) {
         movl(src, Operand(address));
     }
+    void storePtr(Register src, const Operand &dest) {
+        movl(src, dest);
+    }
     void storePtr(Register src, const AbsoluteAddress &address) {
         movl(src, Operand(address));
     }
