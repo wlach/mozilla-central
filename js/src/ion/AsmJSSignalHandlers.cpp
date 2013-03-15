@@ -11,7 +11,6 @@
 
 #include "ion/AsmJS.h"
 #include "ion/AsmJSModule.h"
-#include "ion/AsmJSSignalHandlers.h"
 #include "assembler/assembler/MacroAssembler.h"
 
 using namespace js;
@@ -71,8 +70,6 @@ struct SignalMutex
 
 bool SignalMutex::Lock::sHandlersInstalled = false;
 #endif
-
-// Platform-independent reusable functions:
 
 static AsmJSActivation *
 InnermostAsmJSActivation()
@@ -506,7 +503,7 @@ AsmJSFaultHandler(int signum, siginfo_t *info, void *context)
 #endif // JS_ASMJS
 
 bool
-js::EnsureAsmJSSignalHandlersInstalled()
+EnsureAsmJSSignalHandlersInstalled()
 {
 #if defined(JS_ASMJS)
     SignalMutex::Lock lock;

@@ -12,7 +12,6 @@
 
 #include "AsmJS.h"
 #include "AsmJSModule.h"
-#include "AsmJSSignalHandlers.h"
 
 using namespace js;
 using namespace js::ion;

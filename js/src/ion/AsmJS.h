@@ -45,9 +45,13 @@ CompileAsmJS(JSContext *cx, frontend::TokenStream &ts, frontend::ParseNode *fn, 
 // normally in the interpreter. The function returns 'false' only if a real JS
 // semantic error (OOM or exception thrown when executing GetProperty on the
 // arguments) is pending.
-// (Implemented in AsmJSLink.cpp.)
 extern bool
 LinkAsmJS(JSContext *cx, StackFrame *fp, MutableHandleValue rval);
+
+// Force any currently-executing asm.js code to call
+// js_HandleExecutionInterrupt.
+void
+TriggerOperationCallbackForAsmJSCode(JSRuntime *rt);
 
 // The JSRuntime maintains a stack of AsmJSModule activations. An "activation"
 // of module A is an initial call from outside A into a function inside A,

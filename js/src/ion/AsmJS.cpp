@@ -9,7 +9,6 @@
 #include "frontend/ParseNode.h"
 #include "ion/AsmJS.h"
 #include "ion/AsmJSModule.h"
-#include "ion/AsmJSSignalHandlers.h"
 
 #include "frontend/ParseNode-inl.h"
 
@@ -4952,6 +4951,9 @@ Warn(JSContext *cx, int code, const char *str = NULL)
     return JS_ReportErrorFlagsAndNumber(cx, JSREPORT_WARNING, js_GetErrorMessage,
                                         NULL, code, str);
 }
+
+extern bool
+EnsureAsmJSSignalHandlersInstalled();
 
 bool
 js::CompileAsmJS(JSContext *cx, TokenStream &ts, ParseNode *fn, HandleScript script)

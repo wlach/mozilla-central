@@ -56,7 +56,6 @@
 # include "methodjit/MethodJIT.h"
 #endif
 #include "gc/Marking.h"
-#include "ion/AsmJSSignalHandlers.h"
 #include "js/CharacterEncoding.h"
 #include "js/MemoryMetrics.h"
 #include "frontend/TokenStream.h"
