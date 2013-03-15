@@ -108,8 +108,8 @@ class CodeGeneratorX86Shared : public CodeGeneratorShared
     virtual bool visitGuardClass(LGuardClass *guard);
     virtual bool visitTruncateDToInt32(LTruncateDToInt32 *ins);
     virtual bool visitEffectiveAddress(LEffectiveAddress *ins);
-    virtual bool visitAsmDivOrMod(LAsmDivOrMod *ins);
-    virtual bool visitAsmPassStackArg(LAsmPassStackArg *ins);
+    virtual bool visitAsmJSDivOrMod(LAsmJSDivOrMod *ins);
+    virtual bool visitAsmJSPassStackArg(LAsmJSPassStackArg *ins);
 
     // Out of line visitors.
     bool visitOutOfLineBailout(OutOfLineBailout *ool);

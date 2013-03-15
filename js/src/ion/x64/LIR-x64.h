@@ -77,16 +77,16 @@ class LUInt32ToDouble : public LInstructionHelper<1, 1, 0>
     }
 };
 
-class LAsmLoadFuncPtr : public LInstructionHelper<1, 1, 1>
+class LAsmJSLoadFuncPtr : public LInstructionHelper<1, 1, 1>
 {
   public:
-    LIR_HEADER(AsmLoadFuncPtr);
-    LAsmLoadFuncPtr(const LAllocation &index, const LDefinition &temp) {
+    LIR_HEADER(AsmJSLoadFuncPtr);
+    LAsmJSLoadFuncPtr(const LAllocation &index, const LDefinition &temp) {
         setOperand(0, index);
         setTemp(0, temp);
     }
-    MAsmLoadFuncPtr *mir() const {
-        return mir_->toAsmLoadFuncPtr();
+    MAsmJSLoadFuncPtr *mir() const {
+        return mir_->toAsmJSLoadFuncPtr();
     }
     const LAllocation *index() {
         return getOperand(0);

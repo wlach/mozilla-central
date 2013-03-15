@@ -87,27 +87,27 @@ class MIRGenerator
         return info_->script() == NULL;
     }
 
-    uint32_t maxAsmStackArgBytes() const {
+    uint32_t maxAsmJSStackArgBytes() const {
         JS_ASSERT(compilingAsmJS());
-        return maxAsmStackArgBytes_;
+        return maxAsmJSStackArgBytes_;
     }
-    uint32_t resetAsmMaxStackArgBytes() {
+    uint32_t resetAsmJSMaxStackArgBytes() {
         JS_ASSERT(compilingAsmJS());
-        uint32_t old = maxAsmStackArgBytes_;
-        maxAsmStackArgBytes_ = 0;
+        uint32_t old = maxAsmJSStackArgBytes_;
+        maxAsmJSStackArgBytes_ = 0;
         return old;
     }
-    void setAsmMaxStackArgBytes(uint32_t n) {
+    void setAsmJSMaxStackArgBytes(uint32_t n) {
         JS_ASSERT(compilingAsmJS());
-        maxAsmStackArgBytes_ = n;
+        maxAsmJSStackArgBytes_ = n;
     }
-    void setPerformsAsmCall() {
+    void setPerformsAsmJSCall() {
         JS_ASSERT(compilingAsmJS());
-        performsAsmCall_ = true;
+        performsAsmJSCall_ = true;
     }
-    bool performsAsmCall() const {
+    bool performsAsmJSCall() const {
         JS_ASSERT(compilingAsmJS());
-        return performsAsmCall_;
+        return performsAsmJSCall_;
     }
     bool noteHeapAccess(AsmJSHeapAccess heapAccess) {
         return asmHeapAccesses_.append(heapAccess);
@@ -115,7 +115,7 @@ class MIRGenerator
     const Vector<AsmJSHeapAccess> &asmHeapAccesses() const {
         return asmHeapAccesses_;
     }
-    bool noteAsmGlobalAccess(unsigned offset, unsigned globalDataOffset) {
+    bool noteAsmJSGlobalAccess(unsigned offset, unsigned globalDataOffset) {
         return asmGlobalAccesses_.append(AsmJSGlobalAccess(offset, globalDataOffset));
     }
     const Vector<AsmJSGlobalAccess> &asmGlobalAccesses() const {
@@ -134,8 +134,8 @@ class MIRGenerator
     bool error_;
     size_t cancelBuild_;
 
-    uint32_t maxAsmStackArgBytes_;
-    bool performsAsmCall_;
+    uint32_t maxAsmJSStackArgBytes_;
+    bool performsAsmJSCall_;
     Vector<AsmJSHeapAccess> asmHeapAccesses_;
     Vector<AsmJSGlobalAccess> asmGlobalAccesses_;
 };

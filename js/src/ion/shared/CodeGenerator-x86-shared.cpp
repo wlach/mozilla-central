@@ -209,9 +209,9 @@ CodeGeneratorX86Shared::visitCompareDAndBranch(LCompareDAndBranch *comp)
 }
 
 bool
-CodeGeneratorX86Shared::visitAsmPassStackArg(LAsmPassStackArg *ins)
+CodeGeneratorX86Shared::visitAsmJSPassStackArg(LAsmJSPassStackArg *ins)
 {
-    const MAsmPassStackArg *mir = ins->mir();
+    const MAsmJSPassStackArg *mir = ins->mir();
     Operand dst(StackPointer, mir->spOffset());
     if (ins->arg()->isConstant()) {
         masm.mov(Imm32(ToInt32(ins->arg())), dst);
@@ -633,7 +633,7 @@ CodeGeneratorX86Shared::visitMulI(LMulI *ins)
 }
 
 bool
-CodeGeneratorX86Shared::visitAsmDivOrMod(LAsmDivOrMod *ins)
+CodeGeneratorX86Shared::visitAsmJSDivOrMod(LAsmJSDivOrMod *ins)
 {
     JS_ASSERT(ToRegister(ins->remainder()) == edx);
     JS_ASSERT(ToRegister(ins->lhs()) == eax);

@@ -490,7 +490,7 @@ class TokenStream
                                           va_list args);
 
     // asm.js reporter
-    void reportAsmError(ParseNode *pn, unsigned errorNumber, ...);
+    void reportAsmJSError(ParseNode *pn, unsigned errorNumber, ...);
 
   private:
     // These are private because they should only be called by the tokenizer

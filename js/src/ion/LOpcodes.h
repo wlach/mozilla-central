@@ -201,22 +201,22 @@
     _(InstanceOfV)                  \
     _(CallInstanceOf)               \
     _(InterruptCheck)               \
-    _(ParCheckInterrupt)            \
     _(FunctionBoundary)             \
-    _(AsmLoadHeap)                  \
-    _(AsmStoreHeap)                 \
-    _(AsmLoadGlobalVar)             \
-    _(AsmStoreGlobalVar)            \
-    _(AsmLoadFFIFunc)               \
-    _(AsmParameter)                 \
-    _(AsmReturn)                    \
-    _(AsmVoidReturn)                \
-    _(AsmPassStackArg)              \
-    _(AsmCall)                      \
-    _(AsmCheckOverRecursed)         \
     _(GetDOMProperty)               \
     _(SetDOMProperty)               \
-    _(CallDOMNative)
+    _(CallDOMNative)                \
+    _(AsmJSLoadHeap)                \
+    _(AsmJSStoreHeap)               \
+    _(AsmJSLoadGlobalVar)           \
+    _(AsmJSStoreGlobalVar)          \
+    _(AsmJSLoadFFIFunc)             \
+    _(AsmJSParameter)               \
+    _(AsmJSReturn)                  \
+    _(AsmJSVoidReturn)              \
+    _(AsmJSPassStackArg)            \
+    _(AsmJSCall)                    \
+    _(AsmJSCheckOverRecursed)       \
+    _(ParCheckInterrupt)
 
 #if defined(JS_CPU_X86)
 # include "x86/LOpcodes-x86.h"

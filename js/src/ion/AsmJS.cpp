@@ -1092,7 +1092,7 @@ class ModuleCompiler
 
     ~ModuleCompiler() {
         if (errorString_)
-            tokenStream_.reportAsmError(errorNode_, JSMSG_USE_ASM_TYPE_FAIL, errorString_);
+            tokenStream_.reportAsmJSError(errorNode_, JSMSG_USE_ASM_TYPE_FAIL, errorString_);
 
         // Avoid spurious Label assertions on compilation failure.
         if (!stackOverflowLabel_.bound())
@@ -1413,7 +1413,7 @@ class ModuleCompiler
         // Global accesses in function bodies
         for (unsigned i = 0; i < globalAccesses_.length(); i++) {
             AsmJSGlobalAccess access = globalAccesses_[i];
-            masm_.patchAsmGlobalAccess(access.offset, code, codeBytes, access.globalDataOffset);
+            masm_.patchAsmJSGlobalAccess(access.offset, code, codeBytes, access.globalDataOffset);
         }
 
         // The AsmJSHeapAccess offsets need to be updated to reflect the
@@ -1506,10 +1506,10 @@ class FunctionCompiler
         if (!newBlock(/* pred = */ NULL, &curBlock_))
             return false;
 
-        curBlock_->add(MAsmCheckOverRecursed::New(&m_.stackOverflowLabel()));
+        curBlock_->add(MAsmJSCheckOverRecursed::New(&m_.stackOverflowLabel()));
 
         for (ABIArgIter i(func_.argMIRTypes()); !i.done(); i++) {
-            MAsmParameter *ins = MAsmParameter::New(*i, i.mirType());
+            MAsmJSParameter *ins = MAsmJSParameter::New(*i, i.mirType());
             curBlock_->add(ins);
             curBlock_->initSlot(compileInfo_.localSlot(i.index()), ins);
         }
@@ -1600,7 +1600,7 @@ class FunctionCompiler
     {
         if (!curBlock_)
             return NULL;
-        T *ins = T::NewAsm(op);
+        T *ins = T::NewAsmJS(op);
         curBlock_->add(ins);
         return ins;
     }
@@ -1610,7 +1610,7 @@ class FunctionCompiler
     {
         if (!curBlock_)
             return NULL;
-        T *ins = T::NewAsm(op, type);
+        T *ins = T::NewAsmJS(op, type);
         curBlock_->add(ins);
         return ins;
     }
@@ -1630,7 +1630,7 @@ class FunctionCompiler
     {
         if (!curBlock_)
             return NULL;
-        T *ins = T::NewAsm(lhs, rhs, type);
+        T *ins = T::NewAsmJS(lhs, rhs, type);
         curBlock_->add(ins);
         return ins;
     }
@@ -1649,7 +1649,7 @@ class FunctionCompiler
     {
         if (!curBlock_)
             return NULL;
-        T *ins = T::NewAsm(lhs, rhs);
+        T *ins = T::NewAsmJS(lhs, rhs);
         curBlock_->add(ins);
         return ins;
     }
@@ -1659,7 +1659,7 @@ class FunctionCompiler
     {
         if (!curBlock_)
             return NULL;
-        T *ins = T::NewAsm(op);
+        T *ins = T::NewAsmJS(op);
         curBlock_->add(ins);
         return ins;
     }
@@ -1668,7 +1668,7 @@ class FunctionCompiler
     {
         if (!curBlock_)
             return NULL;
-        MCompare *ins = MCompare::NewAsm(lhs, rhs, op, type);
+        MCompare *ins = MCompare::NewAsmJS(lhs, rhs, op, type);
         curBlock_->add(ins);
         return ins;
     }
@@ -1684,7 +1684,7 @@ class FunctionCompiler
     {
         if (!curBlock_)
             return NULL;
-        MAsmLoadHeap *load = MAsmLoadHeap::New(vt, ptr);
+        MAsmJSLoadHeap *load = MAsmJSLoadHeap::New(vt, ptr);
         curBlock_->add(load);
         return load;
     }
@@ -1693,7 +1693,7 @@ class FunctionCompiler
     {
         if (!curBlock_)
             return;
-        curBlock_->add(MAsmStoreHeap::New(vt, ptr, v));
+        curBlock_->add(MAsmJSStoreHeap::New(vt, ptr, v));
     }
 
     MDefinition *loadGlobalVar(const ModuleCompiler::Global &global)
@@ -1702,7 +1702,7 @@ class FunctionCompiler
             return NULL;
         MIRType type = global.varType().toMIRType();
         unsigned globalDataOffset = module().globalVarIndexToGlobalDataOffset(global.varIndex());
-        MAsmLoadGlobalVar *load = MAsmLoadGlobalVar::New(type, globalDataOffset);
+        MAsmJSLoadGlobalVar *load = MAsmJSLoadGlobalVar::New(type, globalDataOffset);
         curBlock_->add(load);
         return load;
     }
@@ -1712,7 +1712,7 @@ class FunctionCompiler
         if (!curBlock_)
             return;
         unsigned globalDataOffset = module().globalVarIndexToGlobalDataOffset(global.varIndex());
-        curBlock_->add(MAsmStoreGlobalVar::New(globalDataOffset, v));
+        curBlock_->add(MAsmJSStoreGlobalVar::New(globalDataOffset, v));
     }
 
     /***************************************************************** Calls */
@@ -1723,7 +1723,7 @@ class FunctionCompiler
     // Since we do not use IonMonkey's MPrepareCall/MPassArg/MCall, we must
     // manually accumulate, for the entire function, the maximum required stack
     // space for argument passing. (This is passed to the CodeGenerator via
-    // MIRGenerator::maxAsmStackArgBytes.) Naively, this would just be the
+    // MIRGenerator::maxAsmJSStackArgBytes.) Naively, this would just be the
     // maximum of the stack space required for each individual call (as
     // determined by the call ABI). However, as an optimization, arguments are
     // stored to the stack immediately after evaluation (to decrease live
@@ -1741,8 +1741,8 @@ class FunctionCompiler
         uint32_t maxChildStackBytes_;
         uint32_t spIncrement_;
         Vector<Type, 8> types_;
-        MAsmCall::Args regArgs_;
-        Vector<MAsmPassStackArg*> stackArgs_;
+        MAsmJSCall::Args regArgs_;
+        Vector<MAsmJSPassStackArg*> stackArgs_;
         bool childClobbers_;
 
         friend class FunctionCompiler;
@@ -1769,7 +1769,7 @@ class FunctionCompiler
     {
         if (!curBlock_)
             return;
-        args->prevMaxStackBytes_ = mirGen_.resetAsmMaxStackArgBytes();
+        args->prevMaxStackBytes_ = mirGen_.resetAsmJSMaxStackArgBytes();
     }
 
     bool passArg(MDefinition *argDef, Type type, Args *args)
@@ -1780,19 +1780,19 @@ class FunctionCompiler
         if (!curBlock_)
             return true;
 
-        uint32_t childStackBytes = mirGen_.resetAsmMaxStackArgBytes();
+        uint32_t childStackBytes = mirGen_.resetAsmJSMaxStackArgBytes();
         args->maxChildStackBytes_ = Max(args->maxChildStackBytes_, childStackBytes);
         if (childStackBytes > 0 && !args->stackArgs_.empty())
             args->childClobbers_ = true;
 
         ABIArg arg = args->abi_.next(type.toMIRType());
         if (arg.kind() == ABIArg::Stack) {
-            MAsmPassStackArg *mir = MAsmPassStackArg::New(arg.offsetFromArgBase(), argDef);
+            MAsmJSPassStackArg *mir = MAsmJSPassStackArg::New(arg.offsetFromArgBase(), argDef);
             curBlock_->add(mir);
             if (!args->stackArgs_.append(mir))
                 return false;
         } else {
-            if (!args->regArgs_.append(MAsmCall::Arg(arg.reg(), argDef)))
+            if (!args->regArgs_.append(MAsmJSCall::Arg(arg.reg(), argDef)))
                 return false;
         }
         return true;
@@ -1815,17 +1815,17 @@ class FunctionCompiler
             newStackBytes = Max(args->prevMaxStackBytes_,
                                 Max(args->maxChildStackBytes_, parentStackBytes));
         }
-        mirGen_.setAsmMaxStackArgBytes(newStackBytes);
+        mirGen_.setAsmJSMaxStackArgBytes(newStackBytes);
     }
 
   private:
-    bool call(MAsmCall::Callee callee, const Args &args, MIRType returnType, MDefinition **def)
+    bool call(MAsmJSCall::Callee callee, const Args &args, MIRType returnType, MDefinition **def)
     {
         if (!curBlock_) {
             *def = NULL;
             return true;
         }
-        MAsmCall *ins = MAsmCall::New(callee, args.regArgs_, returnType, args.spIncrement_);
+        MAsmJSCall *ins = MAsmJSCall::New(callee, args.regArgs_, returnType, args.spIncrement_);
         if (!ins)
             return false;
         curBlock_->add(ins);
@@ -1837,7 +1837,7 @@ class FunctionCompiler
     bool internalCall(const ModuleCompiler::Func &func, const Args &args, MDefinition **def)
     {
         MIRType returnType = func.returnType().toMIRType();
-        return call(MAsmCall::Callee(func.codeLabel()), args, returnType, def);
+        return call(MAsmJSCall::Callee(func.codeLabel()), args, returnType, def);
     }
 
     bool funcPtrCall(const ModuleCompiler::FuncPtrTable &funcPtrTable, MDefinition *index,
@@ -1850,14 +1850,14 @@ class FunctionCompiler
 
         MConstant *mask = MConstant::New(Int32Value(funcPtrTable.mask()));
         curBlock_->add(mask);
-        MBitAnd *maskedIndex = MBitAnd::NewAsm(index, mask);
+        MBitAnd *maskedIndex = MBitAnd::NewAsmJS(index, mask);
         curBlock_->add(maskedIndex);
         unsigned globalDataOffset = module().funcPtrIndexToGlobalDataOffset(funcPtrTable.baseIndex());
-        MAsmLoadFuncPtr *ptrFun = MAsmLoadFuncPtr::New(globalDataOffset, maskedIndex);
+        MAsmJSLoadFuncPtr *ptrFun = MAsmJSLoadFuncPtr::New(globalDataOffset, maskedIndex);
         curBlock_->add(ptrFun);
 
         MIRType returnType = funcPtrTable.sig().returnType().toMIRType();
-        return call(MAsmCall::Callee(ptrFun), args, returnType, def);
+        return call(MAsmJSCall::Callee(ptrFun), args, returnType, def);
     }
 
     bool ffiCall(unsigned exitIndex, const Args &args, MIRType returnType, MDefinition **def)
@@ -1870,15 +1870,15 @@ class FunctionCompiler
         JS_STATIC_ASSERT(offsetof(AsmJSModule::ExitDatum, exit) == 0);
         unsigned globalDataOffset = module().exitIndexToGlobalDataOffset(exitIndex);
 
-        MAsmLoadFFIFunc *ptrFun = MAsmLoadFFIFunc::New(globalDataOffset);
+        MAsmJSLoadFFIFunc *ptrFun = MAsmJSLoadFFIFunc::New(globalDataOffset);
         curBlock_->add(ptrFun);
 
-        return call(MAsmCall::Callee(ptrFun), args, returnType, def);
+        return call(MAsmJSCall::Callee(ptrFun), args, returnType, def);
     }
 
     bool builtinCall(void *builtin, const Args &args, MIRType returnType, MDefinition **def)
     {
-        return call(MAsmCall::Callee(builtin), args, returnType, def);
+        return call(MAsmJSCall::Callee(builtin), args, returnType, def);
     }
 
     /*********************************************** Control flow generation */
@@ -1887,7 +1887,7 @@ class FunctionCompiler
     {
         if (!curBlock_)
             return;
-        MAsmReturn *ins = MAsmReturn::New(expr);
+        MAsmJSReturn *ins = MAsmJSReturn::New(expr);
         curBlock_->end(ins);
         curBlock_ = NULL;
     }
@@ -1896,7 +1896,7 @@ class FunctionCompiler
     {
         if (!curBlock_)
             return;
-        MAsmVoidReturn *ins = MAsmVoidReturn::New();
+        MAsmJSVoidReturn *ins = MAsmJSVoidReturn::New();
         curBlock_->end(ins);
         curBlock_ = NULL;
     }
@@ -2313,7 +2313,7 @@ AsmJSModuleObject_trace(JSTracer *trc, JSRawObject obj)
 }
 
 static JSObject *
-NewAsmModuleObject(JSContext *cx, ScopedJSDeletePtr<AsmJSModule> *module)
+NewAsmJSModuleObject(JSContext *cx, ScopedJSDeletePtr<AsmJSModule> *module)
 {
     JSObject *obj = NewObjectWithGivenProto(cx, &AsmJSModuleClass, NULL, NULL);
     if (!obj)
@@ -3415,7 +3415,7 @@ CheckPos(FunctionCompiler &f, ParseNode *pos, MDefinition **def, Type *type)
     if (operandType.isSigned())
         *def = f.unary<MToDouble>(operandDef);
     else if (operandType.isUnsigned())
-        *def = f.unary<MAsmUnsignedToDouble>(operandDef);
+        *def = f.unary<MAsmJSUnsignedToDouble>(operandDef);
     else if (operandType.isDoublish())
         *def = operandDef;
     else
@@ -3456,13 +3456,13 @@ CheckNeg(FunctionCompiler &f, ParseNode *expr, MDefinition **def, Type *type)
         return false;
 
     if (operandType.isInt()) {
-        *def = f.unary<MAsmNeg>(operandDef, MIRType_Int32);
+        *def = f.unary<MAsmJSNeg>(operandDef, MIRType_Int32);
         *type = Type::Intish;
         return true;
     }
 
     if (operandType.isDoublish()) {
-        *def = f.unary<MAsmNeg>(operandDef, MIRType_Double);
+        *def = f.unary<MAsmJSNeg>(operandDef, MIRType_Double);
         *type = Type::Double;
         return true;
     }
@@ -3710,10 +3710,10 @@ CheckDivOrMod(FunctionCompiler &f, ParseNode *expr, MDefinition **def, Type *typ
 
     if (lhsType.isUnsigned() && rhsType.isUnsigned()) {
         if (expr->isKind(PNK_DIV)) {
-            *def = f.binary<MAsmUDiv>(lhsDef, rhsDef);
+            *def = f.binary<MAsmJSUDiv>(lhsDef, rhsDef);
             *type = Type::Intish;
         } else {
-            *def = f.binary<MAsmUMod>(lhsDef, rhsDef);
+            *def = f.binary<MAsmJSUMod>(lhsDef, rhsDef);
             *type = Type::Int;
         }
         return true;
@@ -4976,7 +4976,7 @@ js::CompileAsmJS(JSContext *cx, TokenStream &ts, ParseNode *fn, HandleScript scr
     if (!CheckModule(cx, ts, fn, &module))
         return !cx->isExceptionPending();
 
-    RootedObject moduleObj(cx, NewAsmModuleObject(cx, &module));
+    RootedObject moduleObj(cx, NewAsmJSModuleObject(cx, &module));
     if (!moduleObj)
         return false;
 

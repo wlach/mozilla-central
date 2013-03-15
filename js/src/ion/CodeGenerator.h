@@ -45,7 +45,7 @@ class CodeGenerator : public CodeGeneratorSpecific
 
   public:
     bool generate();
-    bool generateAsm();
+    bool generateAsmJS();
     bool link();
 
     bool visitLabel(LLabel *lir);
@@ -211,14 +211,14 @@ class CodeGenerator : public CodeGeneratorSpecific
     bool visitSetDOMProperty(LSetDOMProperty *lir);
     bool visitCallDOMNative(LCallDOMNative *lir);
     bool visitCallGetIntrinsicValue(LCallGetIntrinsicValue *lir);
-    bool visitAsmCall(LAsmCall *lir);
-    bool visitAsmParameter(LAsmParameter *lir);
-    bool visitAsmReturn(LAsmReturn *ret);
-    bool visitAsmVoidReturn(LAsmVoidReturn *ret);
+    bool visitAsmJSCall(LAsmJSCall *lir);
+    bool visitAsmJSParameter(LAsmJSParameter *lir);
+    bool visitAsmJSReturn(LAsmJSReturn *ret);
+    bool visitAsmJSVoidReturn(LAsmJSVoidReturn *ret);
 
     bool visitCheckOverRecursed(LCheckOverRecursed *lir);
     bool visitCheckOverRecursedFailure(CheckOverRecursedFailure *ool);
-    bool visitAsmCheckOverRecursed(LAsmCheckOverRecursed *lir);
+    bool visitAsmJSCheckOverRecursed(LAsmJSCheckOverRecursed *lir);
 
     bool visitParCheckOverRecursed(LParCheckOverRecursed *lir);
     bool visitParCheckOverRecursedFailure(ParCheckOverRecursedFailure *ool);

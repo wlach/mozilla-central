@@ -106,7 +106,7 @@ LIRGeneratorX86Shared::lowerModI(MMod *mod)
 }
 
 bool
-LIRGeneratorX86Shared::visitAsmNeg(MAsmNeg *ins)
+LIRGeneratorX86Shared::visitAsmJSNeg(MAsmJSNeg *ins)
 {
     if (ins->type() == MIRType_Int32)
         return defineReuseInput(new LNegI(useRegisterAtStart(ins->input())), ins, 0);
@@ -116,20 +116,20 @@ LIRGeneratorX86Shared::visitAsmNeg(MAsmNeg *ins)
 }
 
 bool
-LIRGeneratorX86Shared::visitAsmUDiv(MAsmUDiv *div)
+LIRGeneratorX86Shared::visitAsmJSUDiv(MAsmJSUDiv *div)
 {
-    LAsmDivOrMod *lir = new LAsmDivOrMod(useFixed(div->lhs(), eax),
-                                         useRegister(div->rhs()),
-                                         tempFixed(edx));
+    LAsmJSDivOrMod *lir = new LAsmJSDivOrMod(useFixed(div->lhs(), eax),
+                                             useRegister(div->rhs()),
+                                             tempFixed(edx));
     return defineFixed(lir, div, LAllocation(AnyRegister(eax)));
 }
 
 bool
-LIRGeneratorX86Shared::visitAsmUMod(MAsmUMod *mod)
+LIRGeneratorX86Shared::visitAsmJSUMod(MAsmJSUMod *mod)
 {
-    LAsmDivOrMod *lir = new LAsmDivOrMod(useFixed(mod->lhs(), eax),
-                                         useRegister(mod->rhs()),
-                                         tempFixed(edx));
+    LAsmJSDivOrMod *lir = new LAsmJSDivOrMod(useFixed(mod->lhs(), eax),
+                                             useRegister(mod->rhs()),
+                                             tempFixed(edx));
     return defineFixed(lir, mod, LAllocation(AnyRegister(edx)));
 }
 

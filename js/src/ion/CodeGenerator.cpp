@@ -4340,11 +4340,11 @@ CodeGenerator::visitGetArgument(LGetArgument *lir)
 }
 
 bool
-CodeGenerator::generateAsm()
+CodeGenerator::generateAsmJS()
 {
     // The caller (either another asm.js function or the external-entry
     // trampoline) has placed all arguments in registers and on the stack
-    // according to the system ABI. The MAsmParameters which represent these
+    // according to the system ABI. The MAsmJSParameters which represent these
     // parameters have been useFixed()ed to these ABI-specified positions.
     // Thus, there is nothing special to do in the prologue except (possibly)
     // bump the stack.
@@ -5736,9 +5736,9 @@ CodeGenerator::visitOutOfLineParallelAbort(OutOfLineParallelAbort *ool)
 }
 
 bool
-CodeGenerator::visitAsmCall(LAsmCall *ins)
+CodeGenerator::visitAsmJSCall(LAsmJSCall *ins)
 {
-    MAsmCall *mir = ins->mir();
+    MAsmJSCall *mir = ins->mir();
 
     if (mir->spIncrement())
         masm.freeStack(mir->spIncrement());
@@ -5752,15 +5752,15 @@ CodeGenerator::visitAsmCall(LAsmCall *ins)
     masm.bind(&ok);
 #endif
 
-    MAsmCall::Callee callee = mir->callee();
+    MAsmJSCall::Callee callee = mir->callee();
     switch (callee.which()) {
-      case MAsmCall::Callee::Internal:
+      case MAsmJSCall::Callee::Internal:
         masm.call(callee.internal());
         break;
-      case MAsmCall::Callee::Dynamic:
+      case MAsmJSCall::Callee::Dynamic:
         masm.call(ToRegister(ins->getOperand(mir->dynamicCalleeOperandIndex())));
         break;
-      case MAsmCall::Callee::Builtin:
+      case MAsmJSCall::Callee::Builtin:
         masm.call(ImmWord(callee.builtin()));
         break;
     }
@@ -5768,27 +5768,18 @@ CodeGenerator::visitAsmCall(LAsmCall *ins)
     if (mir->spIncrement())
         masm.reserveStack(mir->spIncrement());
 
-    postAsmCall(ins);
+    postAsmJSCall(ins);
     return true;
 }
 
 bool
-CodeGenerator::visitAsmParameter(LAsmParameter *lir)
+CodeGenerator::visitAsmJSParameter(LAsmJSParameter *lir)
 {
     return true;
 }
 
 bool
-CodeGenerator::visitAsmReturn(LAsmReturn *lir)
-{
-    // Don't emit a jump to the return label if this is the last block.
-    if (current->mir() != *gen->graph().poBegin())
-        masm.jump(returnLabel_);
-    return true;
-}
-
-bool
-CodeGenerator::visitAsmVoidReturn(LAsmVoidReturn *lir)
+CodeGenerator::visitAsmJSReturn(LAsmJSReturn *lir)
 {
     // Don't emit a jump to the return label if this is the last block.
     if (current->mir() != *gen->graph().poBegin())
@@ -5797,7 +5788,16 @@ CodeGenerator::visitAsmVoidReturn(LAsmVoidReturn *lir)
 }
 
 bool
-CodeGenerator::visitAsmCheckOverRecursed(LAsmCheckOverRecursed *lir)
+CodeGenerator::visitAsmJSVoidReturn(LAsmJSVoidReturn *lir)
+{
+    // Don't emit a jump to the return label if this is the last block.
+    if (current->mir() != *gen->graph().poBegin())
+        masm.jump(returnLabel_);
+    return true;
+}
+
+bool
+CodeGenerator::visitAsmJSCheckOverRecursed(LAsmJSCheckOverRecursed *lir)
 {
     uintptr_t *limitAddr = &gen->compartment->rt->mainThread.nativeStackLimit;
     masm.branchPtr(Assembler::AboveOrEqual,

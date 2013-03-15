@@ -1074,7 +1074,7 @@ GenerateLIR(MIRGenerator *mir, MacroAssembler *maybeMasm = NULL)
     }
 
     if (mir->compilingAsmJS()) {
-        if (!codegen->generateAsm()) {
+        if (!codegen->generateAsmJS()) {
             js_delete(codegen);
             return NULL;
         }

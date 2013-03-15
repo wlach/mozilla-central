@@ -29,9 +29,9 @@ class LIRGeneratorX86Shared : public LIRGeneratorShared
     bool visitGuardShape(MGuardShape *ins);
     bool visitPowHalf(MPowHalf *ins);
     bool visitConstant(MConstant *ins);
-    bool visitAsmNeg(MAsmNeg *ins);
-    bool visitAsmUDiv(MAsmUDiv *ins);
-    bool visitAsmUMod(MAsmUMod *ins);
+    bool visitAsmJSNeg(MAsmJSNeg *ins);
+    bool visitAsmJSUDiv(MAsmJSUDiv *ins);
+    bool visitAsmJSUMod(MAsmJSUMod *ins);
     bool lowerMulI(MMul *mul, MDefinition *lhs, MDefinition *rhs);
     bool lowerDivI(MDiv *div);
     bool lowerModI(MMod *mod);

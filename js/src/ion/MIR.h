@@ -1702,7 +1702,7 @@ class MCompare
   public:
     INSTRUCTION_HEADER(Compare)
     static MCompare *New(MDefinition *left, MDefinition *right, JSOp op);
-    static MCompare *NewAsm(MDefinition *left, MDefinition *right, JSOp op, CompareType compareType);
+    static MCompare *NewAsmJS(MDefinition *left, MDefinition *right, JSOp op, CompareType compareType);
 
     bool tryFold(bool *result);
     bool evaluateConstantOperands(bool *result);
@@ -2145,7 +2145,7 @@ class MToDouble
     static MToDouble *New(MDefinition *def) {
         return new MToDouble(def);
     }
-    static MToDouble *NewAsm(MDefinition *def) {
+    static MToDouble *NewAsmJS(MDefinition *def) {
         return new MToDouble(def);
     }
 
@@ -2170,10 +2170,10 @@ class MToDouble
 };
 
 // Converts a uint32 to a double (coming from asm.js).
-class MAsmUnsignedToDouble
+class MAsmJSUnsignedToDouble
   : public MUnaryInstruction
 {
-    MAsmUnsignedToDouble(MDefinition *def)
+    MAsmJSUnsignedToDouble(MDefinition *def)
       : MUnaryInstruction(def)
     {
         setResultType(MIRType_Double);
@@ -2181,9 +2181,9 @@ class MAsmUnsignedToDouble
     }
 
   public:
-    INSTRUCTION_HEADER(AsmUnsignedToDouble);
-    static MAsmUnsignedToDouble *NewAsm(MDefinition *def) {
-        return new MAsmUnsignedToDouble(def);
+    INSTRUCTION_HEADER(AsmJSUnsignedToDouble);
+    static MAsmJSUnsignedToDouble *NewAsmJS(MDefinition *def) {
+        return new MAsmJSUnsignedToDouble(def);
     }
 
     MDefinition *foldsTo(bool useValueNumbers);
@@ -2262,7 +2262,7 @@ class MTruncateToInt32 : public MUnaryInstruction
     static MTruncateToInt32 *New(MDefinition *def) {
         return new MTruncateToInt32(def);
     }
-    static MTruncateToInt32 *NewAsm(MDefinition *def) {
+    static MTruncateToInt32 *NewAsmJS(MDefinition *def) {
         return new MTruncateToInt32(def);
     }
 
@@ -2330,7 +2330,7 @@ class MBitNot
   public:
     INSTRUCTION_HEADER(BitNot)
     static MBitNot *New(MDefinition *input);
-    static MBitNot *NewAsm(MDefinition *input);
+    static MBitNot *NewAsmJS(MDefinition *input);
 
     TypePolicy *typePolicy() {
         return this;
@@ -2457,7 +2457,7 @@ class MBitAnd : public MBinaryBitwiseInstruction
   public:
     INSTRUCTION_HEADER(BitAnd)
     static MBitAnd *New(MDefinition *left, MDefinition *right);
-    static MBitAnd *NewAsm(MDefinition *left, MDefinition *right);
+    static MBitAnd *NewAsmJS(MDefinition *left, MDefinition *right);
 
     MDefinition *foldIfZero(size_t operand) {
         return getOperand(operand); // 0 & x => 0;
@@ -2480,7 +2480,7 @@ class MBitOr : public MBinaryBitwiseInstruction
   public:
     INSTRUCTION_HEADER(BitOr)
     static MBitOr *New(MDefinition *left, MDefinition *right);
-    static MBitOr *NewAsm(MDefinition *left, MDefinition *right);
+    static MBitOr *NewAsmJS(MDefinition *left, MDefinition *right);
 
     MDefinition *foldIfZero(size_t operand) {
         return getOperand(1 - operand); // 0 | x => x, so if ith is 0, return (1-i)th
@@ -2502,7 +2502,7 @@ class MBitXor : public MBinaryBitwiseInstruction
   public:
     INSTRUCTION_HEADER(BitXor)
     static MBitXor *New(MDefinition *left, MDefinition *right);
-    static MBitXor *NewAsm(MDefinition *left, MDefinition *right);
+    static MBitXor *NewAsmJS(MDefinition *left, MDefinition *right);
 
     MDefinition *foldIfZero(size_t operand) {
         return getOperand(1 - operand); // 0 ^ x => x
@@ -2542,7 +2542,7 @@ class MLsh : public MShiftInstruction
   public:
     INSTRUCTION_HEADER(Lsh)
     static MLsh *New(MDefinition *left, MDefinition *right);
-    static MLsh *NewAsm(MDefinition *left, MDefinition *right);
+    static MLsh *NewAsmJS(MDefinition *left, MDefinition *right);
 
     MDefinition *foldIfZero(size_t operand) {
         // 0 << x => 0
@@ -2562,7 +2562,7 @@ class MRsh : public MShiftInstruction
   public:
     INSTRUCTION_HEADER(Rsh)
     static MRsh *New(MDefinition *left, MDefinition *right);
-    static MRsh *NewAsm(MDefinition *left, MDefinition *right);
+    static MRsh *NewAsmJS(MDefinition *left, MDefinition *right);
 
     MDefinition *foldIfZero(size_t operand) {
         // 0 >> x => 0
@@ -2584,7 +2584,7 @@ class MUrsh : public MShiftInstruction
   public:
     INSTRUCTION_HEADER(Ursh)
     static MUrsh *New(MDefinition *left, MDefinition *right);
-    static MUrsh *NewAsm(MDefinition *left, MDefinition *right);
+    static MUrsh *NewAsmJS(MDefinition *left, MDefinition *right);
 
     MDefinition *foldIfZero(size_t operand) {
         // 0 >>> x => 0
@@ -2744,7 +2744,7 @@ class MAbs
     static MAbs *New(MDefinition *num, MIRType type) {
         return new MAbs(num, type);
     }
-    static MAbs *NewAsm(MDefinition *num, MIRType type) {
+    static MAbs *NewAsmJS(MDefinition *num, MIRType type) {
         MAbs *ins = new MAbs(num, type);
         ins->implicitTruncate_ = true;
         return ins;
@@ -2956,7 +2956,7 @@ class MAdd : public MBinaryArithInstruction
         return new MAdd(left, right);
     }
 
-    static MAdd *NewAsm(MDefinition *left, MDefinition *right, MIRType type) {
+    static MAdd *NewAsmJS(MDefinition *left, MDefinition *right, MIRType type) {
         MAdd *add = new MAdd(left, right);
         add->specialization_ = type;
         add->setResultType(type);
@@ -2989,7 +2989,7 @@ class MSub : public MBinaryArithInstruction
     static MSub *New(MDefinition *left, MDefinition *right) {
         return new MSub(left, right);
     }
-    static MSub *NewAsm(MDefinition *left, MDefinition *right, MIRType type) {
+    static MSub *NewAsmJS(MDefinition *left, MDefinition *right, MIRType type) {
         MSub *sub = new MSub(left, right);
         sub->specialization_ = type;
         sub->setResultType(type);
@@ -3105,7 +3105,7 @@ class MDiv : public MBinaryArithInstruction
     static MDiv *New(MDefinition *left, MDefinition *right, MIRType type) {
         return new MDiv(left, right, type);
     }
-    static MDiv *NewAsm(MDefinition *left, MDefinition *right, MIRType type) {
+    static MDiv *NewAsmJS(MDefinition *left, MDefinition *right, MIRType type) {
         MDiv *div = new MDiv(left, right, type);
         if (type == MIRType_Int32)
             div->setTruncated(true);
@@ -3155,7 +3155,7 @@ class MMod : public MBinaryArithInstruction
     static MMod *New(MDefinition *left, MDefinition *right) {
         return new MMod(left, right, MIRType_Value);
     }
-    static MMod *NewAsm(MDefinition *left, MDefinition *right, MIRType type) {
+    static MMod *NewAsmJS(MDefinition *left, MDefinition *right, MIRType type) {
         MMod *mod = new MMod(left, right, type);
         if (type == MIRType_Int32)
             mod->setTruncated(true);
@@ -4048,7 +4048,7 @@ class MNot
     static MNot *New(MDefinition *elements) {
         return new MNot(elements);
     }
-    static MNot *NewAsm(MDefinition *elements) {
+    static MNot *NewAsmJS(MDefinition *elements) {
         MNot *ins = new MNot(elements);
         ins->setResultType(MIRType_Int32);
         return ins;
@@ -6796,9 +6796,9 @@ class FlattenedMResumePointIter
     }
 };
 
-class MAsmNeg : public MUnaryInstruction
+class MAsmJSNeg : public MUnaryInstruction
 {
-    MAsmNeg(MDefinition *op, MIRType type)
+    MAsmJSNeg(MDefinition *op, MIRType type)
       : MUnaryInstruction(op)
     {
         setResultType(type);
@@ -6806,9 +6806,9 @@ class MAsmNeg : public MUnaryInstruction
     }
 
   public:
-    INSTRUCTION_HEADER(AsmNeg);
-    static MAsmNeg *NewAsm(MDefinition *op, MIRType type) {
-        return new MAsmNeg(op, type);
+    INSTRUCTION_HEADER(AsmJSNeg);
+    static MAsmJSNeg *NewAsmJS(MDefinition *op, MIRType type) {
+        return new MAsmJSNeg(op, type);
     }
 
     MDefinition *input() const {
@@ -6816,9 +6816,9 @@ class MAsmNeg : public MUnaryInstruction
     }
 };
 
-class MAsmUDiv : public MBinaryInstruction
+class MAsmJSUDiv : public MBinaryInstruction
 {
-    MAsmUDiv(MDefinition *left, MDefinition *right)
+    MAsmJSUDiv(MDefinition *left, MDefinition *right)
       : MBinaryInstruction(left, right)
     {
         setResultType(MIRType_Int32);
@@ -6826,15 +6826,15 @@ class MAsmUDiv : public MBinaryInstruction
     }
 
   public:
-    INSTRUCTION_HEADER(AsmUDiv);
-    static MAsmUDiv *New(MDefinition *left, MDefinition *right) {
-        return new MAsmUDiv(left, right);
+    INSTRUCTION_HEADER(AsmJSUDiv);
+    static MAsmJSUDiv *New(MDefinition *left, MDefinition *right) {
+        return new MAsmJSUDiv(left, right);
     }
 };
 
-class MAsmUMod : public MBinaryInstruction
+class MAsmJSUMod : public MBinaryInstruction
 {
-    MAsmUMod(MDefinition *left, MDefinition *right)
+    MAsmJSUMod(MDefinition *left, MDefinition *right)
        : MBinaryInstruction(left, right)
     {
         setResultType(MIRType_Int32);
@@ -6842,15 +6842,15 @@ class MAsmUMod : public MBinaryInstruction
     }
 
   public:
-    INSTRUCTION_HEADER(AsmUMod);
-    static MAsmUMod *New(MDefinition *left, MDefinition *right) {
-        return new MAsmUMod(left, right);
+    INSTRUCTION_HEADER(AsmJSUMod);
+    static MAsmJSUMod *New(MDefinition *left, MDefinition *right) {
+        return new MAsmJSUMod(left, right);
     }
 };
 
-class MAsmLoadHeap : public MUnaryInstruction
+class MAsmJSLoadHeap : public MUnaryInstruction
 {
-    MAsmLoadHeap(ArrayBufferView::ViewType vt, MDefinition *ptr)
+    MAsmJSLoadHeap(ArrayBufferView::ViewType vt, MDefinition *ptr)
       : MUnaryInstruction(ptr), viewType_(vt)
     {
         if (vt == ArrayBufferView::TYPE_FLOAT32 || vt == ArrayBufferView::TYPE_FLOAT64)
@@ -6862,29 +6862,29 @@ class MAsmLoadHeap : public MUnaryInstruction
     ArrayBufferView::ViewType viewType_;
 
   public:
-    INSTRUCTION_HEADER(AsmLoadHeap);
+    INSTRUCTION_HEADER(AsmJSLoadHeap);
 
-    static MAsmLoadHeap *New(ArrayBufferView::ViewType vt, MDefinition *ptr) {
-        return new MAsmLoadHeap(vt, ptr);
+    static MAsmJSLoadHeap *New(ArrayBufferView::ViewType vt, MDefinition *ptr) {
+        return new MAsmJSLoadHeap(vt, ptr);
     }
 
     ArrayBufferView::ViewType viewType() const { return viewType_; }
     MDefinition *ptr() const { return getOperand(0); }
 };
 
-class MAsmStoreHeap : public MBinaryInstruction
+class MAsmJSStoreHeap : public MBinaryInstruction
 {
-    MAsmStoreHeap(ArrayBufferView::ViewType vt, MDefinition *ptr, MDefinition *v)
+    MAsmJSStoreHeap(ArrayBufferView::ViewType vt, MDefinition *ptr, MDefinition *v)
       : MBinaryInstruction(ptr, v), viewType_(vt)
     {}
 
     ArrayBufferView::ViewType viewType_;
 
   public:
-    INSTRUCTION_HEADER(AsmStoreHeap);
+    INSTRUCTION_HEADER(AsmJSStoreHeap);
 
-    static MAsmStoreHeap *New(ArrayBufferView::ViewType vt, MDefinition *ptr, MDefinition *v) {
-        return new MAsmStoreHeap(vt, ptr, v);
+    static MAsmJSStoreHeap *New(ArrayBufferView::ViewType vt, MDefinition *ptr, MDefinition *v) {
+        return new MAsmJSStoreHeap(vt, ptr, v);
     }
 
     ArrayBufferView::ViewType viewType() const { return viewType_; }
@@ -6892,9 +6892,9 @@ class MAsmStoreHeap : public MBinaryInstruction
     MDefinition *value() const { return getOperand(1); }
 };
 
-class MAsmLoadGlobalVar : public MNullaryInstruction
+class MAsmJSLoadGlobalVar : public MNullaryInstruction
 {
-    MAsmLoadGlobalVar(MIRType type, unsigned globalDataOffset)
+    MAsmJSLoadGlobalVar(MIRType type, unsigned globalDataOffset)
       : globalDataOffset_(globalDataOffset)
     {
         JS_ASSERT(type == MIRType_Int32 || type == MIRType_Double);
@@ -6904,37 +6904,37 @@ class MAsmLoadGlobalVar : public MNullaryInstruction
     unsigned globalDataOffset_;
 
   public:
-    INSTRUCTION_HEADER(AsmLoadGlobalVar);
+    INSTRUCTION_HEADER(AsmJSLoadGlobalVar);
 
-    static MAsmLoadGlobalVar *New(MIRType type, unsigned globalDataOffset) {
-        return new MAsmLoadGlobalVar(type, globalDataOffset);
+    static MAsmJSLoadGlobalVar *New(MIRType type, unsigned globalDataOffset) {
+        return new MAsmJSLoadGlobalVar(type, globalDataOffset);
     }
 
     unsigned globalDataOffset() const { return globalDataOffset_; }
 };
 
-class MAsmStoreGlobalVar : public MUnaryInstruction
+class MAsmJSStoreGlobalVar : public MUnaryInstruction
 {
-    MAsmStoreGlobalVar(unsigned globalDataOffset, MDefinition *v)
+    MAsmJSStoreGlobalVar(unsigned globalDataOffset, MDefinition *v)
       : MUnaryInstruction(v), globalDataOffset_(globalDataOffset)
     {}
 
     unsigned globalDataOffset_;
 
   public:
-    INSTRUCTION_HEADER(AsmStoreGlobalVar);
+    INSTRUCTION_HEADER(AsmJSStoreGlobalVar);
 
-    static MAsmStoreGlobalVar *New(unsigned globalDataOffset, MDefinition *v) {
-        return new MAsmStoreGlobalVar(globalDataOffset, v);
+    static MAsmJSStoreGlobalVar *New(unsigned globalDataOffset, MDefinition *v) {
+        return new MAsmJSStoreGlobalVar(globalDataOffset, v);
     }
 
     unsigned globalDataOffset() const { return globalDataOffset_; }
     MDefinition *value() const { return getOperand(0); }
 };
 
-class MAsmLoadFuncPtr : public MUnaryInstruction
+class MAsmJSLoadFuncPtr : public MUnaryInstruction
 {
-    MAsmLoadFuncPtr(unsigned globalDataOffset, MDefinition *index)
+    MAsmJSLoadFuncPtr(unsigned globalDataOffset, MDefinition *index)
       : MUnaryInstruction(index), globalDataOffset_(globalDataOffset)
     {
         setResultType(MIRType_Pointer);
@@ -6943,19 +6943,19 @@ class MAsmLoadFuncPtr : public MUnaryInstruction
     unsigned globalDataOffset_;
 
   public:
-    INSTRUCTION_HEADER(AsmLoadFuncPtr);
+    INSTRUCTION_HEADER(AsmJSLoadFuncPtr);
 
-    static MAsmLoadFuncPtr *New(unsigned globalDataOffset, MDefinition *index) {
-        return new MAsmLoadFuncPtr(globalDataOffset, index);
+    static MAsmJSLoadFuncPtr *New(unsigned globalDataOffset, MDefinition *index) {
+        return new MAsmJSLoadFuncPtr(globalDataOffset, index);
     }
 
     unsigned globalDataOffset() const { return globalDataOffset_; }
     MDefinition *index() const { return getOperand(0); }
 };
 
-class MAsmLoadFFIFunc : public MNullaryInstruction
+class MAsmJSLoadFFIFunc : public MNullaryInstruction
 {
-    MAsmLoadFFIFunc(unsigned globalDataOffset)
+    MAsmJSLoadFFIFunc(unsigned globalDataOffset)
       : globalDataOffset_(globalDataOffset)
     {
         setResultType(MIRType_Pointer);
@@ -6964,60 +6964,60 @@ class MAsmLoadFFIFunc : public MNullaryInstruction
     unsigned globalDataOffset_;
 
   public:
-    INSTRUCTION_HEADER(AsmLoadFFIFunc);
+    INSTRUCTION_HEADER(AsmJSLoadFFIFunc);
 
-    static MAsmLoadFFIFunc *New(unsigned globalDataOffset) {
-        return new MAsmLoadFFIFunc(globalDataOffset);
+    static MAsmJSLoadFFIFunc *New(unsigned globalDataOffset) {
+        return new MAsmJSLoadFFIFunc(globalDataOffset);
     }
 
     unsigned globalDataOffset() const { return globalDataOffset_; }
 };
 
-class MAsmParameter : public MNullaryInstruction
+class MAsmJSParameter : public MNullaryInstruction
 {
     ABIArg abi_;
 
-    MAsmParameter(ABIArg abi, MIRType mirType)
+    MAsmJSParameter(ABIArg abi, MIRType mirType)
       : abi_(abi)
     {
         setResultType(mirType);
     }
 
   public:
-    INSTRUCTION_HEADER(AsmParameter);
+    INSTRUCTION_HEADER(AsmJSParameter);
 
-    static MAsmParameter *New(ABIArg abi, MIRType mirType) {
-        return new MAsmParameter(abi, mirType);
+    static MAsmJSParameter *New(ABIArg abi, MIRType mirType) {
+        return new MAsmJSParameter(abi, mirType);
     }
 
     ABIArg abi() const { return abi_; }
 };
 
-class MAsmReturn : public MAryControlInstruction<1, 0>
+class MAsmJSReturn : public MAryControlInstruction<1, 0>
 {
-    MAsmReturn(MDefinition *ins) {
+    MAsmJSReturn(MDefinition *ins) {
         setOperand(0, ins);
     }
 
   public:
-    INSTRUCTION_HEADER(AsmReturn);
-    static MAsmReturn *New(MDefinition *ins) {
-        return new MAsmReturn(ins);
+    INSTRUCTION_HEADER(AsmJSReturn);
+    static MAsmJSReturn *New(MDefinition *ins) {
+        return new MAsmJSReturn(ins);
     }
 };
 
-class MAsmVoidReturn : public MAryControlInstruction<0, 0>
+class MAsmJSVoidReturn : public MAryControlInstruction<0, 0>
 {
   public:
-    INSTRUCTION_HEADER(AsmVoidReturn);
-    static MAsmVoidReturn *New() {
-        return new MAsmVoidReturn();
+    INSTRUCTION_HEADER(AsmJSVoidReturn);
+    static MAsmJSVoidReturn *New() {
+        return new MAsmJSVoidReturn();
     }
 };
 
-class MAsmPassStackArg : public MUnaryInstruction
+class MAsmJSPassStackArg : public MUnaryInstruction
 {
-    MAsmPassStackArg(uint32_t spOffset, MDefinition *ins)
+    MAsmJSPassStackArg(uint32_t spOffset, MDefinition *ins)
       : MUnaryInstruction(ins),
         spOffset_(spOffset)
     {}
@@ -7025,9 +7025,9 @@ class MAsmPassStackArg : public MUnaryInstruction
     uint32_t spOffset_;
 
   public:
-    INSTRUCTION_HEADER(AsmPassStackArg);
-    static MAsmPassStackArg *New(uint32_t spOffset, MDefinition *ins) {
-        return new MAsmPassStackArg(spOffset, ins);
+    INSTRUCTION_HEADER(AsmJSPassStackArg);
+    static MAsmJSPassStackArg *New(uint32_t spOffset, MDefinition *ins) {
+        return new MAsmJSPassStackArg(spOffset, ins);
     }
     uint32_t spOffset() const {
         return spOffset_;
@@ -7040,7 +7040,7 @@ class MAsmPassStackArg : public MUnaryInstruction
     }
 };
 
-class MAsmCall : public MInstruction
+class MAsmJSCall : public MInstruction
 {
   public:
     class Callee {
@@ -7087,7 +7087,7 @@ class MAsmCall : public MInstruction
     }
 
   public:
-    INSTRUCTION_HEADER(AsmCall);
+    INSTRUCTION_HEADER(AsmJSCall);
 
     struct Arg {
         AnyRegister reg;
@@ -7096,7 +7096,7 @@ class MAsmCall : public MInstruction
     };
     typedef Vector<Arg, 8> Args;
 
-    static MAsmCall *New(Callee callee, const Args &args, MIRType resultType, size_t spIncrement);
+    static MAsmJSCall *New(Callee callee, const Args &args, MIRType resultType, size_t spIncrement);
 
     size_t numOperands() const {
         return numOperands_;
@@ -7127,13 +7127,13 @@ class MAsmCall : public MInstruction
 
 // The asm.js version doesn't use the bail mechanism: instead it throws and
 // exception by jumping to the given label.
-class MAsmCheckOverRecursed : public MNullaryInstruction
+class MAsmJSCheckOverRecursed : public MNullaryInstruction
 {
     Label *onError_;
-    MAsmCheckOverRecursed(Label *onError) : onError_(onError) {}
+    MAsmJSCheckOverRecursed(Label *onError) : onError_(onError) {}
   public:
-    INSTRUCTION_HEADER(AsmCheckOverRecursed);
-    static MAsmCheckOverRecursed *New(Label *onError) { return new MAsmCheckOverRecursed(onError); }
+    INSTRUCTION_HEADER(AsmJSCheckOverRecursed);
+    static MAsmJSCheckOverRecursed *New(Label *onError) { return new MAsmJSCheckOverRecursed(onError); }
     Label *onError() const { return onError_; }
 };
 

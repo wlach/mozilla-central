@@ -147,7 +147,7 @@ LIRGeneratorX64::visitStoreTypedArrayElement(MStoreTypedArrayElement *ins)
 }
 
 bool
-LIRGeneratorX64::visitAsmUnsignedToDouble(MAsmUnsignedToDouble *ins)
+LIRGeneratorX64::visitAsmJSUnsignedToDouble(MAsmJSUnsignedToDouble *ins)
 {
     JS_ASSERT(ins->input()->type() == MIRType_Int32);
     LUInt32ToDouble *lir = new LUInt32ToDouble(useRegisterAtStart(ins->input()));
@@ -155,20 +155,20 @@ LIRGeneratorX64::visitAsmUnsignedToDouble(MAsmUnsignedToDouble *ins)
 }
 
 bool
-LIRGeneratorX64::visitAsmStoreHeap(MAsmStoreHeap *ins)
+LIRGeneratorX64::visitAsmJSStoreHeap(MAsmJSStoreHeap *ins)
 {
-    LAsmStoreHeap *lir;
+    LAsmJSStoreHeap *lir;
     switch (ins->viewType()) {
       case ArrayBufferView::TYPE_INT8: case ArrayBufferView::TYPE_UINT8:
       case ArrayBufferView::TYPE_INT16: case ArrayBufferView::TYPE_UINT16:
       case ArrayBufferView::TYPE_INT32: case ArrayBufferView::TYPE_UINT32:
-        lir = new LAsmStoreHeap(useRegisterAtStart(ins->ptr()),
-                                useRegisterOrConstantAtStart(ins->value()));
+        lir = new LAsmJSStoreHeap(useRegisterAtStart(ins->ptr()),
+                                  useRegisterOrConstantAtStart(ins->value()));
         break;
       case ArrayBufferView::TYPE_FLOAT32:
       case ArrayBufferView::TYPE_FLOAT64:
-        lir = new LAsmStoreHeap(useRegisterAtStart(ins->ptr()),
-                                useRegisterAtStart(ins->value()));
+        lir = new LAsmJSStoreHeap(useRegisterAtStart(ins->ptr()),
+                                  useRegisterAtStart(ins->value()));
         break;
       default: JS_NOT_REACHED("unexpected array type");
     }
@@ -177,8 +177,8 @@ LIRGeneratorX64::visitAsmStoreHeap(MAsmStoreHeap *ins)
 }
 
 bool
-LIRGeneratorX64::visitAsmLoadFuncPtr(MAsmLoadFuncPtr *ins)
+LIRGeneratorX64::visitAsmJSLoadFuncPtr(MAsmJSLoadFuncPtr *ins)
 {
-    return define(new LAsmLoadFuncPtr(useRegister(ins->index()), temp()), ins);
+    return define(new LAsmJSLoadFuncPtr(useRegister(ins->index()), temp()), ins);
 }
 

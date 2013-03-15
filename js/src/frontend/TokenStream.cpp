@@ -613,7 +613,7 @@ TokenStream::reportStrictWarningErrorNumberVA(const TokenPos &pos, unsigned erro
 }
 
 void
-TokenStream::reportAsmError(ParseNode *pn, unsigned errorNumber, ...)
+TokenStream::reportAsmJSError(ParseNode *pn, unsigned errorNumber, ...)
 {
     va_list args;
     va_start(args, errorNumber);

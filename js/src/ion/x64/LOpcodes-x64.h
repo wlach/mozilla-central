@@ -17,8 +17,8 @@
     _(ModPowTwoI)                   \
     _(PowHalfD)                     \
     _(UInt32ToDouble)               \
-    _(AsmLoadFuncPtr)               \
-    _(AsmDivOrMod)
+    _(AsmJSLoadFuncPtr)             \
+    _(AsmJSDivOrMod)
 
 #endif // jsion_lir_opcodes_x64_h__
 

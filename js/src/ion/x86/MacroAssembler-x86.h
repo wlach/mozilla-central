@@ -811,9 +811,9 @@ class MacroAssemblerX86 : public MacroAssemblerX86Shared
         addl(Imm32(sizeof(uintptr_t) * 2), esp);
     }
 
-    // See CodeGeneratorX86 calls to noteAsmGlobalAccess.
-    void patchAsmGlobalAccess(unsigned offset, uint8_t *code, unsigned codeBytes,
-                              unsigned globalDataOffset)
+    // See CodeGeneratorX86 calls to noteAsmJSGlobalAccess.
+    void patchAsmJSGlobalAccess(unsigned offset, uint8_t *code, unsigned codeBytes,
+                                unsigned globalDataOffset)
     {
         uint8_t *nextInsn = code + offset;
         JS_ASSERT(nextInsn <= code + codeBytes);

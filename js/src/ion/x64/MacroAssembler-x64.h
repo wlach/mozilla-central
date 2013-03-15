@@ -929,9 +929,9 @@ class MacroAssemblerX64 : public MacroAssemblerX86Shared
         addq(Imm32(sizeof(uintptr_t) * 2), rsp);
     }
 
-    // See CodeGeneratorX64 calls to noteAsmGlobalAccess.
-    void patchAsmGlobalAccess(unsigned offset, uint8_t *code, unsigned codeBytes,
-                              unsigned globalDataOffset)
+    // See CodeGeneratorX64 calls to noteAsmJSGlobalAccess.
+    void patchAsmJSGlobalAccess(unsigned offset, uint8_t *code, unsigned codeBytes,
+                                unsigned globalDataOffset)
     {
         uint8_t *nextInsn = code + offset;
         JS_ASSERT(nextInsn <= code + codeBytes);

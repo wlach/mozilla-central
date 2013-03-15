@@ -14,7 +14,7 @@
 namespace js {
 namespace ion {
 
-class OutOfLineAsmLoadHeapOutOfBounds;
+class OutOfLineAsmJSLoadHeapOutOfBounds;
 
 class CodeGeneratorX86 : public CodeGeneratorX86Shared
 {
@@ -52,16 +52,16 @@ class CodeGeneratorX86 : public CodeGeneratorX86Shared
     bool visitCompareV(LCompareV *lir);
     bool visitCompareVAndBranch(LCompareVAndBranch *lir);
     bool visitUInt32ToDouble(LUInt32ToDouble *lir);
-    bool visitAsmLoadHeap(LAsmLoadHeap *ins);
-    bool visitAsmStoreHeap(LAsmStoreHeap *ins);
-    bool visitAsmLoadGlobalVar(LAsmLoadGlobalVar *ins);
-    bool visitAsmStoreGlobalVar(LAsmStoreGlobalVar *ins);
-    bool visitAsmLoadFuncPtr(LAsmLoadFuncPtr *ins);
-    bool visitAsmLoadFFIFunc(LAsmLoadFFIFunc *ins);
+    bool visitAsmJSLoadHeap(LAsmJSLoadHeap *ins);
+    bool visitAsmJSStoreHeap(LAsmJSStoreHeap *ins);
+    bool visitAsmJSLoadGlobalVar(LAsmJSLoadGlobalVar *ins);
+    bool visitAsmJSStoreGlobalVar(LAsmJSStoreGlobalVar *ins);
+    bool visitAsmJSLoadFuncPtr(LAsmJSLoadFuncPtr *ins);
+    bool visitAsmJSLoadFFIFunc(LAsmJSLoadFFIFunc *ins);
 
-    bool visitOutOfLineAsmLoadHeapOutOfBounds(OutOfLineAsmLoadHeapOutOfBounds *ool);
+    bool visitOutOfLineAsmJSLoadHeapOutOfBounds(OutOfLineAsmJSLoadHeapOutOfBounds *ool);
 
-    void postAsmCall(LAsmCall *lir);
+    void postAsmJSCall(LAsmJSCall *lir);
 };
 
 typedef CodeGeneratorX86 CodeGeneratorSpecific;

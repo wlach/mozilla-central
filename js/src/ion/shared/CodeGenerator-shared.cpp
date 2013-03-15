@@ -60,12 +60,12 @@ CodeGeneratorShared::CodeGeneratorShared(MIRGenerator *gen, LIRGraph *graph, Mac
     // argument stack depth separately.
     if (gen->compilingAsmJS()) {
         JS_ASSERT(graph->argumentSlotCount() == 0);
-        frameDepth_ += gen->maxAsmStackArgBytes();
+        frameDepth_ += gen->maxAsmJSStackArgBytes();
 
-        // An MAsmCall does not align the stack pointer at calls sites but instead
+        // An MAsmJSCall does not align the stack pointer at calls sites but instead
         // relies on the a priori stack adjustment (in the prologue) on platforms
         // (like x64) which require the stack to be aligned.
-        if (gen->performsAsmCall()) {
+        if (gen->performsAsmJSCall()) {
             unsigned alignmentAtCall = AlignmentAtPrologue + frameDepth_;
             if (unsigned rem = alignmentAtCall % StackAlignment)
                 frameDepth_ += StackAlignment - rem;

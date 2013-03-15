@@ -473,7 +473,7 @@ MCompare::New(MDefinition *left, MDefinition *right, JSOp op)
 }
 
 MCompare *
-MCompare::NewAsm(MDefinition *left, MDefinition *right, JSOp op, CompareType compareType)
+MCompare::NewAsmJS(MDefinition *left, MDefinition *right, JSOp op, CompareType compareType)
 {
     JS_ASSERT(compareType == Compare_Int32 || compareType == Compare_UInt32 ||
               compareType == Compare_Double);
@@ -1351,7 +1351,7 @@ MBitNot::New(MDefinition *input)
 }
 
 MBitNot *
-MBitNot::NewAsm(MDefinition *input)
+MBitNot::NewAsmJS(MDefinition *input)
 {
     MBitNot *ins = new MBitNot(input);
     ins->specialization_ = MIRType_Int32;
@@ -1421,7 +1421,7 @@ MBitAnd::New(MDefinition *left, MDefinition *right)
 }
 
 MBitAnd *
-MBitAnd::NewAsm(MDefinition *left, MDefinition *right)
+MBitAnd::NewAsmJS(MDefinition *left, MDefinition *right)
 {
     MBitAnd *ins = new MBitAnd(left, right);
     ins->asmSpecialize();
@@ -1435,7 +1435,7 @@ MBitOr::New(MDefinition *left, MDefinition *right)
 }
 
 MBitOr *
-MBitOr::NewAsm(MDefinition *left, MDefinition *right)
+MBitOr::NewAsmJS(MDefinition *left, MDefinition *right)
 {
     MBitOr *ins = new MBitOr(left, right);
     ins->asmSpecialize();
@@ -1449,7 +1449,7 @@ MBitXor::New(MDefinition *left, MDefinition *right)
 }
 
 MBitXor *
-MBitXor::NewAsm(MDefinition *left, MDefinition *right)
+MBitXor::NewAsmJS(MDefinition *left, MDefinition *right)
 {
     MBitXor *ins = new MBitXor(left, right);
     ins->asmSpecialize();
@@ -1463,7 +1463,7 @@ MLsh::New(MDefinition *left, MDefinition *right)
 }
 
 MLsh *
-MLsh::NewAsm(MDefinition *left, MDefinition *right)
+MLsh::NewAsmJS(MDefinition *left, MDefinition *right)
 {
     MLsh *ins = new MLsh(left, right);
     ins->asmSpecialize();
@@ -1477,7 +1477,7 @@ MRsh::New(MDefinition *left, MDefinition *right)
 }
 
 MRsh *
-MRsh::NewAsm(MDefinition *left, MDefinition *right)
+MRsh::NewAsmJS(MDefinition *left, MDefinition *right)
 {
     MRsh *ins = new MRsh(left, right);
     ins->asmSpecialize();
@@ -1491,7 +1491,7 @@ MUrsh::New(MDefinition *left, MDefinition *right)
 }
 
 MUrsh *
-MUrsh::NewAsm(MDefinition *left, MDefinition *right)
+MUrsh::NewAsmJS(MDefinition *left, MDefinition *right)
 {
     MUrsh *ins = new MUrsh(left, right);
     ins->asmSpecialize();
@@ -1963,7 +1963,7 @@ InlinePropertyTable::trimToAndMaybePatchTargets(AutoObjectVector &targets,
 }
 
 MDefinition *
-MAsmUnsignedToDouble::foldsTo(bool useValueNumbers)
+MAsmJSUnsignedToDouble::foldsTo(bool useValueNumbers)
 {
     if (input()->isConstant()) {
         const Value &v = input()->toConstant()->value();
@@ -1974,10 +1974,10 @@ MAsmUnsignedToDouble::foldsTo(bool useValueNumbers)
     return this;
 }
 
-MAsmCall *
-MAsmCall::New(Callee callee, const Args &args, MIRType resultType, size_t spIncrement)
+MAsmJSCall *
+MAsmJSCall::New(Callee callee, const Args &args, MIRType resultType, size_t spIncrement)
 {
-    MAsmCall *call = new MAsmCall;
+    MAsmJSCall *call = new MAsmJSCall;
     call->spIncrement_ = spIncrement;
     call->callee_ = callee;
     call->setResultType(resultType);

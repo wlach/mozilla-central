@@ -3982,31 +3982,31 @@ class LFunctionBoundary : public LInstructionHelper<0, 0, 1>
     }
 };
 
-class LAsmLoadHeap : public LInstructionHelper<1, 1, 0>
+class LAsmJSLoadHeap : public LInstructionHelper<1, 1, 0>
 {
   public:
-    LIR_HEADER(AsmLoadHeap);
-    LAsmLoadHeap(const LAllocation &ptr) {
+    LIR_HEADER(AsmJSLoadHeap);
+    LAsmJSLoadHeap(const LAllocation &ptr) {
         setOperand(0, ptr);
     }
-    MAsmLoadHeap *mir() const {
-        return mir_->toAsmLoadHeap();
+    MAsmJSLoadHeap *mir() const {
+        return mir_->toAsmJSLoadHeap();
     }
     const LAllocation *ptr() {
         return getOperand(0);
     }
 };
 
-class LAsmStoreHeap : public LInstructionHelper<0, 2, 0>
+class LAsmJSStoreHeap : public LInstructionHelper<0, 2, 0>
 {
   public:
-    LIR_HEADER(AsmStoreHeap);
-    LAsmStoreHeap(const LAllocation &ptr, const LAllocation &value) {
+    LIR_HEADER(AsmJSStoreHeap);
+    LAsmJSStoreHeap(const LAllocation &ptr, const LAllocation &value) {
         setOperand(0, ptr);
         setOperand(1, value);
     }
-    MAsmStoreHeap *mir() const {
-        return mir_->toAsmStoreHeap();
+    MAsmJSStoreHeap *mir() const {
+        return mir_->toAsmJSStoreHeap();
     }
     const LAllocation *ptr() {
         return getOperand(0);
@@ -4016,89 +4016,89 @@ class LAsmStoreHeap : public LInstructionHelper<0, 2, 0>
     }
 };
 
-class LAsmLoadGlobalVar : public LInstructionHelper<1, 0, 0>
+class LAsmJSLoadGlobalVar : public LInstructionHelper<1, 0, 0>
 {
   public:
-    LIR_HEADER(AsmLoadGlobalVar);
-    MAsmLoadGlobalVar *mir() const {
-        return mir_->toAsmLoadGlobalVar();
+    LIR_HEADER(AsmJSLoadGlobalVar);
+    MAsmJSLoadGlobalVar *mir() const {
+        return mir_->toAsmJSLoadGlobalVar();
     }
 };
 
-class LAsmStoreGlobalVar : public LInstructionHelper<0, 1, 0>
+class LAsmJSStoreGlobalVar : public LInstructionHelper<0, 1, 0>
 {
   public:
-    LIR_HEADER(AsmStoreGlobalVar);
-    LAsmStoreGlobalVar(const LAllocation &value) {
+    LIR_HEADER(AsmJSStoreGlobalVar);
+    LAsmJSStoreGlobalVar(const LAllocation &value) {
         setOperand(0, value);
     }
-    MAsmStoreGlobalVar *mir() const {
-        return mir_->toAsmStoreGlobalVar();
+    MAsmJSStoreGlobalVar *mir() const {
+        return mir_->toAsmJSStoreGlobalVar();
     }
     const LAllocation *value() {
         return getOperand(0);
     }
 };
 
-class LAsmLoadFFIFunc : public LInstructionHelper<1, 0, 0>
+class LAsmJSLoadFFIFunc : public LInstructionHelper<1, 0, 0>
 {
   public:
-    LIR_HEADER(AsmLoadFFIFunc);
-    MAsmLoadFFIFunc *mir() const {
-        return mir_->toAsmLoadFFIFunc();
+    LIR_HEADER(AsmJSLoadFFIFunc);
+    MAsmJSLoadFFIFunc *mir() const {
+        return mir_->toAsmJSLoadFFIFunc();
     }
 };
 
-class LAsmParameter : public LInstructionHelper<1, 0, 0>
+class LAsmJSParameter : public LInstructionHelper<1, 0, 0>
 {
   public:
-    LIR_HEADER(AsmParameter);
+    LIR_HEADER(AsmJSParameter);
 };
 
-class LAsmReturn : public LInstructionHelper<0, 1, 0>
+class LAsmJSReturn : public LInstructionHelper<0, 1, 0>
 {
   public:
-    LIR_HEADER(AsmReturn);
+    LIR_HEADER(AsmJSReturn);
 };
 
-class LAsmVoidReturn : public LInstructionHelper<0, 0, 0>
+class LAsmJSVoidReturn : public LInstructionHelper<0, 0, 0>
 {
   public:
-    LIR_HEADER(AsmVoidReturn);
+    LIR_HEADER(AsmJSVoidReturn);
 };
 
-class LAsmPassStackArg : public LInstructionHelper<0, 1, 0>
+class LAsmJSPassStackArg : public LInstructionHelper<0, 1, 0>
 {
   public:
-    LIR_HEADER(AsmPassStackArg);
-    LAsmPassStackArg(const LAllocation &arg) {
+    LIR_HEADER(AsmJSPassStackArg);
+    LAsmJSPassStackArg(const LAllocation &arg) {
         setOperand(0, arg);
     }
-    MAsmPassStackArg *mir() const {
-        return mirRaw()->toAsmPassStackArg();
+    MAsmJSPassStackArg *mir() const {
+        return mirRaw()->toAsmJSPassStackArg();
     }
     const LAllocation *arg() {
         return getOperand(0);
     }
 };
 
-class LAsmCall : public LInstruction
+class LAsmJSCall : public LInstruction
 {
     LAllocation *operands_;
     uint32_t numOperands_;
     LDefinition def_;
 
   public:
-    LIR_HEADER(AsmCall);
+    LIR_HEADER(AsmJSCall);
 
-    LAsmCall(LAllocation *operands, uint32_t numOperands)
+    LAsmJSCall(LAllocation *operands, uint32_t numOperands)
       : operands_(operands),
         numOperands_(numOperands),
         def_(LDefinition::BogusTemp())
     {}
 
-    MAsmCall *mir() const {
-        return mir_->toAsmCall();
+    MAsmJSCall *mir() const {
+        return mir_->toAsmJSCall();
     }
 
     bool isCall() const {
@@ -4140,13 +4140,13 @@ class LAsmCall : public LInstruction
     }
 };
 
-class LAsmCheckOverRecursed : public LInstructionHelper<0, 0, 0>
+class LAsmJSCheckOverRecursed : public LInstructionHelper<0, 0, 0>
 {
   public:
-    LIR_HEADER(AsmCheckOverRecursed)
+    LIR_HEADER(AsmJSCheckOverRecursed)
 
-    MAsmCheckOverRecursed *mir() const {
-        return mir_->toAsmCheckOverRecursed();
+    MAsmJSCheckOverRecursed *mir() const {
+        return mir_->toAsmJSCheckOverRecursed();
     }
 };
 

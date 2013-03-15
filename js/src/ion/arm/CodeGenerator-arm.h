@@ -144,7 +144,7 @@ class CodeGeneratorARM : public CodeGeneratorShared
 
     bool generateInvalidateEpilogue();
 
-    void postAsmCall(LAsmCall *lir) {}
+    void postAsmJSCall(LAsmJSCall *lir) {}
 };
 
 typedef CodeGeneratorARM CodeGeneratorSpecific;

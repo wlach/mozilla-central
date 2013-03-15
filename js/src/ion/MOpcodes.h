@@ -71,7 +71,6 @@ namespace ion {
     _(GuardObject)                                                          \
     _(GuardString)                                                          \
     _(ToDouble)                                                             \
-    _(AsmUnsignedToDouble)                                                  \
     _(ToInt32)                                                              \
     _(TruncateToInt32)                                                      \
     _(ToString)                                                             \
@@ -150,23 +149,24 @@ namespace ion {
     _(CallInstanceOf)                                                       \
     _(InterruptCheck)                                                       \
     _(FunctionBoundary)                                                     \
-    _(AsmNeg)                                                               \
-    _(AsmUDiv)                                                              \
-    _(AsmUMod)                                                              \
-    _(AsmLoadHeap)                                                          \
-    _(AsmStoreHeap)                                                         \
-    _(AsmLoadGlobalVar)                                                     \
-    _(AsmStoreGlobalVar)                                                    \
-    _(AsmLoadFuncPtr)                                                       \
-    _(AsmLoadFFIFunc)                                                       \
-    _(AsmReturn)                                                            \
-    _(AsmParameter)                                                         \
-    _(AsmVoidReturn)                                                        \
-    _(AsmPassStackArg)                                                      \
-    _(AsmCall)                                                              \
-    _(AsmCheckOverRecursed)                                                 \
     _(GetDOMProperty)                                                       \
     _(SetDOMProperty)                                                       \
+    _(AsmJSNeg)                                                             \
+    _(AsmJSUDiv)                                                            \
+    _(AsmJSUMod)                                                            \
+    _(AsmJSUnsignedToDouble)                                                \
+    _(AsmJSLoadHeap)                                                        \
+    _(AsmJSStoreHeap)                                                       \
+    _(AsmJSLoadGlobalVar)                                                   \
+    _(AsmJSStoreGlobalVar)                                                  \
+    _(AsmJSLoadFuncPtr)                                                     \
+    _(AsmJSLoadFFIFunc)                                                     \
+    _(AsmJSReturn)                                                          \
+    _(AsmJSParameter)                                                       \
+    _(AsmJSVoidReturn)                                                      \
+    _(AsmJSPassStackArg)                                                    \
+    _(AsmJSCall)                                                            \
+    _(AsmJSCheckOverRecursed)                                               \
     _(ParCheckOverRecursed)                                                 \
     _(ParNewCallObject)                                                     \
     _(ParNew)                                                               \

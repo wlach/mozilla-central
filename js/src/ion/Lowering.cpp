@@ -2402,49 +2402,49 @@ LIRGenerator::visitFunctionBoundary(MFunctionBoundary *ins)
 }
 
 bool
-LIRGenerator::visitAsmLoadHeap(MAsmLoadHeap *ins)
+LIRGenerator::visitAsmJSLoadHeap(MAsmJSLoadHeap *ins)
 {
-    LAsmLoadHeap *lir = new LAsmLoadHeap(useRegisterAtStart(ins->ptr()));
+    LAsmJSLoadHeap *lir = new LAsmJSLoadHeap(useRegisterAtStart(ins->ptr()));
     return define(lir, ins);
 }
 
 bool
-LIRGenerator::visitAsmLoadGlobalVar(MAsmLoadGlobalVar *ins)
+LIRGenerator::visitAsmJSLoadGlobalVar(MAsmJSLoadGlobalVar *ins)
 {
-    return define(new LAsmLoadGlobalVar, ins);
+    return define(new LAsmJSLoadGlobalVar, ins);
 }
 
 bool
-LIRGenerator::visitAsmStoreGlobalVar(MAsmStoreGlobalVar *ins)
+LIRGenerator::visitAsmJSStoreGlobalVar(MAsmJSStoreGlobalVar *ins)
 {
-    return add(new LAsmStoreGlobalVar(useRegisterAtStart(ins->value())), ins);
+    return add(new LAsmJSStoreGlobalVar(useRegisterAtStart(ins->value())), ins);
 }
 
 bool
-LIRGenerator::visitAsmLoadFFIFunc(MAsmLoadFFIFunc *ins)
+LIRGenerator::visitAsmJSLoadFFIFunc(MAsmJSLoadFFIFunc *ins)
 {
-    return define(new LAsmLoadFFIFunc, ins);
+    return define(new LAsmJSLoadFFIFunc, ins);
 }
 
 bool
-LIRGenerator::visitAsmParameter(MAsmParameter *ins)
+LIRGenerator::visitAsmJSParameter(MAsmJSParameter *ins)
 {
     ABIArg abi = ins->abi();
     if (abi.argInRegister())
-        return defineFixed(new LAsmParameter, ins, LAllocation(abi.reg()));
+        return defineFixed(new LAsmJSParameter, ins, LAllocation(abi.reg()));
 
     JS_ASSERT(ins->type() == MIRType_Int32 || ins->type() == MIRType_Double);
     LAllocation::Kind argKind = ins->type() == MIRType_Int32
                                 ? LAllocation::INT_ARGUMENT
                                 : LAllocation::DOUBLE_ARGUMENT;
-    return defineFixed(new LAsmParameter, ins, LArgument(argKind, abi.offsetFromArgBase()));
+    return defineFixed(new LAsmJSParameter, ins, LArgument(argKind, abi.offsetFromArgBase()));
 }
 
 bool
-LIRGenerator::visitAsmReturn(MAsmReturn *ins)
+LIRGenerator::visitAsmJSReturn(MAsmJSReturn *ins)
 {
     MDefinition *rval = ins->getOperand(0);
-    LAsmReturn *lir = new LAsmReturn;
+    LAsmJSReturn *lir = new LAsmJSReturn;
     if (rval->type() == MIRType_Double)
         lir->setOperand(0, useFixed(rval, ReturnFloatReg));
     else if (rval->type() == MIRType_Int32)
@@ -2455,26 +2455,26 @@ LIRGenerator::visitAsmReturn(MAsmReturn *ins)
 }
 
 bool
-LIRGenerator::visitAsmVoidReturn(MAsmVoidReturn *ins)
+LIRGenerator::visitAsmJSVoidReturn(MAsmJSVoidReturn *ins)
 {
-    return add(new LAsmVoidReturn);
+    return add(new LAsmJSVoidReturn);
 }
 
 bool
-LIRGenerator::visitAsmPassStackArg(MAsmPassStackArg *ins)
+LIRGenerator::visitAsmJSPassStackArg(MAsmJSPassStackArg *ins)
 {
     if (ins->arg()->type() == MIRType_Double) {
         JS_ASSERT(!ins->arg()->isEmittedAtUses());
-        return add(new LAsmPassStackArg(useRegisterAtStart(ins->arg())), ins);
+        return add(new LAsmJSPassStackArg(useRegisterAtStart(ins->arg())), ins);
     }
 
-    return add(new LAsmPassStackArg(useRegisterOrConstantAtStart(ins->arg())), ins);
+    return add(new LAsmJSPassStackArg(useRegisterOrConstantAtStart(ins->arg())), ins);
 }
 
 bool
-LIRGenerator::visitAsmCall(MAsmCall *ins)
+LIRGenerator::visitAsmJSCall(MAsmJSCall *ins)
 {
-    gen->setPerformsAsmCall();
+    gen->setPerformsAsmJSCall();
 
     LAllocation *args = gen->allocate<LAllocation>(ins->numOperands());
     if (!args)
@@ -2483,10 +2483,10 @@ LIRGenerator::visitAsmCall(MAsmCall *ins)
     for (unsigned i = 0; i < ins->numArgs(); i++)
         args[i] = useFixed(ins->getOperand(i), ins->registerForArg(i));
 
-    if (ins->callee().which() == MAsmCall::Callee::Dynamic)
+    if (ins->callee().which() == MAsmJSCall::Callee::Dynamic)
         args[ins->dynamicCalleeOperandIndex()] = useFixed(ins->callee().dynamic(), CallTempReg0);
 
-    LInstruction *lir = new LAsmCall(args, ins->numOperands());
+    LInstruction *lir = new LAsmJSCall(args, ins->numOperands());
     if (ins->type() == MIRType_None) {
         lir->setMir(ins);
         return add(lir);
@@ -2495,9 +2495,9 @@ LIRGenerator::visitAsmCall(MAsmCall *ins)
 }
 
 bool
-LIRGenerator::visitAsmCheckOverRecursed(MAsmCheckOverRecursed *ins)
+LIRGenerator::visitAsmJSCheckOverRecursed(MAsmJSCheckOverRecursed *ins)
 {
-    return add(new LAsmCheckOverRecursed(), ins);
+    return add(new LAsmJSCheckOverRecursed(), ins);
 }
 
 bool

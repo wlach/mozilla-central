@@ -413,25 +413,25 @@ CodeGeneratorX86::visitUInt32ToDouble(LUInt32ToDouble *lir)
     return true;
 }
 
-class ion::OutOfLineAsmLoadHeapOutOfBounds : public OutOfLineCodeBase<CodeGeneratorX86>
+class ion::OutOfLineAsmJSLoadHeapOutOfBounds : public OutOfLineCodeBase<CodeGeneratorX86>
 {
     AnyRegister dest_;
   public:
-    OutOfLineAsmLoadHeapOutOfBounds(AnyRegister dest) : dest_(dest) {}
+    OutOfLineAsmJSLoadHeapOutOfBounds(AnyRegister dest) : dest_(dest) {}
     const AnyRegister &dest() const { return dest_; }
-    bool accept(CodeGeneratorX86 *codegen) { return codegen->visitOutOfLineAsmLoadHeapOutOfBounds(this); }
+    bool accept(CodeGeneratorX86 *codegen) { return codegen->visitOutOfLineAsmJSLoadHeapOutOfBounds(this); }
 };
 
 bool
-CodeGeneratorX86::visitAsmLoadHeap(LAsmLoadHeap *ins)
+CodeGeneratorX86::visitAsmJSLoadHeap(LAsmJSLoadHeap *ins)
 {
-    const MAsmLoadHeap *mir = ins->mir();
+    const MAsmJSLoadHeap *mir = ins->mir();
     ArrayBufferView::ViewType vt = mir->viewType();
 
     Register ptr = ToRegister(ins->ptr());
     const LDefinition *out = ins->output();
 
-    OutOfLineAsmLoadHeapOutOfBounds *ool = new OutOfLineAsmLoadHeapOutOfBounds(ToAnyRegister(out));
+    OutOfLineAsmJSLoadHeapOutOfBounds *ool = new OutOfLineAsmJSLoadHeapOutOfBounds(ToAnyRegister(out));
     if (!addOutOfLineCode(ool))
         return false;
 
@@ -465,7 +465,7 @@ CodeGeneratorX86::visitAsmLoadHeap(LAsmLoadHeap *ins)
 }
 
 bool
-CodeGeneratorX86::visitOutOfLineAsmLoadHeapOutOfBounds(OutOfLineAsmLoadHeapOutOfBounds *ool)
+CodeGeneratorX86::visitOutOfLineAsmJSLoadHeapOutOfBounds(OutOfLineAsmJSLoadHeapOutOfBounds *ool)
 {
     if (ool->dest().isFloat())
         masm.movsd(&js_NaN, ool->dest().fpu());
@@ -476,9 +476,9 @@ CodeGeneratorX86::visitOutOfLineAsmLoadHeapOutOfBounds(OutOfLineAsmLoadHeapOutOf
 }
 
 bool
-CodeGeneratorX86::visitAsmStoreHeap(LAsmStoreHeap *ins)
+CodeGeneratorX86::visitAsmJSStoreHeap(LAsmJSStoreHeap *ins)
 {
-    MAsmStoreHeap *mir = ins->mir();
+    MAsmJSStoreHeap *mir = ins->mir();
     ArrayBufferView::ViewType vt = mir->viewType();
 
     Register ptr = ToRegister(ins->ptr());
@@ -514,9 +514,9 @@ CodeGeneratorX86::visitAsmStoreHeap(LAsmStoreHeap *ins)
 }
 
 bool
-CodeGeneratorX86::visitAsmLoadGlobalVar(LAsmLoadGlobalVar *ins)
+CodeGeneratorX86::visitAsmJSLoadGlobalVar(LAsmJSLoadGlobalVar *ins)
 {
-    MAsmLoadGlobalVar *mir = ins->mir();
+    MAsmJSLoadGlobalVar *mir = ins->mir();
 
     CodeOffsetLabel label;
     if (mir->type() == MIRType_Int32)
@@ -524,13 +524,13 @@ CodeGeneratorX86::visitAsmLoadGlobalVar(LAsmLoadGlobalVar *ins)
     else
         label = masm.movsdWithPatch(NULL, ToFloatRegister(ins->output()));
 
-    return gen->noteAsmGlobalAccess(label.offset(), mir->globalDataOffset());
+    return gen->noteAsmJSGlobalAccess(label.offset(), mir->globalDataOffset());
 }
 
 bool
-CodeGeneratorX86::visitAsmStoreGlobalVar(LAsmStoreGlobalVar *ins)
+CodeGeneratorX86::visitAsmJSStoreGlobalVar(LAsmJSStoreGlobalVar *ins)
 {
-    MAsmStoreGlobalVar *mir = ins->mir();
+    MAsmJSStoreGlobalVar *mir = ins->mir();
 
     MIRType type = mir->value()->type();
     JS_ASSERT(type == MIRType_Int32 || type == MIRType_Double);
@@ -541,37 +541,37 @@ CodeGeneratorX86::visitAsmStoreGlobalVar(LAsmStoreGlobalVar *ins)
     else
         label = masm.movsdWithPatch(ToFloatRegister(ins->value()), NULL);
 
-    return gen->noteAsmGlobalAccess(label.offset(), mir->globalDataOffset());
+    return gen->noteAsmJSGlobalAccess(label.offset(), mir->globalDataOffset());
 }
 
 bool
-CodeGeneratorX86::visitAsmLoadFuncPtr(LAsmLoadFuncPtr *ins)
+CodeGeneratorX86::visitAsmJSLoadFuncPtr(LAsmJSLoadFuncPtr *ins)
 {
-    MAsmLoadFuncPtr *mir = ins->mir();
+    MAsmJSLoadFuncPtr *mir = ins->mir();
 
     Register index = ToRegister(ins->index());
     Register out = ToRegister(ins->output());
     CodeOffsetLabel label = masm.movlWithPatch(NULL, index, TimesFour, out);
 
-    return gen->noteAsmGlobalAccess(label.offset(), mir->globalDataOffset());
+    return gen->noteAsmJSGlobalAccess(label.offset(), mir->globalDataOffset());
 }
 
 bool
-CodeGeneratorX86::visitAsmLoadFFIFunc(LAsmLoadFFIFunc *ins)
+CodeGeneratorX86::visitAsmJSLoadFFIFunc(LAsmJSLoadFFIFunc *ins)
 {
-    MAsmLoadFFIFunc *mir = ins->mir();
+    MAsmJSLoadFFIFunc *mir = ins->mir();
 
     Register out = ToRegister(ins->output());
     CodeOffsetLabel label = masm.movlWithPatch(NULL, out);
 
-    return gen->noteAsmGlobalAccess(label.offset(), mir->globalDataOffset());
+    return gen->noteAsmJSGlobalAccess(label.offset(), mir->globalDataOffset());
 }
 
 void
-CodeGeneratorX86::postAsmCall(LAsmCall *lir)
+CodeGeneratorX86::postAsmJSCall(LAsmJSCall *lir)
 {
-    MAsmCall *mir = lir->mir();
-    if (mir->type() != MIRType_Double || mir->callee().which() != MAsmCall::Callee::Builtin)
+    MAsmJSCall *mir = lir->mir();
+    if (mir->type() != MIRType_Double || mir->callee().which() != MAsmJSCall::Callee::Builtin)
         return;
 
     masm.reserveStack(sizeof(double));
