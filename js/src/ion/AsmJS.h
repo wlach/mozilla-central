@@ -8,8 +8,10 @@
 #if !defined(jsion_asmjs_h__)
 #define jsion_asmjs_h__
 
-// asm.js compilation is only available on these platforms:
+// asm.js compilation is only available on desktop x86/x64 at the moment.
+// Don't panic, mobile support is coming soon.
 #if defined(JS_ION) && \
+    !defined(ANDROID) && \
     (defined(JS_CPU_X86) || defined(JS_CPU_X64)) &&  \
     (defined(__linux__) || defined(XP_WIN) || defined(XP_MACOSX))
 # define JS_ASMJS
