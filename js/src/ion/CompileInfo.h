@@ -45,16 +45,13 @@ class CompileInfo
         nslots_ = nimplicit_ + nargs_ + nlocals_ + nstack_;
     }
 
-    // XXX: perhaps we should consider a way to statically distinguish:
-    // CompileInfo and ScriptCompileInfo, where the latter derived the former
-    // and was only needed from the IonBuilder path
     CompileInfo(unsigned nlocals)
       : script_(NULL), fun_(NULL), osrPc_(NULL), constructing_(false)
     {
         nimplicit_ = 0;
         nargs_ = 0;
         nlocals_ = nlocals;
-        nstack_ = 1 /* for ?: (pushPhiInput/popPhiOutput) */;
+        nstack_ = 1;  /* For FunctionCompiler::pushPhiInput/popPhiOutput */
         nslots_ = nlocals_ + nstack_;
     }
 

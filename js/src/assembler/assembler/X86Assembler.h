@@ -191,18 +191,14 @@ private:
         OP_2BYTE_ESCAPE                 = 0x0F,
         OP_AND_EvGv                     = 0x21,
         OP_AND_GvEv                     = 0x23,
-        PRE_OVERRIDE_ES                 = 0x26,
         OP_SUB_EvGv                     = 0x29,
         OP_SUB_GvEv                     = 0x2B,
         PRE_PREDICT_BRANCH_NOT_TAKEN    = 0x2E,
-        PRE_OVERRIDE_CS                 = 0x2E,
         OP_XOR_EvGv                     = 0x31,
         OP_XOR_GvEv                     = 0x33,
-        PRE_OVERRIDE_SS                 = 0x36,
         OP_CMP_EvGv                     = 0x39,
         OP_CMP_GvEv                     = 0x3B,
         OP_CMP_EAXIv                    = 0x3D,
-        PRE_OVERRIDE_DS                 = 0x3E,
 #if WTF_CPU_X86_64
         PRE_REX                         = 0x40,
 #endif
@@ -215,8 +211,6 @@ private:
 #if WTF_CPU_X86_64
         OP_MOVSXD_GvEv                  = 0x63,
 #endif
-        PRE_OVERRIDE_FS                 = 0x64,
-        PRE_OVERRIDE_GS                 = 0x65,
         PRE_OPERAND_SIZE                = 0x66,
         PRE_SSE_66                      = 0x66,
         OP_PUSH_Iz                      = 0x68,
@@ -230,9 +224,7 @@ private:
         OP_MOV_EbGv                     = 0x88,
         OP_MOV_EvGv                     = 0x89,
         OP_MOV_GvEv                     = 0x8B,
-        OP_MOV_GETSEG                   = 0x8C,
         OP_LEA                          = 0x8D,
-        OP_MOV_SETSEG                   = 0x8E,
         OP_GROUP1A_Ev                   = 0x8F,
         OP_NOP                          = 0x90,
         OP_PUSHFLAGS                    = 0x9C,

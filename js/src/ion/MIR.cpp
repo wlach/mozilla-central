@@ -721,7 +721,7 @@ MBinaryBitwiseInstruction::infer(const TypeOracle::BinaryTypes &b)
 }
 
 void
-MBinaryBitwiseInstruction::asmSpecialize()
+MBinaryBitwiseInstruction::specializeForAsmJS()
 {
     specialization_ = MIRType_Int32;
     JS_ASSERT(type() == MIRType_Int32);
@@ -1424,7 +1424,7 @@ MBitAnd *
 MBitAnd::NewAsmJS(MDefinition *left, MDefinition *right)
 {
     MBitAnd *ins = new MBitAnd(left, right);
-    ins->asmSpecialize();
+    ins->specializeForAsmJS();
     return ins;
 }
 
@@ -1438,7 +1438,7 @@ MBitOr *
 MBitOr::NewAsmJS(MDefinition *left, MDefinition *right)
 {
     MBitOr *ins = new MBitOr(left, right);
-    ins->asmSpecialize();
+    ins->specializeForAsmJS();
     return ins;
 }
 
@@ -1452,7 +1452,7 @@ MBitXor *
 MBitXor::NewAsmJS(MDefinition *left, MDefinition *right)
 {
     MBitXor *ins = new MBitXor(left, right);
-    ins->asmSpecialize();
+    ins->specializeForAsmJS();
     return ins;
 }
 
@@ -1466,7 +1466,7 @@ MLsh *
 MLsh::NewAsmJS(MDefinition *left, MDefinition *right)
 {
     MLsh *ins = new MLsh(left, right);
-    ins->asmSpecialize();
+    ins->specializeForAsmJS();
     return ins;
 }
 
@@ -1480,7 +1480,7 @@ MRsh *
 MRsh::NewAsmJS(MDefinition *left, MDefinition *right)
 {
     MRsh *ins = new MRsh(left, right);
-    ins->asmSpecialize();
+    ins->specializeForAsmJS();
     return ins;
 }
 
@@ -1494,7 +1494,7 @@ MUrsh *
 MUrsh::NewAsmJS(MDefinition *left, MDefinition *right)
 {
     MUrsh *ins = new MUrsh(left, right);
-    ins->asmSpecialize();
+    ins->specializeForAsmJS();
     ins->canOverflow_ = false;
     return ins;
 }

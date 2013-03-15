@@ -26,8 +26,8 @@ MIRGenerator::MIRGenerator(JSCompartment *compartment,
     cancelBuild_(0),
     maxAsmJSStackArgBytes_(0),
     performsAsmJSCall_(false),
-    asmHeapAccesses_(GetIonContext()->cx),
-    asmGlobalAccesses_(GetIonContext()->cx)
+    asmJSHeapAccesses_(GetIonContext()->cx),
+    asmJSGlobalAccesses_(GetIonContext()->cx)
 { }
 
 bool

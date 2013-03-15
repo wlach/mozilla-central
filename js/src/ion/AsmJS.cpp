@@ -1278,11 +1278,11 @@ class ModuleCompiler
         return globals_.putNew(varName, g);
     }
     bool collectAccesses(MIRGenerator &gen) {
-        if (!module_->addHeapAccesses(gen.asmHeapAccesses()))
+        if (!module_->addHeapAccesses(gen.heapAccesses()))
             return false;
 
-        for (unsigned i = 0; i < gen.asmGlobalAccesses().length(); i++) {
-            if (!globalAccesses_.append(gen.asmGlobalAccesses()[i]))
+        for (unsigned i = 0; i < gen.globalAccesses().length(); i++) {
+            if (!globalAccesses_.append(gen.globalAccesses()[i]))
                 return false;
         }
         return true;
@@ -1464,7 +1464,7 @@ class FunctionCompiler
     MIRGraph               mirGraph_;
     MIRGenerator           mirGen_;
     CompileInfo            compileInfo_;
-    AutoFlushCache         autoFlushCache_;  // TODO: where does this go Marty?
+    AutoFlushCache         autoFlushCache_;
 
     MBasicBlock *          curBlock_;
     NodeStack              loopStack_;

@@ -524,7 +524,7 @@ CodeGeneratorX86::visitAsmJSLoadGlobalVar(LAsmJSLoadGlobalVar *ins)
     else
         label = masm.movsdWithPatch(NULL, ToFloatRegister(ins->output()));
 
-    return gen->noteAsmJSGlobalAccess(label.offset(), mir->globalDataOffset());
+    return gen->noteGlobalAccess(label.offset(), mir->globalDataOffset());
 }
 
 bool
@@ -541,7 +541,7 @@ CodeGeneratorX86::visitAsmJSStoreGlobalVar(LAsmJSStoreGlobalVar *ins)
     else
         label = masm.movsdWithPatch(ToFloatRegister(ins->value()), NULL);
 
-    return gen->noteAsmJSGlobalAccess(label.offset(), mir->globalDataOffset());
+    return gen->noteGlobalAccess(label.offset(), mir->globalDataOffset());
 }
 
 bool
@@ -553,7 +553,7 @@ CodeGeneratorX86::visitAsmJSLoadFuncPtr(LAsmJSLoadFuncPtr *ins)
     Register out = ToRegister(ins->output());
     CodeOffsetLabel label = masm.movlWithPatch(NULL, index, TimesFour, out);
 
-    return gen->noteAsmJSGlobalAccess(label.offset(), mir->globalDataOffset());
+    return gen->noteGlobalAccess(label.offset(), mir->globalDataOffset());
 }
 
 bool
@@ -564,7 +564,7 @@ CodeGeneratorX86::visitAsmJSLoadFFIFunc(LAsmJSLoadFFIFunc *ins)
     Register out = ToRegister(ins->output());
     CodeOffsetLabel label = masm.movlWithPatch(NULL, out);
 
-    return gen->noteAsmJSGlobalAccess(label.offset(), mir->globalDataOffset());
+    return gen->noteGlobalAccess(label.offset(), mir->globalDataOffset());
 }
 
 void

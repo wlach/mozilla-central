@@ -2423,7 +2423,7 @@ class MBinaryBitwiseInstruction
         setMovable();
     }
 
-    void asmSpecialize();
+    void specializeForAsmJS();
 
   public:
     TypePolicy *typePolicy() {

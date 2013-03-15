@@ -488,7 +488,7 @@ CodeGeneratorX64::visitAsmJSLoadGlobalVar(LAsmJSLoadGlobalVar *ins)
     else
         label = masm.loadRipRelativeDouble(ToFloatRegister(ins->output()));
 
-    return gen->noteAsmJSGlobalAccess(label.offset(), mir->globalDataOffset());
+    return gen->noteGlobalAccess(label.offset(), mir->globalDataOffset());
 }
 
 bool
@@ -505,7 +505,7 @@ CodeGeneratorX64::visitAsmJSStoreGlobalVar(LAsmJSStoreGlobalVar *ins)
     else
         label = masm.storeRipRelativeDouble(ToFloatRegister(ins->value()));
 
-    return gen->noteAsmJSGlobalAccess(label.offset(), mir->globalDataOffset());
+    return gen->noteGlobalAccess(label.offset(), mir->globalDataOffset());
 }
 
 bool
@@ -520,7 +520,7 @@ CodeGeneratorX64::visitAsmJSLoadFuncPtr(LAsmJSLoadFuncPtr *ins)
     CodeOffsetLabel label = masm.leaRipRelative(tmp);
     masm.loadPtr(Operand(tmp, index, TimesEight, 0), out);
 
-    return gen->noteAsmJSGlobalAccess(label.offset(), mir->globalDataOffset());
+    return gen->noteGlobalAccess(label.offset(), mir->globalDataOffset());
 }
 
 bool
@@ -530,6 +530,6 @@ CodeGeneratorX64::visitAsmJSLoadFFIFunc(LAsmJSLoadFFIFunc *ins)
 
     CodeOffsetLabel label = masm.loadRipRelativeInt64(ToRegister(ins->output()));
 
-    return gen->noteAsmJSGlobalAccess(label.offset(), mir->globalDataOffset());
+    return gen->noteGlobalAccess(label.offset(), mir->globalDataOffset());
 }
 
