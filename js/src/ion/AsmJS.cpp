@@ -4959,6 +4959,10 @@ js::CompileAsmJS(JSContext *cx, TokenStream &ts, ParseNode *fn, HandleScript scr
     if (!JSC::MacroAssembler().supportsFloatingPoint())
         return Warn(cx, JSMSG_USE_ASM_TYPE_FAIL, "Disabled by lack of floating point support");
 
+    if (!cx->hasOption(JSOPTION_ASMJS))
+        return Warn(cx, JSMSG_USE_ASM_TYPE_FAIL, "Disabled by javascript.options.experimental_asmjs "
+                                                 "in about:config");
+
     if (cx->compartment->debugMode())
         return Warn(cx, JSMSG_USE_ASM_TYPE_FAIL, "Disabled by debugger");
 
