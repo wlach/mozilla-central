@@ -9,7 +9,6 @@
 #define jsion_asmjsmodule_h__
 
 #include "gc/Marking.h"
-#include "ion/IonMacroAssembler.h"
 #include "ion/RegisterSets.h"
 
 #include "jstypedarrayinlines.h"
@@ -490,12 +489,11 @@ class AsmJSModule
             heapAccesses_.infallibleAppend(accesses[i]);
         return true;
     }
-    void convertHeapAccessesToActualOffset(ion::MacroAssembler &masm) {
-        for (unsigned i = 0; i < heapAccesses_.length(); i++)
-            heapAccesses_[i].updateOffset(masm.actualOffset(heapAccesses_[i].offset()));
-    }
     unsigned numHeapAccesses() const {
         return heapAccesses_.length();
+    }
+    ion::AsmJSHeapAccess &heapAccess(unsigned i) {
+        return heapAccesses_[i];
     }
     const ion::AsmJSHeapAccess &heapAccess(unsigned i) const {
         return heapAccesses_[i];

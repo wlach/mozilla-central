@@ -6,23 +6,24 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "jsmath.h"
-
 #include "frontend/ParseNode.h"
 #include "ion/AsmJS.h"
 #include "ion/AsmJSModule.h"
 #include "ion/AsmJSSignalHandlers.h"
-#include "ion/CodeGenerator.h"
-#include "ion/MIR.h"
-#include "ion/MIRGraph.h"
 
 #include "frontend/ParseNode-inl.h"
 
 using namespace js;
-using namespace js::ion;
 using namespace js::frontend;
 using namespace mozilla;
 
 #ifdef JS_ASMJS
+
+#include "ion/CodeGenerator.h"
+#include "ion/MIR.h"
+#include "ion/MIRGraph.h"
+
+using namespace js::ion;
 
 /*****************************************************************************/
 // ParseNode utilities
@@ -1418,7 +1419,10 @@ class ModuleCompiler
 
         // The AsmJSHeapAccess offsets need to be updated to reflect the
         // "actualOffset" (an ARM distinction).
-        module_->convertHeapAccessesToActualOffset(masm_);
+        for (unsigned i = 0; i < module_->numHeapAccesses(); i++) {
+            AsmJSHeapAccess &access = module_->heapAccess(i);
+            access.updateOffset(masm_.actualOffset(access.offset()));
+        }
 
         *module = module_.forget();
         return true;

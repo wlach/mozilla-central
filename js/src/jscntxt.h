@@ -481,7 +481,6 @@ class PerThreadData : public js::PerThreadDataFriendFields
      */
     js::ion::IonActivation  *ionActivation;
 
-#ifdef JS_ION
     /*
      * asm.js maintains a stack of AsmJSModule activations (see AsmJS.h). This
      * stack is used by JSRuntime::triggerOperationCallback to stop long-
@@ -528,7 +527,6 @@ class PerThreadData : public js::PerThreadDataFriendFields
     js::AsmJSActivation *asmJSActivationStackFromOwnerThread() const {
         return asmJSActivationStack_;
     }
-#endif
 
     /*
      * When this flag is non-zero, any attempt to GC will be skipped. It is used
@@ -541,6 +539,7 @@ class PerThreadData : public js::PerThreadDataFriendFields
     int32_t             suppressGC;
 
     PerThreadData(JSRuntime *runtime);
+    ~PerThreadData();
     bool init();
 
     bool associatedWith(const JSRuntime *rt) { return runtime_ == rt; }

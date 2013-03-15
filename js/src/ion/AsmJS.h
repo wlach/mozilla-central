@@ -5,11 +5,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#if !defined(jsion_asmjs_h__) && defined(JS_ION)
+#if !defined(jsion_asmjs_h__)
 #define jsion_asmjs_h__
 
-// Only turn on asm.js for supported platforms:
-#if (defined(JS_CPU_X86) || defined(JS_CPU_X64)) &&  \
+// asm.js compilation is only available on these platforms:
+#if defined(JS_ION) && \
+    (defined(JS_CPU_X86) || defined(JS_CPU_X64)) &&  \
     (defined(__linux__) || defined(XP_WIN) || defined(XP_MACOSX))
 # define JS_ASMJS
 #endif

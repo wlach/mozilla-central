@@ -694,12 +694,10 @@ PerThreadData::PerThreadData(JSRuntime *runtime)
     ionJSContext(NULL),
     ionStackLimit(0),
     ionActivation(NULL),
-#ifdef JS_ION
     asmJSActivationStack_(NULL),
 # ifdef JS_THREADSAFE
     asmJSActivationStackLock_(NULL),
 # endif
-#endif
     suppressGC(0)
 {}
 
@@ -712,6 +710,14 @@ PerThreadData::init()
         return false;
 #endif
     return true;
+}
+
+PerThreadData::~PerThreadData()
+{
+#ifdef JS_THREADSAFE
+    if (asmJSActivationStackLock_)
+        PR_DestroyLock(asmJSActivationStackLock_);
+#endif
 }
 
 JSRuntime::JSRuntime(JSUseHelperThreads useHelperThreads)
